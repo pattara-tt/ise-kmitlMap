@@ -54,11 +54,11 @@ export default function MapView({ apiRef }) {
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, [viewMode]);
 
-  // 🏢 ตึก สจล. (KMITL) — ตึกเดียว (ตัดของเก่า SD/BACC/CEN/LD/BTS/SW ทั้งหมดออกแล้ว)
+  // 🏢 ตึก Sc8 — ตึกเดียว (ตัดของเก่า SD/BACC/CEN/LD/BTS/SW ทั้งหมดออกแล้ว)
   const [kmitlOpen, setKmitlOpen] = useState(false);
   const kmitlOpenRef = useRef(kmitlOpen);
   useEffect(() => { kmitlOpenRef.current = kmitlOpen; }, [kmitlOpen]);
-  const [kmitlFloor, setKmitlFloor] = useState(KMITL_FLOORS[0]?.id || "1");
+  const [kmitlFloor, setKmitlFloor] = useState("1");
   const kmitlFloorRef = useRef(kmitlFloor);
   useEffect(() => { kmitlFloorRef.current = kmitlFloor; ctx.current.drawFloorOverlay?.(); }, [kmitlFloor]);
   // 🧭 กราฟ node/edge ของชั้นที่กำลังดูอยู่ — เพิ่มชั้นใหม่ในอนาคตแค่ต่อ ternary นี้
@@ -190,7 +190,7 @@ export default function MapView({ apiRef }) {
         L.popup({ closeButton: true, offset: [0, -8] }).setLatLng([snapLat, snapLng]).setContent(box).openOn(map);
       });
 
-      // 🏢 พื้นที่ตึก สจล. (KMITL) — กดบริเวณ SVG ของอาคารเพื่อเปิดผังและปุ่มเลือกชั้น
+      // 🏢 พื้นที่ตึก Sc8 — กดบริเวณ SVG ของอาคารเพื่อเปิดผังและปุ่มเลือกชั้น
       ctx.current.kmitlFlash = () => {
         const hit = ctx.current.kmitlRect;
         if (hit) {
@@ -306,7 +306,7 @@ export default function MapView({ apiRef }) {
     if (!L || !m) return;
     if (c.kmitlOverlay) { m.removeLayer(c.kmitlOverlay); c.kmitlOverlay = null; }
     if (!kmitlOpen && mapZoom < 16) return;
-    const shownFloor = kmitlOpen ? kmitlFloor : (KMITL_FLOORS[0]?.id || "1");
+    const shownFloor = kmitlOpen ? kmitlFloor : "1";
     const f = KMITL_FLOORS.find((x) => x.id === shownFloor);
     if (f && f.svg && !kmitlCalibrate) {
       c.kmitlOverlay = L.imageOverlay(f.svg, KMITL_BOUNDS, { opacity: 0.96, interactive: false, pane: "bdiFloorPane" }).addTo(m);
@@ -407,14 +407,14 @@ export default function MapView({ apiRef }) {
         if (c.routeKey === key && c.scored) { c.select(c.best); return c.scored; }
         c.routeLayer.clearLayers(); setRouteData({ loading: true });
         c.indoorOn = false; c.updateIndoor?.();
-        let sName = "KMITL ลาดกระบัง", eName = "สถานีแอร์พอร์ตลิงก์ลาดกระบัง", sCoord = null, eCoord = null, note = null;
+        let sName = "Sc8", eName = "สถานีแอร์พอร์ตลิงก์ลาดกระบัง", sCoord = null, eCoord = null, note = null;
         if (!from && c.myLocation) { sCoord = c.myLocation; sName = "ตำแหน่งของฉัน"; }
         const resolve = async (x) => { if (!x) return null; const pc = c.placeCache && c.placeCache[x]; if (pc) return pc; return (await resolvePlace(x)) || (await geocodeNominatim(x)); };
         const [gFrom, gTo] = await Promise.all([resolve(from), resolve(to)]);
         if (from) { if (gFrom) { sCoord = gFrom.coord; sName = gFrom.name; } else note = `หา "${from}" ไม่เจอ (ใช้ สจล. แทน) — ลองพิมพ์ชื่อให้ชัดขึ้น`; }
         if (to) { if (gTo) { eCoord = gTo.coord; eName = gTo.name; } else note = (note ? note + " · " : "") + `หา "${to}" ไม่เจอ (ใช้สถานีแอร์พอร์ตลิงก์ลาดกระบังแทน)`; }
         // ใช้ graphRoute (Dijkstra บนกราฟ OSM + กราฟในตึกทั้งหมด) เป็นแหล่งเดียว — ไม่มี ORS/`/api/route` แล้ว
-        const DEF_START = [100.7789, 13.7292]; // KMITL
+        const DEF_START = [100.780099, 13.729721]; // Sc8
         const DEF_END = [100.7469, 13.7229]; // สถานีแอร์พอร์ตเรลลิงก์ลาดกระบัง
         const start = sCoord || DEF_START;
         const end = eCoord || DEF_END;
@@ -924,7 +924,7 @@ export default function MapView({ apiRef }) {
           </div>
           {routeSheetOpen ? (routeData.loading ? <div style={{ fontSize: 13, color: "var(--bdi-text-dim)" }}>กำลังคำนวณเส้นทาง…</div> : routeData.error ? <div style={{ fontSize: 12, color: "var(--bdi-danger)" }}>ใช้ไม่ได้: {routeData.error}</div> : (
             <div>
-              <div style={{ fontSize: 12.5, color: "var(--bdi-text-dim)", marginBottom: 6 }}>{routeData.startName || "KMITL"} → {routeData.endName || "ปลายทาง"}</div>
+              <div style={{ fontSize: 12.5, color: "var(--bdi-text-dim)", marginBottom: 6 }}>{routeData.startName || "Sc8"} → {routeData.endName || "ปลายทาง"}</div>
               {routeData.graphOk === false ? <div style={{ fontSize: 11, color: "#f4b860", marginTop: 4 }}>⏳ โครงข่ายทางเท้า OSM กำลังโหลด — เส้นแนะนำจะแม่นขึ้นอัตโนมัติเมื่อพร้อม</div> : null}
               {routeData.routes[routeData.best] ? (() => {
                 const r = routeData.routes[routeData.best];
@@ -952,11 +952,11 @@ export default function MapView({ apiRef }) {
         </div>
       ) : null}
 
-      {/* 🏢 แผงผังตึก สจล. (KMITL) — เปิดเมื่อกดบริเวณ SVG ของอาคาร มีแถบเลือกชั้นด้านข้าง */}
+      {/* 🏢 แผงผังตึก Sc8 — เปิดเมื่อกดบริเวณ SVG ของอาคาร มีแถบเลือกชั้นด้านข้าง */}
       {kmitlOpen && !nav?.active ? (
         <>
           <div style={{ position: "absolute", top: 200, right: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-            สจล. (KMITL)
+            Sc8
             <button onClick={() => setKmitlOpen(false)} style={{ background: "none", border: "none", color: "#5F6368", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>✕</button>
           </div>
 

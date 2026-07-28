@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import EventPage from "../components/EventPage";
-import NotificationPage from "../components/NotificationPage";
+import ReportPage from "../components/ReportPage";
 
 const MapView = dynamic(() => import("../components/MapView"), {
   ssr: false,
@@ -38,9 +38,9 @@ function NotiIcon() {
 const TABS = [
   { id: "explore", label: "EXPLORE", icon: ExploreIcon },
   { id: "events", label: "EVENTS", icon: MissionIcon },
-  { id: "notification", label: "NOTIFICATION", icon: NotiIcon },
+  { id: "report", label: "REPORT", icon: NotiIcon },
 ];
-const TITLE = { explore: "EXPLORE", events: "EVENTS", notification: "NOTIFICATION" };
+const TITLE = { explore: "EXPLORE", events: "EVENTS", report: "รายงานปัญหา" };
 
 export default function Page() {
   const mapApi = useRef(null);
@@ -62,7 +62,7 @@ export default function Page() {
           <MapView apiRef={mapApi} />
         </div>
         {tab === "events" ? <EventPage /> : null}
-        {tab === "notification" ? <NotificationPage /> : null}
+        {tab === "report" ? <ReportPage /> : null}
       </div>
 
       {/* Bottom nav ตาม Figma (Frame 22) */}
