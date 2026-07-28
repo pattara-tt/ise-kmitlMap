@@ -27,7 +27,7 @@ export const NODE_TYPES = [
     id: "path",
     label: "ทางเดิน",
     icon: "•",
-    color: "#4285F4",
+    color: "#B3AFB8",
   },
   {
     id: "stairs",
@@ -84,8 +84,8 @@ export const SC8_CENTER = [
 // ]
 
 export const SC8_BOUNDS = [
-  [13.727992, 100.779728],
-  [13.729994, 100.780325],
+  [13.728306, 100.779664],
+  [13.729686, 100.780328],
 ];
 
 // พื้นที่ Outline สำหรับกดเลือกอาคารบนแผนที่
@@ -161,7 +161,7 @@ export const SC8_FLOORS = [
   {
     id: "2",
     label: "2",
-    svg: null,
+    svg: "/data/floorplans/Sc8/floor2.svg",
   },
   {
     id: "1",
@@ -199,12 +199,87 @@ export const SC8_FLOORS = [
 // export const SC8_FLOOR1_EDGES = [
 //   ["Sc8F1P1", "Sc8F1Lift1"],
 // ];
-//
+//#1 [ทางเดิน]: 13.7290372, 100.7799219
+
+
 // ============================================================
 
-export const SC8_FLOOR1_NODES = {};
+export const SC8_FLOOR1_NODES = {
+  Sc8Lift1F1: { lat:13.7291256 , lon:100.7802095 , type: "lift", label: "ลิฟต์ ชั้น1" },
+  Sc8Toilet1F1: { lat:13.7291665, lon:100.7800143, type: "Toilet", label: "ห้องน้ำชั้น 1" },
+  Sc8FireExit1F1: { lat:13.7288873, lon:100.7799855, type: "Fire_Exit", label: "ทางหนึไฟชั้น 1" },
+  Sc8Entrance1F1: { lat:13.7290372, lon:100.7799219, type: "Entrance", label: "ทางเข้าอาคารพระจอมชั้น 1" },
+  Sc8Stair1F1: { lat:13.7291831, lon:100.7801042, type: "Stair", label: "ทางหนึไฟข้างลิฟต์ชั้น 1"},
+  Sc8Stair2F1: { lat:13.7290097, lon:100.7801518, type: "Stair", label: "บันไดกลางโถงชั้น 1"},
+  Sc8CoWork1F1: { lat:13.7288521, lon:100.7800338, type: "Co_Work", label: "coworking space KDAI"},
+  Sc8StudyRoom1F1: { lat:13.7291126, lon:100.7802591, type: "Study_Room", label: "ห้อง 108 ตึกพระจอมฯ"},
+  Sc8StudyRoom2F1: { lat:13.7289785, lon:100.7802711, type: "Study_Room", label: "ห้อง 107 ตึกพระจอมฯ"},
+  Sc8StudyRoom3F1: { lat:13.7288756, lon:100.7802738, type: "Study_Room", label: "ห้อง 106 ตึกพระจอมฯ"},
+  Sc8PC1: { lat:13.7290345 , lon:100.7800217 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC2: { lat:13.7290358 , lon:100.7800928 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC3: { lat:13.7290358 , lon:100.7801504 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC4: { lat:13.7290866 , lon:100.7800230 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC5: { lat:13.7290879 , lon:100.7800968 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC6: { lat:13.7290853 , lon:100.7801518 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC7: { lat:13.7291296 , lon:100.7801518 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC8: { lat:13.7291556 , lon:100.7801303 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC9: { lat:13.7291544 , lon:100.7800131 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC9_5: { lat:13.7291570 , lon:100.7800801 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC10: { lat:13.7291818 , lon:100.7800788 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC11: { lat:13.7290853 , lon:100.7802229 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC12: { lat:13.7290345 , lon:100.7802242 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC13: { lat:13.7289798 , lon:100.7802255 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC14: { lat:13.7289212 , lon:100.7802282 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC15: { lat:13.7288769 , lon:100.7802269 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC16: { lat:13.7288769 , lon:100.7800847 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC17: { lat:13.7289811 , lon:100.7800888 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC18: { lat:13.7289303 , lon:100.7800834 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC19: { lat:13.7289016 , lon:100.7800552 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC20: { lat:13.7288899 , lon:100.7800123 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8PC21: { lat:13.7288730 , lon:100.7800364 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" }
+};
 
-export const SC8_FLOOR1_EDGES = [];
+export const SC8_FLOOR1_EDGES = [
+  ["Sc8Entrance1F1", "Sc8PC1"],
+  ["Sc8PC1", "Sc8PC2"],
+  ["Sc8PC1", "Sc8PC4"],
+  ["Sc8PC4", "Sc8PC5"],
+  ["Sc8PC6", "Sc8PC5"],
+  ["Sc8PC2", "Sc8PC3"],
+  ["Sc8PC1", "Sc8PC17"],
+  ["Sc8PC2", "Sc8PC5"],
+  ["Sc8PC11", "Sc8PC12"],
+  ["Sc8PC3", "Sc8PC6"],
+  ["Sc8Entrance1F1", "Sc8PC4"],
+  ["Sc8PC6", "Sc8PC7"],
+  ["Sc8PC7", "Sc8PC8"],
+  ["Sc8PC8", "Sc8PC9"],
+  ["Sc8PC9_5", "Sc8PC9"],
+  ["Sc8PC9", "Sc8ToiletF1"],
+  ["Sc8PC9_5", "Sc8PC10"],
+  ["Sc8PC10", "Sc8Stair1F1"],
+  ["Sc8PC3", "Sc8Stair2F1"],
+  ["Sc8PC6", "Sc8Lift1F1"],
+  ["Sc8PC6", "Sc8PC11"],
+  ["Sc8PC11", "Sc8StudyRoom1F1"],
+  ["Sc8PC3", "Sc8PC12"],
+  ["Sc8PC12", "Sc8PC13"],
+  ["Sc8PC13", "Sc8StudyRoom2F1"],
+  ["Sc8PC13", "Sc8PC14"],
+  ["Sc8PC14", "Sc8PC15"],
+  ["Sc8PC15", "Sc8StudyRoom3F1"],
+  ["Sc8PC15", "Sc8PC16"],
+  ["Sc8PC16", "Sc8PC21"],
+  ["Sc8PC21", "Sc8CoWork1F1"],
+  ["Sc8PC21", "Sc8PC20"],
+  ["Sc8PC20", "Sc8FireExit1F1"],
+  ["Sc8PC2", "Sc8PC17"],
+  ["Sc8PC17", "Sc8PC18"],
+  ["Sc8PC18", "Sc8PC19"],
+  ["Sc8PC19", "Sc8PC20"],
+  ["Sc8PC19", "Sc8PC21"],
+  ["Sc8PC19", "Sc8PC16"],
+];
 
 // ============================================================
 // 🔗 เส้นเชื่อมระหว่างชั้น
@@ -216,10 +291,11 @@ export const SC8_FLOOR1_EDGES = [];
 //   "Sc8F1Lift1",
 //   "Sc8F2Lift1",
 // ]
-//
-// ============================================================
 
-export const SC8_INTER_FLOOR_EDGES = [];
+
+export const SC8_INTER_FLOOR_EDGES = [
+
+];
 
 // ============================================================
 // 🚪 จุดเชื่อมภายในอาคารกับภายนอกอาคาร
@@ -234,20 +310,21 @@ export const SC8_INTER_FLOOR_EDGES = [];
 //
 // ============================================================
 
-export const SC8_EXTERIOR_LINKS = [];
+export const SC8_EXTERIOR_LINKS = [
+  { node: "Sc8Entrance1F1", lat: 13.7290371, lon: 100.7799681, type: "Entrance", label: "ทางเข้า Sc8" },
+];
 
-// ============================================================
 // 🌳 Node ภายนอกอาคาร
-// ============================================================
 
-export const SC8_EXTERIOR_NODES = {};
+export const SC8_EXTERIOR_NODES = Object.fromEntries(
+  SC8_EXTERIOR_LINKS.map((e, i) => [`Sc8Ext${i}`, { lat: e.lat, lon: e.lon, label: e.label || "ทางเข้า-ออก" }])
+);
 
 // ============================================================
 // 🛣️ Edge ภายนอกอาคาร
 // ============================================================
 
-export const SC8_EXTERIOR_EDGES = [];
-
+export const SC8_EXTERIOR_EDGES = SC8_EXTERIOR_LINKS.map((e, i) => [e.node, `Sc8Ext${i}`]);
 // ============================================================
 // 🧩 รวม Node ของ Sc8
 // ============================================================
@@ -259,7 +336,6 @@ export const SC8_ALL_NODES = {
 
 // ============================================================
 // 🧩 รวม Edge ของ Sc8
-// ============================================================
 
 export const SC8_ALL_EDGES = [
   ...SC8_FLOOR1_EDGES,

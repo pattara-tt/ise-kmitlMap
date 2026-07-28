@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import EventPage from "../components/EventPage";
 import ReportPage from "../components/ReportPage";
+import SettingsPage from "../components/SettingsPage";
 
 const MapView = dynamic(() => import("../components/MapView"), {
   ssr: false,
@@ -35,12 +36,21 @@ function NotiIcon() {
   );
 }
 
+function SettingsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path fillRule="evenodd" clipRule="evenodd" d="M8.14 1.667c-.55 0-1.02.393-1.117.933l-.157.874a1.05 1.05 0 01-.62.77 6.68 6.68 0 00-.72.416c-.297.19-.67.24-1.003.117l-.847-.31a1.133 1.133 0 00-1.39.5l-.86 1.49a1.133 1.133 0 00.28 1.44l.69.567c.263.216.4.55.373.89a6.79 6.79 0 000 .833c.027.34-.11.674-.373.89l-.69.567a1.133 1.133 0 00-.28 1.44l.86 1.49c.28.485.883.68 1.39.5l.847-.31c.333-.123.706-.073 1.003.117.23.15.47.29.72.416.316.16.543.45.62.77l.157.874c.097.54.567.933 1.117.933h1.72c.55 0 1.02-.393 1.117-.933l.157-.874c.077-.32.324-.61.62-.77.25-.126.49-.266.72-.416.297-.19.67-.24 1.003-.117l.847.31c.507.18 1.11-.015 1.39-.5l.86-1.49c.28-.485.163-1.1-.28-1.44l-.69-.567a1.05 1.05 0 01-.373-.89 6.79 6.79 0 000-.833c-.027-.34.11-.674.373-.89l.69-.567c.443-.34.56-.955.28-1.44l-.86-1.49a1.133 1.133 0 00-1.39-.5l-.847.31c-.333.123-.706.073-1.003-.117a6.68 6.68 0 00-.72-.416 1.05 1.05 0 01-.62-.77l-.157-.874a1.133 1.133 0 00-1.117-.933H8.14zM9 13.333A3.333 3.333 0 109 6.667a3.333 3.333 0 000 6.666z" fill="currentColor" />
+    </svg>
+  );
+}
+
 const TABS = [
   { id: "explore", label: "EXPLORE", icon: ExploreIcon },
   { id: "events", label: "EVENTS", icon: MissionIcon },
   { id: "report", label: "REPORT", icon: NotiIcon },
+  { id: "settings", label: "SETTINGS", icon: SettingsIcon },
 ];
-const TITLE = { explore: "EXPLORE", events: "EVENTS", report: "รายงานปัญหา" };
+const TITLE = { explore: "EXPLORE", events: "EVENTS", report: "รายงานปัญหา", settings: "ตั้งค่า" };
 
 export default function Page() {
   const mapApi = useRef(null);
@@ -63,6 +73,7 @@ export default function Page() {
         </div>
         {tab === "events" ? <EventPage /> : null}
         {tab === "report" ? <ReportPage /> : null}
+        {tab === "settings" ? <SettingsPage /> : null}
       </div>
 
       {/* Bottom nav ตาม Figma (Frame 22) */}

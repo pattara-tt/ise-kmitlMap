@@ -727,6 +727,8 @@ export function swPxToLatLng([x, y]) {
 }
 export const SW_OUTLINE = SW_OUTLINE_PX.map(swPxToLatLng);
 export const SW_FLOORS = [{ id: "1", label: "1", svg: "/data/floorplans/skywalk_sc_sp/floor1.svg" }];
+export const SW_FLOORS = [{ id: "1", label: "2", svg: "/data/floorplans/skywalk_sc_sp/floor2.svg" }];
+
 export const SW_SC_SP_NODES = {
   SpEscScStart: { lat: 13.7461580, lon: 100.5336115, type: "escalator", label: "บันไดเลื่อนไป SIAM CENTER" },
   SpEscScEnd: { lat: 13.7461801, lon: 100.5335377, type: "escalator", label: "" },

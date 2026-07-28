@@ -449,7 +449,8 @@ export function graphRoute(nodes, start, end) {
   const coords = [start, ...pathKeys.map((k) => nodes.get(k).pt), end];
   const nodeKeys = [null, ...pathKeys, null]; // คู่กับ coords ทุกจุด — null = จุดเริ่ม/จบสังเคราะห์ ไม่ใช่ node จริงในกราฟ
   let distM = 0; for (let i = 1; i < coords.length; i++) distM += haversine(coords[i - 1], coords[i]);
-  if (distM < 50) return null;
+  const hasIndoor = pathKeys.some((k) => k && k.startsWith("IN:")); // เส้นทางในตึกสั้นๆ (เช่น <50ม.) เป็นเรื่องปกติ ไม่ใช่ "เส้นทางปลอม" — ยกเว้นกฎระยะขั้นต่ำให้
+  if (!hasIndoor && distM < 50) return null;
   return { graphed: true, coordinates: coords, nodeKeys, distance_m: Math.round(distM), duration_min: Math.max(1, Math.round(distM / 75)), steps: [] };
 }
 

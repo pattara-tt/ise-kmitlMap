@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Nav3D from "./Nav3D";
 import PlaceInput from "./PlaceInput";
 import { speak, speakNow, unlockSpeech, loadVoices, hasThaiVoice } from "./speech";
 import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
@@ -11,7 +10,7 @@ import {
   KMITL_FLOOR1_NODES, KMITL_FLOOR1_EDGES,
   KMITL_ALL_NODES, KMITL_NODE_FLOOR, KMITL_EXTERIOR_LINKS,
   CAT, MAN, ROAD_EN, catColor, thaiInstr, roadEN,
-  OVERPASS_MIRRORS,
+  OVERPASS_MIRRORS, BUILDINGS,
 } from "./mapConstants";
 import {
   indoorFloorRoute,
@@ -35,7 +34,7 @@ export default function MapView({ apiRef }) {
   const [nav, setNav] = useState(null);
   const [voice, setVoice] = useState(true);
   const [voiceLang, setVoiceLang] = useState("th");
-  const [nav3d, setNav3D] = useState(null);
+
   const [sFrom, setSFrom] = useState("");
   const [sTo, setSTo] = useState("");
   // chips คุมเลเยอร์แผนที่ (ตัด Street light/lamp ออกแล้ว — เหลือแค่ทางเชื่อม/ห้องน้ำ)
@@ -43,6 +42,7 @@ export default function MapView({ apiRef }) {
   const [mapZoom, setMapZoom] = useState(ZOOM);
   const [mapReady, setMapReady] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [placeCard, setPlaceCard] = useState(null); // { name, coord, extract, image, loading, error } — การ์ดรายละเอียดสถานที่หลังค้นหา
   const [routeSheetOpen, setRouteSheetOpen] = useState(false);
   const [viewMode, setViewMode] = useState("auto"); // "auto" | "mobile" | "desktop" — ปุ่มมุมขวาบนบังคับ layout ไม่ต้องรอ resize จอจริง
   // 🔧 สลับโหมดแล้วต้องสั่ง Leaflet คำนวณขนาด container ใหม่เอง — ไม่งั้นแผนที่ค้างขนาดเดิม (เห็นแค่ UI overlay ขยับนิดเดียว แผนที่ไม่เต็มจอ)
@@ -162,12 +162,13 @@ export default function MapView({ apiRef }) {
             const d = haversine([lng, lat], [n.lon, n.lat]);
             if (d < bestD) { bestD = d; bestId = id; }
           }
-          return bestId ? nodesObj[bestId] : null;
+          return bestId ? { id: bestId, ...nodesObj[bestId] } : null;
         };
+        let snapNode = null; // 🏢 node จริงที่สแนปติด (ถ้ามี) — ใช้ตั้งชื่อป้ายจาก label ของ node เองแทนการ reverse-geocode
         if (kmitlOpenRef.current && pipTH(lat, lng, KMITL_OUTLINE)) {
           const floorNodes = Object.fromEntries(Object.keys(KMITL_ALL_NODES).filter((id) => KMITL_NODE_FLOOR[id] === kmitlFloorRef.current).map((id) => [id, KMITL_ALL_NODES[id]]));
           const near = nearestInFloor(floorNodes);
-          if (near) { snapLat = near.lat; snapLng = near.lon; }
+          if (near) { snapLat = near.lat; snapLng = near.lon; snapNode = near; }
         }
         ctx.current.pinMarker = L.marker([snapLat, snapLng], {
           icon: L.divIcon({ className: "", html: '<div style="width:14px;height:14px;background:#D93025;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.4)"></div>', iconSize: [14, 14], iconAnchor: [7, 14] }),
@@ -180,8 +181,15 @@ export default function MapView({ apiRef }) {
         box.appendChild(btnFrom); box.appendChild(btnTo);
         const setPin = (setter) => async () => {
           map.closePopup();
-          let label = `หมุด ${snapLat.toFixed(5)},${snapLng.toFixed(5)}`;
-          try { const g = await queuedReverse([snapLng, snapLat]); if (g && (g.place || g.road)) label = g.place || g.road; } catch (err) {}
+          let label;
+          if (snapNode) {
+            // 🏢 สแนปติด node ในตึก — ใช้ label ของ node เอง (ไม่ reverse-geocode กันได้ชื่อซ้ำกันทั้งต้นทาง/ปลายทาง)
+            const t = NODE_TYPES.find((x) => x.id === snapNode.type);
+            label = snapNode.label || `${t ? t.label : snapNode.type} · ${snapNode.id}`;
+          } else {
+            label = `หมุด ${snapLat.toFixed(5)},${snapLng.toFixed(5)}`;
+            try { const g = await queuedReverse([snapLng, snapLat]); if (g && (g.place || g.road)) label = g.place || g.road; } catch (err) {}
+          }
           ctx.current.placeCache[label] = { coord: [snapLng, snapLat], name: label };
           setter(label);
         };
@@ -300,6 +308,33 @@ export default function MapView({ apiRef }) {
     return () => { cancelled = true; setMapReady(false); if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
   }, []);
 
+  // 🎓 ป้ายชื่ออาคาร — วางกลางตึกตาม bounds ใน BUILDINGS registry พร้อมไอคอนหมวกปริญญาบอกพิกัด
+  // (แทนที่ label สำเร็จรูปจาก CARTO tile ที่ถูกเอาออกไปแล้วใน mapBaseLayer.js เพราะชื่อผิด/ไม่ตรงกับชื่อจริงของอาคาร)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m || !mapReady) return;
+    const layer = L.layerGroup().addTo(m);
+    for (const key in BUILDINGS) {
+      const b = BUILDINGS[key];
+      if (!b.bounds || !b.bounds.length) continue;
+      const [[south, west], [north, east]] = b.bounds;
+      const lat = (south + north) / 2, lon = (west + east) / 2;
+      L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: "",
+          html: `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none">
+            <span style="font-size:18px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">🎓</span>
+            <span style="background:rgba(255,255,255,.92);color:#202124;font-weight:800;font-size:11px;padding:2px 8px;border-radius:999px;box-shadow:0 1px 4px rgba(0,0,0,.25);white-space:nowrap">${b.name}</span>
+          </div>`,
+          iconSize: [140, 40], iconAnchor: [70, 20],
+        }),
+        interactive: false,
+        zIndexOffset: 500,
+      }).addTo(layer);
+    }
+    return () => m.removeLayer(layer);
+  }, [mapReady]);
+
   // 🏢 วาด/ลบ overlay ผังชั้น KMITL ตาม state เปิด/ปิด และชั้นที่เลือก
   useEffect(() => {
     const c = ctx.current, L = c.L, m = mapRef.current;
@@ -382,6 +417,22 @@ export default function MapView({ apiRef }) {
     (c.kmitlGraphLayer || []).forEach((ly) => m.removeLayer(ly));
     c.kmitlGraphLayer = [];
     if (!kmitlOpen || !Object.keys(kmitlFloorNodes).length) { setKmitlRouteResult(null); return; }
+    // 🔗 วาดเส้น edge ทั้งหมด (เส้นประจาง) ให้เห็นว่า node ไหนเชื่อมถึงกันจริงบ้าง — ช่วยดีบั๊ก "มี node แต่ไม่มี edge เชื่อม" ซึ่งเป็นสาเหตุอันดับ 1 ที่หาเส้นทางไม่เจอ
+    for (const [a, b] of kmitlFloorEdges) {
+      const na = kmitlFloorNodes[a], nb = kmitlFloorNodes[b];
+      if (!na || !nb) continue; // edge อ้าง node ที่ไม่มีจริง (พิมพ์ผิด/ลืมเพิ่ม) — ข้ามอย่างปลอดภัย ไม่ให้พัง
+      c.kmitlGraphLayer.push(L.polyline([[na.lat, na.lon], [nb.lat, nb.lon]], { color: "#9AA0A6", weight: 2, opacity: 0.6, dashArray: "4 4", pane: "bdiFloorPane" }).addTo(m));
+    }
+    // 📍 วาด node ทุกจุดของชั้นที่กำลังดูอยู่ ให้เห็นบน SVG จริง (จุดที่หายไปก่อนหน้านี้)
+    for (const id of Object.keys(kmitlFloorNodes)) {
+      const n = kmitlFloorNodes[id];
+      if (!Number.isFinite(n?.lat) || !Number.isFinite(n?.lon)) continue;
+      const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
+      const marker = L.circleMarker([n.lat, n.lon], { radius: 5, color: "#FFFFFF", weight: 1.5, fillColor: t.color, fillOpacity: 0.95, pane: "bdiFloorPane" }).addTo(m);
+      if (n.type === "escalator" || n.type === "lift") marker.bindPopup(`${t.icon} ${t.label} #${id}${n.label ? "<br>" + n.label : ""}`);
+      else marker.bindTooltip(`${id}${n.label ? " · " + n.label : ""}`, { permanent: false });
+      c.kmitlGraphLayer.push(marker);
+    }
     if (kmitlRouteResult?.path?.length > 1) {
       const latlngs = kmitlRouteResult.path.map((id) => kmitlFloorNodes[id]).filter(Boolean).map((n) => [n.lat, n.lon]);
       if (latlngs.length > 1) c.kmitlGraphLayer.push(L.polyline(latlngs, { color: "#F9AB00", weight: 6, opacity: 0.95, pane: "bdiFloorPane" }).addTo(m));
@@ -453,7 +504,10 @@ export default function MapView({ apiRef }) {
             const SEGMENT_LABELS = { indoor: "🔵 ทางเดินในอาคาร", outdoor: "🟢 ทางเดินนอกอาคาร" };
             for (const seg of segs) {
               if (seg.coordinates.length < 2) continue;
-              L.polyline(seg.coordinates.map(([lon, lat]) => [lat, lon]), { color: SEGMENT_COLORS[seg.cat] || "#1A73E8", weight: 7, opacity: 1, lineCap: "round", lineJoin: "round" })
+              const latlngs = seg.coordinates.map(([lon, lat]) => [lat, lon]);
+              // 🔵⚪ เส้นนำทางแบบจุด: วาดซ้อน 2 ชั้น — ชั้นขาวหนากว่าเป็นขอบ + ชั้นฟ้าบางกว่าทับด้านบน ให้ดูเป็นจุดกลมสีฟ้าขอบขาว
+              L.polyline(latlngs, { color: "#FFFFFF", weight: 11, opacity: 1, dashArray: "1 14", lineCap: "round", lineJoin: "round" }).addTo(c.segLayer);
+              L.polyline(latlngs, { color: "#1A73E8", weight: 7, opacity: 1, dashArray: "1 14", lineCap: "round", lineJoin: "round" })
                 .bindPopup(SEGMENT_LABELS[seg.cat] || seg.cat)
                 .addTo(c.segLayer);
             }
@@ -715,6 +769,38 @@ export default function MapView({ apiRef }) {
   function toggleVoiceLang() { const c = ctx.current; c.voiceLang = c.voiceLang === "en" ? "th" : "en"; setVoiceLang(c.voiceLang); }
 
   function doSearch() { const f = sFrom.trim(), t = sTo.trim(); setSearchOpen(false); setRouteSheetOpen(false); try { apiRef?.current?.showRoutes?.(f || null, t || null); } catch (e) {} }
+
+  // 📚 ดึงข้อมูลสถานที่จาก Wikipedia อัตโนมัติ (ข้อความย่อ + รูปภาพ) — ลองภาษาไทยก่อน ถ้าไม่มีค่อย fallback เป็นอังกฤษ
+  async function fetchWikiSummary(query) {
+    const tryLang = async (lang) => {
+      const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!res.ok) return null;
+      const j = await res.json();
+      if (j.type === "disambiguation" || !j.extract) return null;
+      return { title: j.title, extract: j.extract, image: j.thumbnail?.source || j.originalimage?.source || null };
+    };
+    try {
+      return (await tryLang("th")) || (await tryLang("en"));
+    } catch (e) { return null; }
+  }
+
+  // 📍 ผู้ใช้เลือกสถานที่ปลายทางจากช่องค้นหา — แสดงการ์ดรายละเอียดกลางจอก่อน ยังไม่ขึ้นเส้นทางทันที (กด "นำทาง" ในการ์ดค่อยขึ้น)
+  async function openPlaceCard(name, coord) {
+    ctx.current.placeCache[name] = { coord, name };
+    setSTo(name);
+    setPlaceCard({ name, coord, extract: null, image: null, loading: true, error: false });
+    const wiki = await fetchWikiSummary(name);
+    setPlaceCard((prev) => (prev && prev.name === name
+      ? { ...prev, loading: false, extract: wiki?.extract || null, image: wiki?.image || null, error: !wiki }
+      : prev));
+  }
+  function navigateFromCard() {
+    if (!placeCard) return;
+    setPlaceCard(null);
+    setSearchOpen(false); setRouteSheetOpen(false);
+    try { apiRef?.current?.showRoutes?.(sFrom.trim() || null, placeCard.name); } catch (e) {}
+  }
   // เปิด/ปิดเลเยอร์บนแผนที่ตาม chip (ทางเชื่อม/skywalk, ห้องน้ำ) — ตัด Street light chip ออกแล้ว
   function toggleChip(k) {
     const c = ctx.current;
@@ -897,12 +983,42 @@ export default function MapView({ apiRef }) {
               <span className="gm-origin-dot" />
               <span className="gm-dest-pin" />
               <PlaceInput value={sFrom} onChange={setSFrom} onEnter={doSearch} onPick={async (sg) => { let coord = sg.coord; if (sg.src === "landmark" && sg.lm) { try { const r = await resolveLandmark(sg.lm); if (r?.coord) coord = r.coord; } catch (e) {} } setSFrom(sg.name); ctx.current.placeCache[sg.name] = { coord, name: sg.name }; }} placeholder="ตำแหน่งของคุณ" />
-              <PlaceInput value={sTo} onChange={setSTo} onEnter={doSearch} onPick={async (sg) => { let coord = sg.coord; if (sg.src === "landmark" && sg.lm) { try { const r = await resolveLandmark(sg.lm); if (r?.coord) coord = r.coord; } catch (e) {} } setSTo(sg.name); ctx.current.placeCache[sg.name] = { coord, name: sg.name }; }} placeholder="เลือกปลายทาง" />
+              <PlaceInput value={sTo} onChange={setSTo} onEnter={doSearch} onPick={async (sg) => { let coord = sg.coord; if (sg.src === "landmark" && sg.lm) { try { const r = await resolveLandmark(sg.lm); if (r?.coord) coord = r.coord; } catch (e) {} } openPlaceCard(sg.name, coord); }} placeholder="เลือกปลายทาง" />
             </div>
             <button className="bdi-btn gm-search-action" onClick={doSearch}>ค้นหาเส้นทาง</button>
           </div>
         )}
       </div>
+      ) : null}
+
+      {/* 📍 การ์ดรายละเอียดสถานที่ — โผล่กลางจอหลังเลือกปลายทางจากช่องค้นหา กด "นำทาง" ค่อยขึ้นเส้นทาง */}
+      {placeCard ? (
+        <div style={{ position: "absolute", inset: 0, zIndex: 2100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(32,33,36,.35)" }}
+          onClick={() => setPlaceCard(null)}>
+          <div style={{ width: "min(360px, 100%)", background: "#FFFFFF", borderRadius: 18, overflow: "hidden", boxShadow: "0 8px 30px rgba(0,0,0,.3)" }} onClick={(e) => e.stopPropagation()}>
+            {placeCard.loading ? (
+              <div style={{ height: 160, background: "#F1F3F4", display: "grid", placeItems: "center", color: "#5F6368", fontSize: 13 }}>กำลังโหลดรูปภาพ…</div>
+            ) : placeCard.image ? (
+              <img src={placeCard.image} alt={placeCard.name} style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }} />
+            ) : (
+              <div style={{ height: 100, background: "#E8F0FE", display: "grid", placeItems: "center", fontSize: 34 }}>📍</div>
+            )}
+            <div style={{ padding: "16px 18px" }}>
+              <div style={{ fontWeight: 800, fontSize: 18, color: "#202124", marginBottom: 6 }}>{placeCard.name}</div>
+              <div style={{ fontSize: 13.5, color: "#5F6368", lineHeight: 1.6, maxHeight: 140, overflowY: "auto" }}>
+                {placeCard.loading ? "กำลังค้นหาข้อมูล…" : placeCard.extract || "ไม่พบข้อมูลรายละเอียดของสถานที่นี้"}
+              </div>
+              <button onClick={navigateFromCard}
+                style={{ width: "100%", marginTop: 16, padding: "12px 0", border: "none", borderRadius: 12, background: "#1A73E8", color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+                🧭 นำทาง
+              </button>
+              <button onClick={() => setPlaceCard(null)}
+                style={{ width: "100%", marginTop: 8, padding: "9px 0", border: "none", background: "none", color: "#5F6368", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                ปิด
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {/* Chips เปิด/ปิดเลเยอร์ (ทางเชื่อม/Skywalk, ห้องน้ำ) */}
@@ -941,7 +1057,6 @@ export default function MapView({ apiRef }) {
                     <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                       <button onClick={(e) => { e.stopPropagation(); startNav(r.index); }} className="bdi-btn" style={{ fontSize: 12, padding: "6px 12px" }}>🚶 เริ่มนำทาง</button>
                       <button onClick={(e) => { e.stopPropagation(); startSim(r.index); }} className="bdi-btn ghost" style={{ fontSize: 12, padding: "6px 12px" }}>▶ จำลอง</button>
-                      <button onClick={(e) => { e.stopPropagation(); setNav3D({ route: r, problems: ctx.current.problems, toilets: ctx.current.osmToilets, cameras: ctx.current.osmCameras, destName: routeData.endName }); }} className="bdi-btn ghost" style={{ fontSize: 12, padding: "6px 12px" }}>🧊 3D</button>
                     </div>
                   </button>
                 );
@@ -1071,7 +1186,6 @@ export default function MapView({ apiRef }) {
           className="gm-fab" style={{ bottom: routeData ? (routeSheetOpen ? "58%" : 224) : 120 }}>◎</button>
       ) : null}
 
-      {nav3d ? <Nav3D route={nav3d.route} problems={nav3d.problems} toilets={nav3d.toilets} cameras={nav3d.cameras} destName={nav3d.destName} onClose={() => setNav3D(null)} /> : null}
     </div>
   );
 }
