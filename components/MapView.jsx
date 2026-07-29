@@ -1462,9 +1462,8 @@ export default function MapView({ apiRef }) {
               ลากจุด <span style={{ color: "#4ade80" }}>เขียว</span> (มุมบนซ้าย NW) และ <span style={{ color: "#f87171" }}>แดง</span> (มุมล่างขวา SE) ของภาพให้ตรงกับขอบตึกจริงบนแผนที่<br /><br />
               <b>NW:</b> {kmitlCalReadout.nw}<br />
               <b>SE:</b> {kmitlCalReadout.se}<br /><br />
-              พอตรงแล้ว ก็อปข้อความนี้ทั้งหมดส่งกลับมาให้ผมได้เลย
             </div>
-          ) : null}
+          ) : null}ห
           {!KMITL_FLOORS.find((x) => x.id === kmitlFloor)?.svg ? (
             <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "8px 12px", color: "var(--bdi-text-dim)", fontSize: 12, maxWidth: 220 }}>
               ยังไม่มีไฟล์ผังของชั้นนี้
