@@ -465,6 +465,25 @@ export const LANDMARKS = [
   { aliases: ["สจล", "สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง", "kmitl", "พระจอมเกล้าลาดกระบัง"], coord: [100.7789, 13.7292], name: "สจล. (KMITL)" },
   { aliases: ["ลาดกระบัง", "lat krabang", "ladkrabang"], coord: [100.7789, 13.7292], name: "ลาดกระบัง" },
   { aliases: ["สนามบินสุวรรณภูมิ", "สุวรรณภูมิ", "suvarnabhumi"], coord: [100.7501, 13.6900], name: "สนามบินสุวรรณภูมิ" },
+  {
+    name: "ตึกพระจอมเกล้าฯ (Sc8)",
+    coord: [100.779996, 13.728996],
+    query: null,
+    aliases: [
+      "sc8",
+      "sc08",
+      "sc 8",
+      "sc 08",
+      "ตึกพระจอม",
+      "ตึกพระจอมเกล้า",
+      "ตึกพระจอมเกล้าฯ",
+      "ตึกพระจอมเกล้าเจ้าอยู่หัว",
+      "ตึกปฏิบัติการณ์หลังใหม่",
+      "ตึกปฏิบัติการหลังใหม่",
+      "ถนนหลวงพรตพิทยพยัต",
+      "ถนนหลวงพรตพิทยพยัตต์",
+    ],
+  },
 ];
 // แก้พิกัดแลนด์มาร์กให้ "ทนทาน": ถ้า lm มี query เฉพาะ -> ถาม OSM (Nominatim) เอาพิกัดจริง
 // แต่ยอมรับเฉพาะเมื่ออยู่ใกล้พิกัด curated (<1.5 กม.) กัน Nominatim คืนที่ผิด/กำกวม
@@ -557,23 +576,130 @@ export function queuedReverse(lonlat) {
 
 // แนะนำสถานที่แบบสด: รวมแลนด์มาร์กในเครื่อง + ค้นจาก OSM (Nominatim) ตามที่พิมพ์
 export async function suggestPlaces(q) {
-  const s = (q || "").trim().toLowerCase();
+  const normalize = (text) =>
+    String(text || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "");
+
+  const s = normalize(q);
   const out = [];
+
+  const SC8_NAME = "ตึกพระจอมเกล้าฯ (Sc8)";
+
+  const isSc8Search = [
+    "sc8",
+    "sc08",
+    "ตึกพระจอม",
+    "ตึกพระจอมเกล้า",
+    "ตึกพระจอมเกล้าฯ",
+    "ตึกพระจอมเกล้าเจ้าอยู่หัว",
+    "ตึกปฏิบัติการณ์หลังใหม่",
+    "ตึกปฏิบัติการหลังใหม่",
+    "ถนนหลวงพรตพิทยพยัต",
+    "ถนนหลวงพรตพิทยพยัตต์",
+  ].some((alias) => {
+    const a = normalize(alias);
+    return a.includes(s) || s.includes(a);
+  });
+
+  if (isSc8Search) {
+    const lm = LANDMARKS.find(
+      (item) => item.name === SC8_NAME
+    );
+
+    out.push({
+      name: SC8_NAME,
+      coord: [100.780099, 13.729721],
+      src: "landmark",
+      lm: lm || {
+        name: SC8_NAME,
+        coord: [100.780099, 13.729721],
+        aliases: [],
+      },
+    });
+
+    return out;
+  }
+
   for (const lm of LANDMARKS) {
-    if (lm.aliases.some((a) => { const al = a.toLowerCase(); return al.includes(s) || s.includes(al); })) {
-      if (!out.some((o) => o.name === lm.name)) out.push({ name: lm.name, coord: lm.coord, src: "landmark", lm });
+    const matched = lm.aliases?.some((alias) => {
+      const a = normalize(alias);
+      return a.includes(s) || s.includes(a);
+    });
+
+    if (matched && !out.some((item) => item.name === lm.name)) {
+      out.push({
+        name: lm.name,
+        coord: lm.coord,
+        src: "landmark",
+        lm,
+      });
     }
   }
+
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=th&countrycodes=th&viewbox=${SEARCH_VIEWBOX}&bounded=1&q=${encodeURIComponent(q)}`;
-    const r = await fetch(url, { headers: { Accept: "application/json" } });
-    if (r.ok) {
-      const j = await r.json();
-      for (const it of j) {
-        const name = (it.display_name || "").split(",").slice(0, 2).join(", ").trim();
-        if (name && !out.some((o) => o.name === name)) out.push({ name, coord: [parseFloat(it.lon), parseFloat(it.lat)], src: "osm" });
+    const url =
+      "https://nominatim.openstreetmap.org/search" +
+      "?format=json" +
+      "&limit=6" +
+      "&accept-language=th" +
+      "&countrycodes=th" +
+      "&viewbox=100.70,13.80,100.85,13.65" +
+      "&bounded=1" +
+      `&q=${encodeURIComponent(q)}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (response.ok) {
+      const results = await response.json();
+
+      for (const item of results) {
+        let name = (item.display_name || "")
+          .split(",")
+          .slice(0, 2)
+          .join(", ")
+          .trim();
+
+        const normalizedName = normalize(name);
+
+        const isOldSc8Name =
+          normalizedName.includes(
+            normalize("ตึกปฏิบัติการณ์หลังใหม่")
+          ) ||
+          normalizedName.includes(
+            normalize("ตึกปฏิบัติการหลังใหม่")
+          ) ||
+          normalizedName.includes(
+            normalize("ถนนหลวงพรตพิทยพยัต")
+          );
+
+        if (isOldSc8Name) {
+          name = SC8_NAME;
+        }
+
+        if (
+          name &&
+          !out.some((existing) => existing.name === name)
+        ) {
+          out.push({
+            name,
+            coord: [
+              parseFloat(item.lon),
+              parseFloat(item.lat),
+            ],
+            src: isOldSc8Name ? "landmark" : "osm",
+          });
+        }
       }
     }
-  } catch (e) {}
+  } catch (error) {
+    console.error("suggestPlaces error:", error);
+  }
+
   return out.slice(0, 8);
 }

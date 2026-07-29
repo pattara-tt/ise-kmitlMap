@@ -240,6 +240,13 @@ export async function drawGoogleLikeBaseMap(L, map, bbox) {
     return { type: "place", color: "#8F959B" };
   };
   
+  const NAME_OVERRIDE = {
+    "ตึกปฏิบัติการณ์หลังใหม่": "ตึกพระจอมเกล้าฯ (Sc8)",
+    "ตึกปฏิบัติการหลังใหม่": "ตึกพระจอมเกล้าฯ (Sc8)",
+    "ถนนหลวงพรตพิทยพยัต": "ตึกพระจอมเกล้าฯ (Sc8)",
+    "ถนนหลวงพรตพิทยพยัตต์": "ตึกพระจอมเกล้าฯ (Sc8)",
+  };
+
   if (poiJson) {
     const seen = new Set();
     for (const el of poiJson.elements || []) {
@@ -248,9 +255,20 @@ export async function drawGoogleLikeBaseMap(L, map, bbox) {
       const lon = el.lon ?? el.center?.lon;
       if (lat == null || lon == null) continue;
       const tags = el.tags || {};
-      const name = tags["name:th"] || tags.name || tags["name:en"];
-      if (!name) continue;
-      const key = `${lat.toFixed(6)},${lon.toFixed(6)},${name}`;
+
+    const rawName =
+      tags["name:th"] ||
+      tags.name ||
+      tags["name:en"];
+
+    if (!rawName) continue;
+
+    const name =
+      NAME_OVERRIDE[rawName.trim()] ||
+      rawName;
+
+    const key =
+      `${lat.toFixed(6)},${lon.toFixed(6)},${name}`;   
       if (seen.has(key)) continue;
       seen.add(key);
       const st = poiStyle(tags);

@@ -236,7 +236,12 @@ export const SC8_FLOOR1_NODES = {
   Sc8PC18: { lat:13.7289303 , lon:100.7800834 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
   Sc8PC19: { lat:13.7289016 , lon:100.7800552 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
   Sc8PC20: { lat:13.7288899 , lon:100.7800123 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
-  Sc8PC21: { lat:13.7288730 , lon:100.7800364 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" }
+  Sc8PC21: { lat:13.7288730 , lon:100.7800364 , type: "path", label: "ทางเดินอาคารพระจอมชั้น 1" },
+  Sc8StudyRoom1CenterF1: { lat:13.7291617 , lon:100.7802781 , type: "path", label: "ห้อง 108 ตึกพระจอมฯ" },
+  Sc8StudyRoom2CenterF1: { lat:13.7289767 , lon:100.7802956 , type: "path", label: "ห้อง 107 ตึกพระจอมฯ" },
+  Sc8StudyRoom3CenterF1: { lat:13.7288620 , lon:100.7803023 , type: "path", label: "ห้อง 106 ตึกพระจอมฯ" },
+  Sc8CoWork1F1Center: { lat:13.7288373 , lon:100.7800917, type: "path", label: "coworking space KDAI" },
+
 };
 
 export const SC8_FLOOR1_EDGES = [
@@ -255,7 +260,7 @@ export const SC8_FLOOR1_EDGES = [
   ["Sc8PC7", "Sc8PC8"],
   ["Sc8PC8", "Sc8PC9"],
   ["Sc8PC9_5", "Sc8PC9"],
-  ["Sc8PC9", "Sc8ToiletF1"],
+  ["Sc8PC9", "Sc8Toilet1F1"],
   ["Sc8PC9_5", "Sc8PC10"],
   ["Sc8PC10", "Sc8Stair1F1"],
   ["Sc8PC3", "Sc8Stair2F1"],
@@ -280,6 +285,11 @@ export const SC8_FLOOR1_EDGES = [
   ["Sc8PC19", "Sc8PC21"],
   ["Sc8PC19", "Sc8PC16"],
 ];
+export const SC8_FLOOR2_NODES = {
+  
+};
+
+export const SC8_FLOOR2_EDGES = [];
 
 // ============================================================
 // 🔗 เส้นเชื่อมระหว่างชั้น

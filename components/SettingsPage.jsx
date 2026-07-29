@@ -25,6 +25,7 @@ export default function SettingsPage() {
 
   const rowStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 14px", borderBottom: "1px solid #E8EAED", cursor: "pointer" };
   const cardStyle = { borderRadius: 14, background: "#FFFFFF", border: "1px solid #DADCE0", boxShadow: "0 1px 3px rgba(60,64,67,.15)", overflow: "hidden", marginBottom: 4 };
+  const rowIcon = (src) => <img src={src} alt="" style={{ width: 18, height: 18, objectFit: "contain" }} />;
 
   return (
     <div className="bdi-page">
@@ -41,15 +42,15 @@ export default function SettingsPage() {
       <div className="bdi-h3"><span>บัญชี</span></div>
       <div style={cardStyle}>
         <div style={rowStyle}>
-          <span style={{ fontSize: 14, color: "#202124" }}>✏️ แก้ไขโปรไฟล์</span>
+          <span style={{ fontSize: 14, color: "#202124", display: "flex", alignItems: "center", gap: 10 }}>{rowIcon("/data/icon/editProfile.svg")} แก้ไขโปรไฟล์</span>
           <span style={{ color: "#5F6368" }}>›</span>
         </div>
         <div style={rowStyle}>
-          <span style={{ fontSize: 14, color: "#202124" }}>🔒 เปลี่ยนรหัสผ่าน</span>
+          <span style={{ fontSize: 14, color: "#202124", display: "flex", alignItems: "center", gap: 10 }}>{rowIcon("/data/icon/password.svg")} เปลี่ยนรหัสผ่าน</span>
           <span style={{ color: "#5F6368" }}>›</span>
         </div>
         <div style={{ ...rowStyle, borderBottom: "none" }}>
-          <span style={{ fontSize: 14, color: "#202124" }}>🔔 การแจ้งเตือน</span>
+          <span style={{ fontSize: 14, color: "#202124", display: "flex", alignItems: "center", gap: 10 }}>{rowIcon("/data/icon/noti.svg")} การแจ้งเตือน</span>
           <span style={{ color: "#5F6368" }}>›</span>
         </div>
       </div>
@@ -58,15 +59,15 @@ export default function SettingsPage() {
       <div className="bdi-h3"><span>คำแนะนำ</span></div>
       <div style={cardStyle}>
         <div style={rowStyle}>
-          <span style={{ fontSize: 14, color: "#202124" }}>❓ วิธีใช้งานแอป</span>
+          <span style={{ fontSize: 14, color: "#202124", display: "flex", alignItems: "center", gap: 10 }}>{rowIcon("/data/icon/infor.svg")} วิธีใช้งานแอป</span>
           <span style={{ color: "#5F6368" }}>›</span>
         </div>
         <div style={rowStyle}>
-          <span style={{ fontSize: 14, color: "#202124" }}>💬 ติดต่อ/ส่งความคิดเห็น</span>
+          <span style={{ fontSize: 14, color: "#202124", display: "flex", alignItems: "center", gap: 10 }}>{rowIcon("/data/icon/contact.svg")} ติดต่อ/ส่งความคิดเห็น</span>
           <span style={{ color: "#5F6368" }}>›</span>
         </div>
         <div style={{ ...rowStyle, borderBottom: "none" }}>
-          <span style={{ fontSize: 14, color: "#202124" }}>📄 เงื่อนไขการใช้งาน & ความเป็นส่วนตัว</span>
+          <span style={{ fontSize: 14, color: "#202124", display: "flex", alignItems: "center", gap: 10 }}>{rowIcon("/data/icon/note.svg")} เงื่อนไขการใช้งาน & ความเป็นส่วนตัว</span>
           <span style={{ color: "#5F6368" }}>›</span>
         </div>
       </div>
