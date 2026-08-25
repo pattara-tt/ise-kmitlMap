@@ -25,21 +25,21 @@ function Contracts({ user }) {
 
   return (
     <>
-      <UCHead code="UC4" title="ติดตามวันหมดอายุสัญญาบริการ" desc="เรียงตามวันที่ใกล้หมดอายุที่สุด — สัญญาที่เหลือไม่เกิน 30 วันจะถูกไฮไลต์" />
+      <UCHead title="ติดตามระยะสัญญาบริการ" desc="เรียงตามวันที่ใกล้หมดอายุที่สุด — สัญญาใหม่ก่อนหมดอายุสัญญา" />
       <Tiles items={[
         { label: "สัญญาทั้งหมด", value: rows.length },
-        { label: "ใกล้หมดอายุ (≤30 วัน)", value: soon },
-        { label: "หมดอายุแล้ว", value: expired },
-        { label: "ยังใช้งานได้", value: rows.length - expired },
+        { label: "สัญญาใกล้หมดอายุ (≤30 วัน)", value: soon },
+        { label: "สิ้นสุดสัญญา", value: expired },
+        { label: "อยู่ในระยะสัญญา", value: rows.length - expired },
       ]} />
       <SearchBar value={q} onChange={setQ} placeholder="ค้นหาชื่อสถาบัน / แพ็กเกจ" />
       <Table
         columns={[
           { key: "institution", label: "สถาบัน" },
-          { key: "plan", label: "แพ็กเกจ" },
-          { key: "endDate", label: "วันหมดอายุ" },
+          { key: "plan", label: "ประเภทการใช้งาน" },
+          { key: "endDate", label: "วันสิ้นอายุสัญญา" },
           {
-            key: "left", label: "คงเหลือ",
+            key: "left", label: "ระยะคงเลือสัญญา",
             render: (c) => c.left < 0
               ? <Pill color="#D93025" bg="#FCE8E6">หมดอายุ {Math.abs(c.left)} วัน</Pill>
               : c.left <= 30
@@ -76,7 +76,7 @@ function Broadcast({ user }) {
 
   return (
     <>
-      <UCHead code="UC5" title="ส่งข้อความแจ้งเตือนระบบถึงทุกมหาวิทยาลัยในระบบ" desc="ข้อความจะแสดงบนหน้าแรกของผู้ใช้ทุกคนในสถาบันที่เลือก" />
+      <UCHead title="ส่งข้อความแจ้งเตือนระบบถึงทุกมหาวิทยาลัยในระบบ" desc="ข้อความจะแสดงบนหน้าแรกของผู้ใช้ทุกคนในสถาบันที่เลือก" />
       <Card>
         <Field label="หัวข้อ"><Input value={form.title} onChange={set("title")} placeholder="เช่น แจ้งปิดปรับปรุงระบบ" /></Field>
         <Field label="เนื้อหา"><Textarea value={form.body} onChange={set("body")} placeholder="รายละเอียดที่ต้องการแจ้ง" /></Field>
@@ -115,7 +115,7 @@ function Access({ user }) {
 
   return (
     <>
-      <UCHead code="UC6" title="จัดการสิทธิ์การเข้าถึงระดับสถาบัน" desc="กำหนดระดับสิทธิ์ โมดูลที่เปิดใช้ และจำนวนบัญชีสูงสุดของแต่ละสถาบัน" />
+      <UCHead title="จัดการสิทธิ์การเข้าถึงระดับสถาบัน" desc="กำหนดระดับสิทธิ์ โมดูลที่เปิดใช้ และจำนวนบัญชีสูงสุดของแต่ละสถาบัน" />
       {items.map((row) => (
         <Card key={row.id}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
