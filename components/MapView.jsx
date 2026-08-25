@@ -220,7 +220,8 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
   );
 }
 
-export default function MapView({ apiRef }) {
+export default function MapView({ apiRef, viewMode = "auto" }) {
+  // viewMode ถูกควบคุมจากปุ่มสลับ "มือถือ/คอม" ที่แถบบนของแอป (app/page.jsx)
   const mapEl = useRef(null);
   const mapRef = useRef(null);
   const ctx = useRef({ L: null, routeLayer: null, problems: [], osmPromise: null, select: () => {}, scored: null, voiceOn: true, voiceLang: "th", crossings: [], placeCache: {} });
@@ -243,7 +244,6 @@ export default function MapView({ apiRef }) {
   const [routeFormOpen, setRouteFormOpen] = useState(false);
   const [placeCard, setPlaceCard] = useState(null); // { name, coord, extract, image, loading, error } — การ์ดรายละเอียดสถานที่หลังค้นหา
   const [routeSheetOpen, setRouteSheetOpen] = useState(false);
-  const [viewMode, setViewMode] = useState("auto"); // "auto" | "mobile" | "desktop" — ปุ่มมุมขวาบนบังคับ layout ไม่ต้องรอ resize จอจริง
   // 🔧 สลับโหมดแล้วต้องสั่ง Leaflet คำนวณขนาด container ใหม่เอง — ไม่งั้นแผนที่ค้างขนาดเดิม (เห็นแค่ UI overlay ขยับนิดเดียว แผนที่ไม่เต็มจอ)
   useEffect(() => {
     const m = mapRef.current; if (!m) return;
@@ -1246,18 +1246,8 @@ export default function MapView({ apiRef }) {
         .bdi-mapwrap.force-desktop .bdi-chips{right:auto;width:620px}
         .bdi-mapwrap.force-desktop .gm-bottom-stack{left:12px!important;right:auto!important;bottom:12px!important;width:420px}
         .bdi-mapwrap.force-desktop .gm-route-sheet{border-radius:18px!important;max-height:52vh!important}
-        .bdi-view-toggle{position:absolute;top:12px;right:12px;z-index:2100;width:40px;height:40px;border-radius:10px;border:1px solid #DADCE0;background:#fff;color:#3C4043;font-size:18px;display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgba(60,64,67,.28)}
-        .bdi-view-toggle:hover{background:#F8F9FA}
       `}</style>
 
-      <button
-        type="button"
-        className="bdi-view-toggle"
-        title={viewMode === "desktop" ? "สลับเป็นมือถือ" : viewMode === "mobile" ? "สลับเป็น auto (ตามขนาดจอ)" : "สลับเป็น desktop"}
-        onClick={() => setViewMode((v) => (v === "auto" ? "desktop" : v === "desktop" ? "mobile" : "auto"))}
-      >
-        {viewMode === "desktop" ? "🖥️" : viewMode === "mobile" ? "📱" : "⇄"}
-      </button>
 
       <div ref={mapEl} style={{ height: "100%", width: "100%" }} />
 

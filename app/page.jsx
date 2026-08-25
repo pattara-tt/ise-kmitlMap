@@ -1,90 +1,202 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-import EventPage from "../components/EventPage";
-import ReportPage from "../components/ReportPage";
-import SettingsPage from "../components/SettingsPage";
+import { useEffect, useState } from "react";
+import AuthPage from "../components/AuthPage";
+import UserApp from "../components/UserApp";
+import ExecPanel from "../components/panels/ExecPanel";
+import MarketingPanel from "../components/panels/MarketingPanel";
+import GisPanel from "../components/panels/GisPanel";
+import AdminPanel from "../components/panels/AdminPanel";
+import PrPanel from "../components/panels/PrPanel";
+import RegistrarPanel from "../components/panels/RegistrarPanel";
+import { ROLE_LABEL, USE_CASES } from "../lib/usecases";
+import { Icon, Logo, MenuIcon } from "../components/ui";
 
-const MapView = dynamic(() => import("../components/MapView"), {
-  ssr: false,
-  loading: () => <div style={{ padding: 24, fontSize: 18, color: "var(--bdi-text-dim)" }}>กำลังโหลดแผนที่…</div>,
-});
+const PANELS = { exec: ExecPanel, marketing: MarketingPanel, gis: GisPanel, admin: AdminPanel, pr: PrPanel, registrar: RegistrarPanel };
 
-// ไอคอนแถบล่าง — SVG ที่ให้มา ใช้ currentColor แทนสีตายตัว (#293DEB เดิม) จะได้เปลี่ยนสีตาม active/inactive อัตโนมัติผ่าน CSS
-function ExploreIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M5.5 14.5L12.5 12.5L14.5 5.5L7.5 7.5L5.5 14.5V14.5M10 11.5C9.58333 11.5 9.22917 11.3542 8.9375 11.0625C8.64583 10.7708 8.5 10.4167 8.5 10C8.5 9.58333 8.64583 9.22917 8.9375 8.9375C9.22917 8.64583 9.58333 8.5 10 8.5C10.4167 8.5 10.7708 8.64583 11.0625 8.9375C11.3542 9.22917 11.5 9.58333 11.5 10C11.5 10.4167 11.3542 10.7708 11.0625 11.0625C10.7708 11.3542 10.4167 11.5 10 11.5V11.5M10 20C8.61667 20 7.31667 19.7375 6.1 19.2125C4.88333 18.6875 3.825 17.975 2.925 17.075C2.025 16.175 1.3125 15.1167 0.7875 13.9C0.2625 12.6833 0 11.3833 0 10C0 8.61667 0.2625 7.31667 0.7875 6.1C1.3125 4.88333 2.025 3.825 2.925 2.925C3.825 2.025 4.88333 1.3125 6.1 0.7875C7.31667 0.2625 8.61667 0 10 0C11.3833 0 12.6833 0.2625 13.9 0.7875C15.1167 1.3125 16.175 2.025 17.075 2.925C17.975 3.825 18.6875 4.88333 19.2125 6.1C19.7375 7.31667 20 8.61667 20 10C20 11.3833 19.7375 12.6833 19.2125 13.9C18.6875 15.1167 17.975 16.175 17.075 17.075C16.175 17.975 15.1167 18.6875 13.9 19.2125C12.6833 19.7375 11.3833 20 10 20V20" fill="currentColor" />
-    </svg>
-  );
-}
-function MissionIcon() {
-  return (
-    <svg width="10" height="20" viewBox="0 0 10 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M0 0H10V7.85C10 8.23333 9.91667 8.575 9.75 8.875C9.58333 9.175 9.35 9.41667 9.05 9.6L5.5 11.7L6.2 14H10L6.9 16.2L8.1 20L5 17.65L1.9 20L3.1 16.2L0 14H3.8L4.5 11.7L0.95 9.6C0.65 9.41667 0.416667 9.175 0.25 8.875C0.0833333 8.575 0 8.23333 0 7.85V0V0M2 2V7.85V7.85V7.85L4 9.05V2H2V2M8 2H6V9.05L8 7.85V7.85V7.85V2V2M5 5.825V5.825V5.825V5.825V5.825V5.825V5.825M4 5.525V5.525V5.525V5.525V5.525V5.525V5.525V5.525M6 5.525V5.525V5.525V5.525V5.525V5.525V5.525V5.525" fill="currentColor" />
-    </svg>
-  );
-}
-function NotiIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M10 1.5C10.5741 1.50001 11.1297 1.58668 11.6543 1.74707C11.1654 2.24975 10.7892 2.8622 10.5654 3.54395C10.3809 3.51519 10.1921 3.50001 10 3.5C8.13748 3.5 6.57289 4.90081 6.3672 6.75195L6.15724 8.63965C6.03372 9.75135 5.67217 10.8241 5.09669 11.7832L4.61427 12.5859C4.45676 12.8485 4.362 13.008 4.29982 13.127C4.29457 13.137 4.29032 13.1469 4.28615 13.1553C4.29545 13.156 4.30606 13.1575 4.3174 13.1582C4.45145 13.1661 4.63709 13.167 4.94337 13.167H15.0567C15.363 13.167 15.5486 13.1661 15.6826 13.1582C15.6936 13.1575 15.7039 13.156 15.7129 13.1553C15.7088 13.147 15.7054 13.1369 15.7002 13.127C15.638 13.008 15.5433 12.8485 15.3858 12.5859L14.9033 11.7832C14.4881 11.0912 14.1854 10.3398 14.002 9.55762C14.3236 9.62772 14.6573 9.666 15 9.66602C15.3684 9.66599 15.7266 9.62173 16.0703 9.54102C16.2056 9.96382 16.3886 10.3712 16.6182 10.7539L17.1006 11.5566C17.2455 11.7981 17.3776 12.0172 17.4736 12.2012C17.567 12.3799 17.678 12.6189 17.7158 12.8965C17.8373 13.7878 17.3483 14.6505 16.5215 15.0049C16.264 15.1152 16.002 15.1434 15.8008 15.1553C15.5937 15.1675 15.3381 15.167 15.0567 15.167H4.94337C4.66196 15.167 4.40635 15.1675 4.19923 15.1553C3.99802 15.1434 3.73601 15.1152 3.47853 15.0049C2.65164 14.6506 2.16269 13.7878 2.28419 12.8965C2.32207 12.6189 2.43306 12.3799 2.52638 12.2012C2.62248 12.0172 2.75453 11.7981 2.89943 11.5566L3.38185 10.7539C3.80925 10.0415 4.07819 9.24468 4.16994 8.41895L4.37892 6.53027C4.69734 3.66648 7.11852 1.5 10 1.5ZM14.3047 3.48633C15.0167 4.32061 15.4919 5.36818 15.6211 6.53027L15.6221 6.54492C15.4298 6.62238 15.22 6.66597 15 6.66602L14.8291 6.6582C13.989 6.57271 13.3332 5.86268 13.333 5C13.3332 4.32809 13.7318 3.75004 14.3047 3.48633Z" fill="currentColor" />
-      <path d="M7.58519 14.7206C7.72762 15.5179 8.04149 16.2225 8.4781 16.7251C8.91471 17.2276 9.44966 17.5 10 17.5C10.5503 17.5 11.0853 17.2276 11.5219 16.7251C11.9585 16.2225 12.2724 15.5179 12.4148 14.7206" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="15" cy="5.00004" r="2.16667" fill="currentColor" stroke="currentColor" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path fillRule="evenodd" clipRule="evenodd" d="M8.14 1.667c-.55 0-1.02.393-1.117.933l-.157.874a1.05 1.05 0 01-.62.77 6.68 6.68 0 00-.72.416c-.297.19-.67.24-1.003.117l-.847-.31a1.133 1.133 0 00-1.39.5l-.86 1.49a1.133 1.133 0 00.28 1.44l.69.567c.263.216.4.55.373.89a6.79 6.79 0 000 .833c.027.34-.11.674-.373.89l-.69.567a1.133 1.133 0 00-.28 1.44l.86 1.49c.28.485.883.68 1.39.5l.847-.31c.333-.123.706-.073 1.003.117.23.15.47.29.72.416.316.16.543.45.62.77l.157.874c.097.54.567.933 1.117.933h1.72c.55 0 1.02-.393 1.117-.933l.157-.874c.077-.32.324-.61.62-.77.25-.126.49-.266.72-.416.297-.19.67-.24 1.003-.117l.847.31c.507.18 1.11-.015 1.39-.5l.86-1.49c.28-.485.163-1.1-.28-1.44l-.69-.567a1.05 1.05 0 01-.373-.89 6.79 6.79 0 000-.833c-.027-.34.11-.674.373-.89l.69-.567c.443-.34.56-.955.28-1.44l-.86-1.49a1.133 1.133 0 00-1.39-.5l-.847.31c-.333.123-.706.073-1.003-.117a6.68 6.68 0 00-.72-.416 1.05 1.05 0 01-.62-.77l-.157-.874a1.133 1.133 0 00-1.117-.933H8.14zM9 13.333A3.333 3.333 0 109 6.667a3.333 3.333 0 000 6.666z" fill="currentColor" />
-    </svg>
-  );
-}
-
-const TABS = [
-  { id: "explore", label: "EXPLORE", icon: ExploreIcon },
-  { id: "events", label: "EVENTS", icon: MissionIcon },
-  { id: "report", label: "REPORT", icon: NotiIcon },
-  { id: "settings", label: "SETTINGS", icon: SettingsIcon },
+// แท็บของผู้ใช้งานทั่วไป (UC23–UC26)
+const USER_TABS = [
+  { id: "map", label: "แผนที่", icon: "svg:growth", code: "UC24" },
+  { id: "search", label: "ค้นหา", icon: "🔍", code: "UC23" },
+  { id: "events", label: "กิจกรรม", icon: "⭐", code: "UC26" },
+  { id: "feedback", label: "แจ้งปัญหา", icon: "✉️", code: "UC25" },
 ];
-const TITLE = { explore: "EXPLORE", events: "EVENTS", report: "รายงานปัญหา", settings: "ตั้งค่า" };
+
+// ความกว้างที่ถือว่าเป็นจอคอม (ใช้เฉพาะตอนอยู่โหมด auto)
+const DESKTOP_MIN_WIDTH = 900;
 
 export default function Page() {
-  const mapApi = useRef(null);
-  const [tab, setTab] = useState("explore");
+  const [user, setUser] = useState(null);
+  const [uc, setUc] = useState(null);
+  const [tab, setTab] = useState("map");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [view, setView] = useState("auto");     // auto | mobile | desktop (ผู้ใช้กดเลือกเองได้)
+  const [wide, setWide] = useState(false);      // ขนาดจอจริงตอนนี้กว้างพอเป็นจอคอมไหม
+
+  // ── ติดตามขนาดหน้าจอจริง เพื่อให้โหมด auto ปรับตามความกว้าง/สูงเอง ──
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${DESKTOP_MIN_WIDTH}px)`);
+    const sync = () => setWide(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // ── คืนค่า session + โหมดการแสดงผลที่เคยเลือกไว้ ──
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("kmitlmap:view");
+      if (v) setView(v);
+      const raw = localStorage.getItem("kmitlmap:user");
+      if (raw) applyLogin(JSON.parse(raw), false);
+    } catch (e) {}
+  }, []);
+
+  function pickView(v) {
+    setView(v);
+    try { localStorage.setItem("kmitlmap:view", v); } catch (e) {}
+    // แจ้ง Leaflet ให้คำนวณขนาด container ใหม่หลัง layout เปลี่ยน
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 320);
+  }
+
+  function applyLogin(u, persist = true) {
+    setUser(u);
+    const list = USE_CASES[u.role] || [];
+    setUc(u.role === "user" ? null : list[0]?.key || null);
+    setTab("map");
+    if (persist) { try { localStorage.setItem("kmitlmap:user", JSON.stringify(u)); } catch (e) {} }
+  }
+
+  function logout() {
+    try { localStorage.removeItem("kmitlmap:user"); } catch (e) {}
+    setUser(null); setUc(null); setMenuOpen(false);
+  }
+
+  // โหมดที่ใช้จริง = ที่ผู้ใช้เลือก หรือถ้า auto ก็ตัดสินจากความกว้างจอ
+  const desktop = view === "desktop" || (view === "auto" && wide);
+  const dataView = desktop ? "desktop" : "mobile";
+
+  const ViewSwitch = () => (
+    <div className="bdi-viewswitch" title="สลับมุมมอง มือถือ / คอม">
+      {[["mobile", "svg:mobile", "มือถือ"], ["auto", "⇄", "อัตโนมัติตามขนาดจอ"], ["desktop", "svg:desktop", "คอมพิวเตอร์"]].map(([k, ic, label]) => (
+        <button key={k} className={view === k ? "on" : ""} title={label} onClick={() => pickView(k)}>
+          <MenuIcon icon={ic} size={17} />
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!user) {
+    return (
+      <div className="bdi-shell" data-view={dataView}>
+        <div className="bdi-main">
+          <div style={{ position: "absolute", top: "calc(10px + env(safe-area-inset-top))", right: 12, zIndex: 2200 }}><ViewSwitch /></div>
+          <AuthPage onLogin={applyLogin} />
+        </div>
+      </div>
+    );
+  }
+
+  const isUser = user.role === "user";
+  const ucList = USE_CASES[user.role] || [];
+  const current = ucList.find((x) => x.key === uc) || ucList[0];
+  const Panel = PANELS[user.role];
+  const menuItems = isUser ? USER_TABS.map((t) => ({ code: t.code, key: t.id, title: t.label, icon: t.icon })) : ucList;
+  const activeKey = isUser ? tab : uc;
+
+  function pickMenu(item) {
+    if (isUser) setTab(item.key);
+    else setUc(item.key);
+    setMenuOpen(false);
+  }
+
+  // ── เนื้อหาเมนู ใช้ร่วมกันทั้ง drawer (มือถือ) และแถบซ้าย (คอม) ──
+  const MenuBody = () => (
+    <>
+      <div style={{ padding: "6px 16px 12px", borderBottom: "1px solid #E8EAED" }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: "#202124" }}>{user.name}</div>
+        <div style={{ fontSize: 12, color: "#5F6368", wordBreak: "break-all" }}>{user.email}</div>
+        <div style={{ marginTop: 6, display: "inline-block", fontSize: 11, fontWeight: 800, color: "#1A73E8", background: "#E8F0FE", padding: "3px 9px", borderRadius: 999 }}>{ROLE_LABEL[user.role]}</div>
+      </div>
+      <div style={{ padding: "10px 16px 4px", fontSize: 11, fontWeight: 800, color: "#5F6368", letterSpacing: 1 }}>เมนูตามสิทธิ์การใช้งาน</div>
+      {menuItems.map((item) => {
+        const on = item.key === activeKey;
+        return (
+          <button key={item.code + item.key} onClick={() => pickMenu(item)}
+            style={{ display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", border: "none", cursor: "pointer",
+              background: on ? "#E8F0FE" : "transparent", padding: "11px 16px", color: on ? "#1A73E8" : "#202124" }}>
+            <MenuIcon icon={item.icon} size={19} color={on ? "#1A73E8" : "#5F6368"} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {item.code ? <span style={{ fontSize: 10.5, fontWeight: 800, color: on ? "#1A73E8" : "#5F6368", display: "block" }}>{item.code}</span> : null}
+              <span style={{ fontSize: 13, fontWeight: on ? 800 : 500, lineHeight: 1.35, display: "block" }}>{item.title}</span>
+            </span>
+          </button>
+        );
+      })}
+      <div style={{ padding: "14px 16px 16px", borderTop: "1px solid #E8EAED", marginTop: 10 }}>
+        <button onClick={logout} style={{ width: "100%", padding: "11px 0", border: "1px solid #F5C2C0", borderRadius: 12, background: "#fff", color: "#D93025", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>ออกจากระบบ</button>
+      </div>
+    </>
+  );
 
   return (
-    <div className="bdi-shell">
-      <div className="bdi-main">
-        {/* Top bar ตาม Figma — ซ่อนตอนอยู่แท็บ EXPLORE เพราะแผนที่มีแถบค้นหา/หัวข้อของตัวเองอยู่แล้ว (ธีมสว่างแบบ Google Maps) กันแถบม่วงเก่าโผล่ทับซ้อน */}
-        {tab !== "explore" ? (
-          <div className="bdi-topbar">
-            <div className="bdi-avatar">👤</div>
-            <h1>{TITLE[tab]}</h1>
+    <div className="bdi-shell" data-view={dataView}>
+      {/* แถบเมนูซ้าย — เฉพาะโหมดคอม */}
+      {desktop ? (
+        <aside className="bdi-side">
+          <div style={{ padding: "16px 16px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+            <Logo size={26} />
+            <b style={{ fontSize: 16, letterSpacing: .6, color: "#202124" }}>SciMap</b>
           </div>
+          <div className="bdi-side-body"><MenuBody /></div>
+        </aside>
+      ) : null}
+
+      <div className="bdi-main">
+        <div className="bdi-topbar">
+          {!desktop ? (
+            <button onClick={() => setMenuOpen((v) => !v)} style={{ border: "none", background: "none", fontSize: 20, cursor: "pointer", padding: 0, lineHeight: 1, color: "#202124" }}>☰</button>
+          ) : null}
+          <h1 style={{ flex: 1 }}>
+            {isUser
+              ? (desktop ? (USER_TABS.find((t) => t.id === tab)?.label || "SciMap") : "SciMap")
+              : (current?.code ? `${current.code} · ${ROLE_LABEL[user.role]}` : `${current?.title || ""} · ${ROLE_LABEL[user.role]}`)}
+          </h1>
+          <ViewSwitch />
+          <div className="bdi-avatar" title={user.name}><Icon name="user" size={18} color="#1A73E8" /></div>
+        </div>
+
+        {/* Drawer — เฉพาะโหมดมือถือ */}
+        {!desktop && menuOpen ? (
+          <>
+            <div onClick={() => setMenuOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(32,33,36,.45)", zIndex: 2500 }} />
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "min(288px, 84vw)", background: "#fff", zIndex: 2600, boxShadow: "2px 0 16px rgba(0,0,0,.25)", overflowY: "auto", padding: "calc(16px + env(safe-area-inset-top)) 0 16px" }}>
+              <MenuBody />
+            </div>
+          </>
         ) : null}
 
-        {/* EXPLORE — แผนที่ mount ค้างไว้เสมอ (กันโหลด Leaflet ใหม่ตอนสลับแท็บ) */}
-        <div style={{ position: "absolute", inset: 0, visibility: tab === "explore" ? "visible" : "hidden" }}>
-          <MapView apiRef={mapApi} />
-        </div>
-        {tab === "events" ? <EventPage /> : null}
-        {tab === "report" ? <ReportPage /> : null}
-        {tab === "settings" ? <SettingsPage /> : null}
+        {isUser ? (
+          <UserApp user={user} tab={tab} viewMode={view === "auto" ? "auto" : desktop ? "desktop" : "mobile"} />
+        ) : (
+          <div className="bdi-page">
+            <div className="bdi-page-inner"><Panel uc={current?.key} user={user} /></div>
+          </div>
+        )}
       </div>
 
-      {/* Bottom nav ตาม Figma (Frame 22) */}
-      <nav className="bdi-nav">
-        {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
-            <span className="ic"><t.icon /></span>
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      {/* แท็บล่าง — ผู้ใช้งานทั่วไป ในโหมดมือถือ */}
+      {isUser && !desktop ? (
+        <nav className="bdi-nav">
+          {USER_TABS.map((t) => (
+            <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
+              <span className="ic"><MenuIcon icon={t.icon} size={18} /></span>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
     </div>
   );
 }
