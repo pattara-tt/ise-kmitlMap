@@ -275,6 +275,10 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
 }
 
 export default function MapView({ apiRef, viewMode = "auto", user = null }) {
+  // 🔐 เช็คสิทธิ์ "ผู้ดูแลแผนที่" — ใช้คุมการแสดง panel ทดสอบ/แก้ไขข้อมูลตึกที่ user ทั่วไปไม่ควรเห็น
+  // อนุญาต 2 role: gis (ผู้ดูแลข้อมูลสถานที่และอาคาร) และ registrar (ฝ่ายทะเบียน — จัดการข้อมูลห้อง/ชั้นบนแผนที่ ตาม usecases.js)
+  const MAP_ADMIN_ROLES = ["gis", "registrar"];
+  const isMapAdmin = MAP_ADMIN_ROLES.includes(user?.role);
   // 🎪 กิจกรรมจากฝ่ายประชาสัมพันธ์ — แสดงเป็นหมุดบนแผนที่ ค้นหาได้ และกดสนใจได้จากการ์ด
   const [events, setEvents] = useState([]);
   const [interests, setInterests] = useState([]);
@@ -754,11 +758,15 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     (c.kmitlGraphLayer || []).forEach((ly) => m.removeLayer(ly));
     c.kmitlGraphLayer = [];
     if (!kmitlOpen || !Object.keys(kmitlFloorNodes).length) { setKmitlRouteResult(null); return; }
-    // 🔗 วาดเส้น edge ทั้งหมด (เส้นประจาง) ให้เห็นว่า node ไหนเชื่อมถึงกันจริงบ้าง — ช่วยดีบั๊ก "มี node แต่ไม่มี edge เชื่อม" ซึ่งเป็นสาเหตุอันดับ 1 ที่หาเส้นทางไม่เจอ
-    for (const [a, b] of kmitlFloorEdges) {
-      const na = kmitlFloorNodes[a], nb = kmitlFloorNodes[b];
-      if (!na || !nb) continue; // edge อ้าง node ที่ไม่มีจริง (พิมพ์ผิด/ลืมเพิ่ม) — ข้ามอย่างปลอดภัย ไม่ให้พัง
-      c.kmitlGraphLayer.push(L.polyline([[na.lat, na.lon], [nb.lat, nb.lon]], { color: "#9AA0A6", weight: 2, opacity: 0.6, dashArray: "4 4", pane: "bdiFloorPane" }).addTo(m));
+    // 🔒 เส้นเชื่อม node (เส้นประ) เป็นกราฟสำหรับ debug เส้นทางเดินภายในตึก — ผู้ดูแลแผนที่ (gis/registrar) เท่านั้นที่ต้องใช้
+    // ผู้ใช้งานทั่วไปไม่ต้องเห็นเส้นพวกนี้ แต่ยังต้องเห็น "จุด" ของห้อง/สิ่งอำนวยความสะดวก (ลิฟต์/ห้องน้ำ/โคเวิร์ก/ห้องเรียน) ตามปกติ เพื่อกดแจ้งปัญหา/ดูกิจกรรมได้
+    if (isMapAdmin) {
+      // 🔗 วาดเส้น edge ทั้งหมด (เส้นประจาง) ให้เห็นว่า node ไหนเชื่อมถึงกันจริงบ้าง — ช่วยดีบั๊ก "มี node แต่ไม่มี edge เชื่อม" ซึ่งเป็นสาเหตุอันดับ 1 ที่หาเส้นทางไม่เจอ
+      for (const [a, b] of kmitlFloorEdges) {
+        const na = kmitlFloorNodes[a], nb = kmitlFloorNodes[b];
+        if (!na || !nb) continue; // edge อ้าง node ที่ไม่มีจริง (พิมพ์ผิด/ลืมเพิ่ม) — ข้ามอย่างปลอดภัย ไม่ให้พัง
+        c.kmitlGraphLayer.push(L.polyline([[na.lat, na.lon], [nb.lat, nb.lon]], { color: "#9AA0A6", weight: 2, opacity: 0.6, dashArray: "4 4", pane: "bdiFloorPane" }).addTo(m));
+      }
     }
     // 📍 วาด node ทุกจุดของชั้นที่กำลังดูอยู่ ให้เห็นบน SVG จริง — กรองตามชิปที่เปิดอยู่ (ห้องเรียน/ห้องน้ำ/ลิฟต์/บันได) ส่วน type อื่น (ทางเดิน/ทางเข้า/ทางหนีไฟ) ยังโชว์เสมอไม่เกี่ยวกับชิป
     for (const id of Object.keys(kmitlFloorNodes)) {
@@ -790,7 +798,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
       if (latlngs.length > 1) c.kmitlGraphLayer.push(L.polyline(latlngs, { color: "#F9AB00", weight: 6, opacity: 0.95, pane: "bdiFloorPane" }).addTo(m));
     }
     return () => { (c.kmitlGraphLayer || []).forEach((ly) => { if (m.hasLayer(ly)) m.removeLayer(ly); }); c.kmitlGraphLayer = []; };
-  }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlRouteResult, chips]);
+  }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlRouteResult, chips, isMapAdmin]);
 
   // 🎪 หมุดกิจกรรม — กิจกรรมที่ผู้ใช้กดสนใจจะเป็นหมุดแดงเด่น แสดงตลอดไม่ว่าจะซูมระดับไหน
   useEffect(() => {
@@ -1943,12 +1951,14 @@ async function submitReport() {
             <button onClick={() => setKmitlOpen(false)} style={{ background: "none", border: "none", color: "#5F6368", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>✕</button>
           </div>
 
-          <div style={{ position: "absolute", top: 240, right: 14, zIndex: 1900, display: "flex", gap: 6 }}>
-            <button onClick={() => setKmitlCalibrate((v) => !v)} style={{ background: kmitlCalibrate ? "#1A73E8" : "#FFFFFF", color: kmitlCalibrate ? "#fff" : "#3C4043", border: "1px solid #DADCE0", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔧 ปรับตำแหน่ง</button>
-            <button onClick={() => setKmitlNodeMode((v) => !v)} style={{ background: kmitlNodeMode ? "#1A73E8" : "#FFFFFF", color: kmitlNodeMode ? "#fff" : "#3C4043", border: "1px solid #DADCE0", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📍 ปักหมุด</button>
-          </div>
+          {isMapAdmin ? (
+            <div style={{ position: "absolute", top: 240, right: 14, zIndex: 1900, display: "flex", gap: 6 }}>
+              <button onClick={() => setKmitlCalibrate((v) => !v)} style={{ background: kmitlCalibrate ? "#1A73E8" : "#FFFFFF", color: kmitlCalibrate ? "#fff" : "#3C4043", border: "1px solid #DADCE0", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔧 ปรับตำแหน่ง</button>
+              <button onClick={() => setKmitlNodeMode((v) => !v)} style={{ background: kmitlNodeMode ? "#1A73E8" : "#FFFFFF", color: kmitlNodeMode ? "#fff" : "#3C4043", border: "1px solid #DADCE0", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📍 ปักหมุด</button>
+            </div>
+          ) : null}
 
-          {kmitlNodeMode ? (
+          {isMapAdmin && kmitlNodeMode ? (
             <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 270, lineHeight: 1.6, maxHeight: 300, overflowY: "auto" }}>
               เลือกประเภท แล้วแตะบนแผนที่เพื่อปักหมุด — ลากปรับตำแหน่งได้ / คลิกขวาที่หมุดเพื่อลบ
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0" }}>
@@ -1975,13 +1985,13 @@ async function submitReport() {
               ) : null}
             </div>
           ) : null}
-          {kmitlCalibrate && kmitlCalReadout ? (
+          {isMapAdmin && kmitlCalibrate && kmitlCalReadout ? (
             <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 260, lineHeight: 1.6 }}>
               ลากจุด <span style={{ color: "#4ade80" }}>เขียว</span> (มุมบนซ้าย NW) และ <span style={{ color: "#f87171" }}>แดง</span> (มุมล่างขวา SE) ของภาพให้ตรงกับขอบตึกจริงบนแผนที่<br /><br />
               <b>NW:</b> {kmitlCalReadout.nw}<br />
               <b>SE:</b> {kmitlCalReadout.se}<br /><br />
             </div>
-          ) : null}ห
+          ) : null}
           {!KMITL_FLOORS.find((x) => x.id === kmitlFloor)?.svg ? (
             <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "8px 12px", color: "var(--bdi-text-dim)", fontSize: 12, maxWidth: 220 }}>
               ยังไม่มีไฟล์ผังของชั้นนี้
@@ -1996,8 +2006,8 @@ async function submitReport() {
             ))}
           </div>
 
-          {/* 🧭 ทดสอบหาเส้นทางในตึกชั้นที่กำลังดู */}
-          {Object.keys(kmitlFloorNodes).length ? (
+          {/* 🧭 ทดสอบหาเส้นทางในตึกชั้นที่กำลังดู — เฉพาะผู้ดูแลแผนที่ */}
+          {isMapAdmin && Object.keys(kmitlFloorNodes).length ? (
             <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, width: 200 }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>🧭 ทดสอบหาเส้นทางในตึก</div>
               <select value={kmitlRouteFrom} onChange={(e) => setKmitlRouteFrom(e.target.value)} style={{ width: "100%", marginBottom: 6, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
