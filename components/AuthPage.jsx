@@ -39,7 +39,7 @@ export default function AuthPage({ onLogin }) {
       </div>
 
       <div style={{ display: "flex", background: "#E8EAED", borderRadius: 999, padding: 4, marginBottom: 16 }}>
-        {[["login", "เข้าสู่ระบบ (UC28)"], ["register", "ลงทะเบียน (UC27)"]].map(([k, label]) => (
+        {[["login", "เข้าสู่ระบบ"], ["register", "ลงทะเบียน"]].map(([k, label]) => (
           <button key={k} onClick={() => { setMode(k); setErr(""); }}
             style={{ flex: 1, padding: "9px 0", border: "none", borderRadius: 999, cursor: "pointer", fontWeight: 800, fontSize: 12.5,
               background: mode === k ? "#fff" : "transparent", color: mode === k ? "#1A73E8" : "#5F6368",
@@ -60,7 +60,7 @@ export default function AuthPage({ onLogin }) {
         {mode === "register" ? (
           <>
             <Field label="ชื่อ-นามสกุล">
-              <Input value={form.name} onChange={set("name")} placeholder="เช่น กิตติพัฒน์ ใจงาม" />
+              <Input value={form.name} onChange={set("name")} placeholder="เช่น อินฟินิตี้ ไอ" />
             </Field>
             <Field label="ชื่อผู้ใช้ (username)">
               <Input value={form.username} onChange={set("username")} placeholder="เช่น kittipat" />

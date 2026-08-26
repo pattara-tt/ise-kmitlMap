@@ -132,6 +132,7 @@ const STATUS_STYLE = {
   pending: ["#B06000", "#FEF7E0", "รอพิจารณา"],
   approved: ["#188038", "#E6F4EA", "อนุมัติ"],
   rejected: ["#D93025", "#FCE8E6", "ไม่อนุมัติ"],
+  cancelled: ["#5F6368", "#F1F3F4", "ยกเลิกแล้ว"],
   active: ["#188038", "#E6F4EA", "ใช้งาน"],
   suspended: ["#D93025", "#FCE8E6", "ระงับ"],
   expired: ["#D93025", "#FCE8E6", "หมดอายุ"],
@@ -183,7 +184,7 @@ export function Table({ columns, rows, empty = "ไม่มีข้อมู�
 export function SearchBar({ value, onChange, placeholder }) {
   return (
     <div style={{ position: "relative", marginBottom: 10 }}>
-      <span style={{ position: "absolute", left: 11, top: 9, fontSize: 14, color: "#5F6368" }}>🔍</span>
+      <Icon name="search" size={16} color="#5F6368" style={{ position: "absolute", left: 11, top: 12 }} />
       <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ paddingLeft: 32 }} />
     </div>
   );
@@ -208,10 +209,27 @@ export function useCollection(name) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // const create = useCallback(async (item, actor) => {
+  //   await fetch("/api/data/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, _actor: actor }) });
+  //   await reload();
+  // }, [name, reload]);
+
   const create = useCallback(async (item, actor) => {
-    await fetch("/api/data/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, _actor: actor }) });
-    await reload();
-  }, [name, reload]);
+      const r = await fetch("/api/data/" + name, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...item, _actor: actor })
+      });
+
+      const j = await r.json().catch(() => ({}));
+
+      if (!r.ok) {
+        throw new Error(j.error || `สร้างข้อมูลไม่สำเร็จ (${r.status})`);
+      }
+
+      await reload();
+      return j.item;
+    }, [name, reload]);
 
   const patch = useCallback(async (id, p, actor) => {
     await fetch("/api/data/" + name, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p, _actor: actor }) });

@@ -22,6 +22,7 @@ export const DEMO_BBOX = [
 // 🧭 ประเภท Node สำหรับปักบนผังอาคาร
 // ============================================================
 
+<<<<<<< HEAD
 // ⚠️ NODE_TYPES คือ "แหล่งความจริงเดียว" (single source of truth) ของการแม็ป
 // type -> ไอคอน/สี/ป้ายกำกับ ของทุก node บนแผนที่/ผังอาคาร
 //
@@ -36,6 +37,8 @@ export const DEMO_BBOX = [
 // field "chip" (ไม่บังคับ) ใช้จัดกลุ่มสำหรับปุ่ม filter แบบ chip บน MapView/
 // Buildingfloorpicker (room/toilet/lift/stairs) — CHIP_NODE_TYPES ด้านล่าง
 // ถูกสร้างจาก field นี้อัตโนมัติ ไม่ต้องคัดลอกรายชื่อ id เองอีกต่อไป
+=======
+>>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
 export const NODE_TYPES = [
   {
     id: "path",

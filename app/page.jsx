@@ -48,7 +48,17 @@ export default function Page() {
       const v = localStorage.getItem("kmitlmap:view");
       if (v) setView(v);
       const raw = localStorage.getItem("kmitlmap:user");
-      if (raw) applyLogin(JSON.parse(raw), false);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        // localStorage อาจเก็บชื่อเก่าจากก่อนแก้ seed ไว้ — ใช้ข้อมูล user ปัจจุบันจาก backend เป็นหลัก
+        fetch("/api/data/users")
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => {
+            const fresh = data?.items?.find((u) => u.id === cached.id || u.email === cached.email);
+            applyLogin(fresh || cached, !!fresh);
+          })
+          .catch(() => applyLogin(cached, false));
+      }
     } catch (e) {}
   }, []);
 
@@ -112,9 +122,6 @@ export default function Page() {
   }
 
   // ── เนื้อหาเมนู ใช้ร่วมกันทั้ง drawer (มือถือ) และแถบซ้าย (คอม) ──
-  // ฝ่ายทะเบียน (registrar) ไม่ต้องมีรายการเมนู UC21/UC22 ตรงนี้ เพราะ RegistrarPanel
-  // มีปุ่มสลับ "จัดการห้อง (UC21)" / "จัดการผังชั้น (UC22)" อยู่ในตัวเองอยู่แล้ว
-  const isRegistrar = user.role === "registrar";
   const MenuBody = () => (
     <>
       <div style={{ padding: "6px 16px 12px", borderBottom: "1px solid #E8EAED" }}>

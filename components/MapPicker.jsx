@@ -1,5 +1,6 @@
 "use client";
 
+<<<<<<< HEAD
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadLeaflet, suggestPlaces, resolvePlace, geocodeNominatim, queuedReverse } from "./mapGeo";
 import {
@@ -7,16 +8,43 @@ import {
   KMITL_OUTLINE, BUILDINGS, getNodeType,
 } from "./mapConstants";
 import { Btn, Input, Pill, useCollection } from "./ui";
+=======
+import { useEffect, useRef, useState } from "react";
+import { loadLeaflet, suggestPlaces, resolvePlace, geocodeNominatim, queuedReverse } from "./mapGeo";
+import {
+  CENTER, KMITL_ALL_NODES, KMITL_BOUNDS, KMITL_FLOORS, KMITL_NODE_FLOOR,
+  KMITL_OUTLINE,
+} from "./mapConstants";
+import { Btn, Input, Pill } from "./ui";
+>>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
 
 // กล่องแผนที่สำหรับเลือกสถานที่จัดกิจกรรม
 // ใช้ชั้นข้อมูลชุดเดียวกับแผนที่ของผู้ใช้งานทั่วไป — ขอบเขตอาคาร ผังชั้น (SVG)
 // และหมุดห้อง/สิ่งอำนวยความสะดวกภายในอาคาร กดที่ห้องเพื่อเลือกเป็นสถานที่จัดงานได้เลย
+<<<<<<< HEAD
 // ไอคอนของจุดภายในอาคาร: ใช้ NODE_TYPES/getNodeType จาก mapConstants.js (แหล่งความจริงเดียว)
 // แทนตาราง NODE_ICON แยกที่เคยมีอยู่ที่นี่ — ถ้า type ไหนไม่มีใน NODE_TYPES จะ fallback เป็น "📍"
 const nodeIcon = (type) => {
   const t = getNodeType(type);
   return (t && t.id === type && t.icon) || "📍";
 };
+=======
+// ไอคอนของจุดภายในอาคาร (ครอบคลุมชื่อประเภทที่ใช้จริงใน mapConstants)
+const NODE_ICON = {
+  lift: "🛗", elevator: "🛗",
+  toilet: "🚻", wc: "🚻",
+  stair: "🪜", stairs: "🪜",
+  escalator: "⬆️",
+  fire_exit: "🚪", exit: "🚪",
+  entrance: "🚩",
+  co_work: "💻", coworking: "💻",
+  study_room: "📚", classroom: "📚", room: "📚",
+  atm: "🏧",
+  canteen: "🍽️", food: "🍽️",
+  parking: "🅿️",
+};
+const nodeIcon = (type) => NODE_ICON[String(type || "").toLowerCase()] || "📍";
+>>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
 // จุดประเภททางเดิน/เส้นทาง ไม่ต้องแสดงบนแผนที่เลือกสถานที่
 const isWalkway = (type) => ["path", "walkway", "corridor", "way", "node"].includes(String(type || "").toLowerCase());
 
@@ -33,6 +61,7 @@ export default function MapPicker({ value, onChange, height = 300 }) {
   const [floor, setFloor] = useState("1");             // ชั้นที่กำลังแสดง
   const timer = useRef(null);
 
+<<<<<<< HEAD
   // 📋 ผสานรายละเอียดชั้นที่ฝ่ายทะเบียนกรอกไว้ (collection "floors") เข้ากับข้อมูลชั้นแบบ static (svg, id, label)
   const { items: floorRecords } = useCollection("floors");
   const KMITL_FLOORS = useMemo(
@@ -44,6 +73,8 @@ export default function MapPicker({ value, onChange, height = 300 }) {
     [floorRecords]
   );
 
+=======
+>>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   useEffect(() => { valueRef.current = value; onChangeRef.current = onChange; });
@@ -258,12 +289,17 @@ export default function MapPicker({ value, onChange, height = 300 }) {
             <div style={{ display: "flex", flexDirection: "column", background: "#fff", border: "1px solid #DADCE0", borderRadius: 8, overflow: "hidden", boxShadow: "0 1px 4px rgba(60,64,67,.28)" }}>
               {KMITL_FLOORS.map((f) => {
                 const on = f.id === floor;
+<<<<<<< HEAD
                 const tooltip = [
                   f.svg ? `ชั้น ${f.label}` : `ชั้น ${f.label} (ยังไม่มีไฟล์ผัง)`,
                   f.detail || null,
                 ].filter(Boolean).join(" · ");
                 return (
                   <button key={f.id} onClick={() => setFloor(f.id)} title={tooltip}
+=======
+                return (
+                  <button key={f.id} onClick={() => setFloor(f.id)} title={f.svg ? `ชั้น ${f.label}` : `ชั้น ${f.label} (ยังไม่มีไฟล์ผัง)`}
+>>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
                     style={{ border: "none", borderBottom: "1px solid #F1F3F4", cursor: "pointer", width: 34, padding: "6px 0", fontSize: 12, fontWeight: 800,
                       background: on ? "#1A73E8" : "#fff", color: on ? "#fff" : f.svg ? "#3C4043" : "#BDC1C6" }}>
                     {f.label}
@@ -281,4 +317,8 @@ export default function MapPicker({ value, onChange, height = 300 }) {
       </div>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9

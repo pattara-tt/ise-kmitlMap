@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PlaceInput from "./PlaceInput";
+import { Btn, Field, Input, Textarea, useCollection } from "./ui";
 import { speak, speakNow, unlockSpeech, loadVoices, hasThaiVoice } from "./speech";
 import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
 import {
   CENTER, ZOOM, DEMO_BBOX,
   KMITL_BOUNDS, KMITL_OUTLINE, KMITL_FLOORS as KMITL_FLOORS_STATIC, NODE_TYPES,
   CHIP_NODE_TYPES, getNodeType,
+  KMITL_BOUNDS, KMITL_OUTLINE, KMITL_FLOORS, NODE_TYPES,
   KMITL_FLOOR1_NODES, KMITL_FLOOR1_EDGES,
   KMITL_ALL_NODES, KMITL_NODE_FLOOR, KMITL_EXTERIOR_LINKS,
   CAT, MAN, ROAD_EN, catColor, thaiInstr, roadEN,
@@ -211,7 +213,7 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
               <span style={{ fontSize: 18 }}>{item.icon || "📍"}</span>
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", color: "#202124", fontWeight: 700, fontSize: 14 }}>{item.name}</span>
-                <span style={{ display: "block", color: "#5F6368", fontSize: 11.5, marginTop: 2 }}>{item.nodeId ? `ชั้น ${item.floor} · ${item.nodeId}` : item.src === "osm" ? "OSM" : "สถานที่"}</span>
+                <span style={{ display: "block", color: "#5F6368", fontSize: 11.5, marginTop: 2 }}>{item.src === "event" ? `กิจกรรม · ${item.subtitle || ""}` : item.nodeId ? `ชั้น ${item.floor} · ${item.nodeId}` : item.src === "osm" ? "OSM" : "สถานที่"}</span>
               </span>
             </button>
           ))}
@@ -221,7 +223,19 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
   );
 }
 
-export default function MapView({ apiRef, viewMode = "auto" }) {
+export default function MapView({ apiRef, viewMode = "auto", user = null }) {
+  // 🎪 กิจกรรมจากฝ่ายประชาสัมพันธ์ — แสดงเป็นหมุดบนแผนที่ ค้นหาได้ และกดสนใจได้จากการ์ด
+  const [events, setEvents] = useState([]);
+  const [interests, setInterests] = useState([]);
+  const [eventCard, setEventCard] = useState(null);
+  // 🚩 แจ้งปัญหา/ขอแก้ไขข้อมูลสถานที่ — ส่งเป็นคำร้องให้ฝ่ายดูแลระบบพิจารณา
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportForm, setReportForm] = useState(null);
+  const [reportSending, setReportSending] = useState(false);
+  const { items: rooms } = useCollection("rooms");
+  const { items: requests, create: createRequest } = useCollection("requests");
+  const { items: quotaItems } = useCollection("requestQuota");
+  const requestQuota = quotaItems[0] || {};
   // viewMode ถูกควบคุมจากปุ่มสลับ "มือถือ/คอม" ที่แถบบนของแอป (app/page.jsx)
   const mapEl = useRef(null);
   const mapRef = useRef(null);
@@ -245,6 +259,35 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
   const [routeFormOpen, setRouteFormOpen] = useState(false);
   const [placeCard, setPlaceCard] = useState(null); // { name, coord, extract, image, loading, error } — การ์ดรายละเอียดสถานที่หลังค้นหา
   const [routeSheetOpen, setRouteSheetOpen] = useState(false);
+
+
+  const reloadEvents = useCallback(async () => {
+    try {
+      const [a, b] = await Promise.all([
+        fetch("/api/data/events").then((r) => r.json()),
+        fetch("/api/data/eventInterest").then((r) => r.json()),
+      ]);
+      setEvents((a.items || []).filter((e) => e.published && isEventVisible(e)));
+      setInterests(b.items || []);
+    } catch (e) {}
+  }, []);
+  useEffect(() => { reloadEvents(); }, [reloadEvents]);
+
+  const myInterest = (eventId) => interests.find((i) => i.eventId === eventId && i.userId === user?.id);
+
+  async function toggleInterest(ev) {
+    if (!user?.id) return alert("กรุณาเข้าสู่ระบบก่อนกดสนใจกิจกรรม");
+    const mine = myInterest(ev.id);
+    if (mine) {
+      await fetch(`/api/data/eventInterest?id=${encodeURIComponent(mine.id)}`, { method: "DELETE" });
+    } else {
+      await fetch("/api/data/eventInterest", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId: ev.id, userId: user.id }),
+      });
+    }
+    await reloadEvents();
+  }
   // 🔧 สลับโหมดแล้วต้องสั่ง Leaflet คำนวณขนาด container ใหม่เอง — ไม่งั้นแผนที่ค้างขนาดเดิม (เห็นแค่ UI overlay ขยับนิดเดียว แผนที่ไม่เต็มจอ)
   useEffect(() => {
     const m = mapRef.current; if (!m) return;
@@ -670,12 +713,25 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
     for (const id of Object.keys(kmitlFloorNodes)) {
       const n = kmitlFloorNodes[id];
       if (!Number.isFinite(n?.lat) || !Number.isFinite(n?.lon)) continue;
+      // node ทางเดินมีไว้ให้อัลกอริทึมเดินกราฟตอนนำทางเท่านั้น ไม่แสดงเป็นหมุดบนผัง
+      if (WALKWAY_NODE_TYPES.includes(String(n.type || "").toLowerCase())) continue;
       const chipKey = Object.keys(CHIP_NODE_TYPES).find((k) => CHIP_NODE_TYPES[k].includes(n.type));
       if (chipKey && !chips[chipKey]) continue; // ชิปหมวดนี้ปิดอยู่ — ข้าม node ประเภทนี้ไป
-      const t = getNodeType(n.type);
+      const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
       const marker = L.circleMarker([n.lat, n.lon], { radius: 5, color: "#FFFFFF", weight: 1.5, fillColor: t.color, fillOpacity: 0.95, pane: "bdiFloorPane" }).addTo(m);
-      if (n.type === "escalator" || n.type === "lift" || n.type === "Entrance" || n.type === "Fire_Exit") marker.bindPopup(`${t.icon} ${t.label} #${id}${n.label ? "<br>" + n.label : ""}`);
-      else marker.bindTooltip(`${id}${n.label ? " · " + n.label : ""}`, { permanent: false });
+      const nodeName = n.label || t.label;
+      marker.bindTooltip(nodeName, { direction: "top", offset: [0, -8] });
+      // กดที่ node แล้วเปิดการ์ดสถานที่แบบเดียวกับการค้นหา (มีปุ่มนำทาง / แจ้งปัญหา)
+      marker.on("click", () => {
+        const entry = SC8_SEARCH_NODES.find((x) => x.id === id || x.markerId === id);
+        openPlaceCard(entry?.name || nodeName, [n.lon, n.lat], {
+          nodeId: entry?.id || id,
+          markerNodeId: entry?.markerId || id,
+          floor: kmitlFloor,
+          icon: entry?.icon || t.icon,
+          extract: entry?.extract || `${t.label} ชั้น ${kmitlFloor} อาคารพระจอมเกล้าฯ (Sc8)`,
+        });
+      });
       c.kmitlGraphLayer.push(marker);
     }
     if (kmitlRouteResult?.path?.length > 1) {
@@ -684,6 +740,36 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
     }
     return () => { (c.kmitlGraphLayer || []).forEach((ly) => { if (m.hasLayer(ly)) m.removeLayer(ly); }); c.kmitlGraphLayer = []; };
   }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlRouteResult, chips]);
+
+  // 🎪 หมุดกิจกรรม — กิจกรรมที่ผู้ใช้กดสนใจจะเป็นหมุดแดงเด่น แสดงตลอดไม่ว่าจะซูมระดับไหน
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    (c.eventMarkers || []).forEach((mk) => m.removeLayer(mk));
+    c.eventMarkers = [];
+
+    for (const ev of events) {
+      if (!Number.isFinite(Number(ev.lat)) || !Number.isFinite(Number(ev.lon))) continue;
+      const on = !!interests.find((i) => i.eventId === ev.id && i.userId === user?.id);
+      const color = on ? "#D93025" : "#1A73E8";
+      const size = on ? 42 : 34;
+      const html = `
+        <div style="position:relative;display:grid;place-items:center;width:${size}px;height:${size}px">
+          ${on ? `<span style="position:absolute;inset:-6px;border-radius:50%;background:${color};opacity:.22"></span>` : ""}
+          <span style="width:${size}px;height:${size}px;border-radius:50% 50% 50% 6px;transform:rotate(-45deg);background:${color};border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.4);display:grid;place-items:center">
+            <span style="transform:rotate(45deg);width:${on ? 19 : 16}px;height:${on ? 19 : 16}px;background:#fff;-webkit-mask:url('${EVENT_PIN_ICON}') center/contain no-repeat;mask:url('${EVENT_PIN_ICON}') center/contain no-repeat"></span>
+          </span>
+        </div>`;
+      const mk = L.marker([Number(ev.lat), Number(ev.lon)], {
+        icon: L.divIcon({ className: "", html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
+        zIndexOffset: on ? 3000 : 2200,
+        title: ev.name,
+      }).addTo(m);
+      mk.on("click", () => openEventCard(ev));
+      c.eventMarkers.push(mk);
+    }
+    return () => { (c.eventMarkers || []).forEach((mk) => { if (m.hasLayer(mk)) m.removeLayer(mk); }); c.eventMarkers = []; };
+  }, [events, interests, mapReady, user?.id]);
 
   useEffect(() => {
     ctx.current.kmitlAddNode = (lat, lon) => {
@@ -1040,6 +1126,18 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
     } catch (e) { return null; }
   }
 
+  // 🎪 เปิดการ์ดรายละเอียดกิจกรรม (ข้อมูลตามที่ฝ่ายประชาสัมพันธ์กรอกไว้)
+  function openEventCard(ev) {
+    setPlaceCard(null);
+    setSearchOpen(false);
+    setEventCard(ev);
+    const map = mapRef.current;
+    if (map && Number.isFinite(Number(ev.lat))) {
+      map.setView([Number(ev.lat), Number(ev.lon)], Math.max(map.getZoom(), 18), { animate: true });
+      setTimeout(() => map.panBy([0, 110], { animate: true }), 280);
+    }
+  }
+
   // 📍 ผู้ใช้เลือกสถานที่ปลายทางจากช่องค้นหา — แสดงการ์ดรายละเอียดกลางจอก่อน ยังไม่ขึ้นเส้นทางทันที (กด "นำทาง" ในการ์ดค่อยขึ้น)
   async function openPlaceCard(name, coord, meta = {}) {
     const routeNode = meta.nodeId
@@ -1147,6 +1245,141 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
     setRouteSheetOpen(false);
   }
 
+  // เปิดฟอร์มแจ้งปัญหาของสถานที่ที่กำลังเปิดการ์ดอยู่
+ function openReportForm() {
+    if (!placeCard) return;
+    const room = rooms.find((r) => r.nodeId === placeCard.nodeId);
+    if (room) {
+      // มีข้อมูลห้องอยู่ในระบบ (rooms) แล้ว → prefill เป็นข้อมูลเดิมให้แก้
+      setReportForm({
+        roomId: room.id,
+        nodeId: room.nodeId,
+        before: { name: room.name, type: room.type, capacity: room.capacity, teacher: room.teacher },
+        subject: "",
+        name: room.name,
+        type: room.type,
+        capacity: room.capacity,
+        teacher: room.teacher,
+        note: "",
+      });
+    } else {
+      // สถานที่ประเภทนี้ยังไม่มีข้อมูลโครงสร้างใน rooms (เช่น ห้องน้ำ/ลิฟต์) → ใช้ฟอร์มข้อความอย่างเดียว
+      setReportForm({
+        roomId: null,
+        nodeId: placeCard.nodeId || null,
+        before: { name: placeCard.name },
+        subject: "",
+        name: placeCard.name,
+        note: "",
+      });
+    }
+    setReportOpen(true);
+  }
+
+async function submitReport() {
+    if (!reportForm || !user) return;
+
+    if (!reportForm.note?.trim()) {
+      alert("กรุณากรอกรายละเอียดปัญหา");
+      return;
+    }
+
+    if (reportForm.roomId != null) {
+      const before = reportForm.before || {};
+
+      const after = {
+        name: String(reportForm.name ?? "").trim(),
+        type: String(reportForm.type ?? "").trim(),
+        capacity:
+          reportForm.capacity === "" || reportForm.capacity == null
+            ? null
+            : Number(reportForm.capacity),
+        teacher: String(reportForm.teacher ?? "").trim(),
+      };
+
+      const changed =
+        after.name !== String(before.name ?? "").trim() ||
+        after.type !== String(before.type ?? "").trim() ||
+        after.capacity !== (before.capacity == null ? null : Number(before.capacity)) ||
+        after.teacher !== String(before.teacher ?? "").trim();
+
+      if (!changed) {
+        alert("กรุณาแก้ไขข้อมูลอย่างน้อย 1 รายการก่อนส่งคำร้อง");
+        return;
+      }
+    }
+
+    const dailyLimit = Number(requestQuota?.perUserPerDay ?? 3);
+    const monthlyLimit = Number(requestQuota?.perUserPerMonth ?? 20);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const currentMonth = today.slice(0, 7);
+
+    const userRequests = requests.filter(
+      (r) =>
+        r.userId === user.id &&
+        r.status !== "cancelled"
+    );
+
+    const todayCount = userRequests.filter(
+      (r) => String(r.createdAt || "").slice(0, 10) === today
+    ).length;
+
+    const monthlyCount = userRequests.filter(
+      (r) => String(r.createdAt || "").slice(0, 7) === currentMonth
+    ).length;
+
+    if (todayCount >= dailyLimit) {
+      alert(`ส่งคำร้องได้สูงสุด ${dailyLimit} เรื่องต่อวัน`);
+      return;
+    }
+
+    if (monthlyCount >= monthlyLimit) {
+      alert(`ส่งคำร้องได้สูงสุด ${monthlyLimit} เรื่องต่อเดือน`);
+      return;
+    }
+
+    setReportSending(true);
+
+    const after =
+      reportForm.roomId != null
+        ? {
+            name: String(reportForm.name ?? "").trim(),
+            type: String(reportForm.type ?? "").trim(),
+            capacity:
+              reportForm.capacity === "" || reportForm.capacity == null
+                ? null
+                : Number(reportForm.capacity),
+            teacher: String(reportForm.teacher ?? "").trim(),
+          }
+        : {
+            name: String(reportForm.name ?? "").trim(),
+          };
+
+    try {
+      await createRequest({
+        userId: user.id,
+        roomId: reportForm.roomId,
+        nodeId: reportForm.nodeId,
+        subject: reportForm.subject?.trim() || "แจ้งแก้ไขข้อมูลสถานที่",
+        detail: reportForm.note.trim(),
+        before: reportForm.before,
+        after,
+        status: "pending",
+      });
+
+      alert("ส่งคำร้องแจ้งปัญหาเรียบร้อย รอผู้ดูแลระบบตรวจสอบ");
+      setReportOpen(false);
+      setReportForm(null);
+    } catch (e) {
+      console.error("submitReport error:", e);
+      alert(`ส่งคำร้องไม่สำเร็จ: ${e.message}`);
+    } finally {
+      setReportSending(false);
+    }
+  }
+
+
   // เปิด/ปิดเลเยอร์บนแผนที่ตาม chip (ทางเชื่อม/skywalk, ห้องน้ำ) — ตัด Street light chip ออกแล้ว
   function toggleChip(k) {
     setChips((p) => ({ ...p, [k]: !p[k] }));
@@ -1173,8 +1406,13 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
     { k: "lift", icon: () => <span>🛗</span>, label: "ลิฟต์" },
     { k: "stairs", icon: () => <span>🪜</span>, label: "บันได" },
   ];
-  // 🗂️ หมวด chip -> node type จริง — ดึงมาจาก mapConstants.js (แหล่งความจริงเดียว)
-  // ไม่ต้องพิมพ์รายชื่อ type ซ้ำที่นี่อีกต่อไป ดู NODE_TYPES/CHIP_NODE_TYPES ใน mapConstants.js
+  // 🗂️ หมวด chip -> node type จริงที่ปักไว้ใน mapConstants.js — ใช้กรองว่าจะโชว์ node ประเภทไหนบนแผนที่บ้าง
+  const CHIP_NODE_TYPES = {
+    room: ["Study_Room", "Co_Work"],
+    toilet: ["Toilet"],
+    lift: ["lift"],
+    stairs: ["Stair"],
+  };
 
   const navTarget = active ?? (routeData && !routeData.error && !routeData.loading ? routeData.best : null);
 
@@ -1230,7 +1468,7 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
         .gm-route-sheet{max-height:44vh!important;border-radius:18px 18px 0 0!important;padding:0 16px calc(12px + env(safe-area-inset-bottom))!important;overflow:auto!important;box-shadow:0 -2px 12px rgba(60,64,67,.22)!important;background:linear-gradient(135deg,#dbeafe 0%,#e0e7ff 52%,#ede9fe 100%)!important}
         .bdi-sheet-handle{display:flex;justify-content:space-between;align-items:center;cursor:pointer;border-radius:18px 18px 0 0;min-height:54px;font-weight:600}
         .bdi-sheet-handle:before{content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);width:36px;height:4px;border-radius:2px;background:#DADCE0}
-        .bdi-route-opt{width:100%;text-align:left;background:#fff;border:0;border-top:1px solid #ECEFF1;border-radius:0;padding:14px 2px;margin:0;color:#202124;cursor:pointer}
+        .bdi-route-opt{width:100%;box-sizing:border-box;text-align:left;background:#fff;border:0;cursor:pointer;border-top:1px solid #ECEFF1;border-radius:0;padding:14px 2px;margin:0;color:#202124;cursor:pointer}
         .bdi-route-opt:first-of-type{border-top:0}
         .bdi-route-opt.on{background:#F8FBFF;box-shadow:inset 4px 0 0 #1A73E8;padding-left:12px}
         .bdi-badge{display:inline-flex;align-items:center;border-radius:4px;background:#E8F0FE;color:#1967D2;padding:3px 7px;font-size:11px;font-weight:600}
@@ -1318,8 +1556,10 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
               <SearchPlaceInput
                 value={searchQuery}
                 onChange={setSearchQuery}
-                placeholder="ค้นหาตึก ห้อง ลิฟต์ หรือห้องน้ำ"
+                events={events}
+                placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ"
                 onPick={async (sg) => {
+                  if (sg.src === "event" && sg.event) { openEventCard(sg.event); return; }
                   let coord = sg.coord;
                   if (sg.src === "landmark" && sg.lm) {
                     try { const r = await resolveLandmark(sg.lm); if (r?.coord) coord = r.coord; } catch (e) {}
@@ -1353,12 +1593,231 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
                 {placeCard.loading ? "กำลังค้นหาข้อมูล…" : placeCard.extract || "ไม่พบข้อมูลรายละเอียดของสถานที่นี้"}
               </div>
               <button onClick={navigateFromCard} style={{ width: "100%", marginTop: 13, padding: "12px 0", border: "none", borderRadius: 12, background: "#1A73E8", color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
-                🧭 เส้นทางไปที่นี่
+                <CompassIcon size={16} color="#fff" /> เส้นทางไปที่นี่
+              </button>
+              <button onClick={openReportForm} style={{ width: "100%", marginTop: 8, padding: "11px 0", border: "1px solid #DADCE0", borderRadius: 12, background: "#fff", color: "#D93025", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                แจ้งปัญหา
               </button>
             </div>
           </div>
         </div>
       ) : null}
+
+      {/* 🚩 ฟอร์มแจ้งปัญหา / ขอแก้ไขข้อมูลสถานที่ → ส่งเป็นคำร้องให้ฝ่ายดูแลระบบ */}
+      {reportOpen && reportForm ? (
+        <div style={{ position: "absolute", inset: 0, zIndex: 2400, background: "rgba(32,33,36,.45)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div style={{ width: "min(480px, 100%)", maxHeight: "82vh", overflowY: "auto", background: "#fff", borderRadius: "18px 18px 0 0", padding: "16px 18px calc(16px + env(safe-area-inset-bottom))" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <b style={{ fontSize: 16, color: "#202124" }}>แจ้งปัญหา</b>
+              <button onClick={() => { setReportOpen(false); setReportForm(null); }} style={{ width: 30, height: 30, borderRadius: "50%", border: 0, background: "#F1F3F4", cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ fontSize: 12.5, color: "#5F6368", marginBottom: 10 }}>{placeCard?.name}</div>
+
+            {reportForm.roomId ? (
+              <>
+                {/* ข้อมูลปัจจุบันในระบบ (Original) */}
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: 14,
+                    borderRadius: 12,
+                    background: "#F8F9FA",
+                    border: "1px solid #E0E0E0",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 14,
+                      color: "#202124",
+                      marginBottom: 10,
+                    }}
+                  >
+                    ข้อมูลปัจจุบันในระบบ
+                  </div>
+
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, color: "#5F6368" }}>
+                      ชื่อสถานที่
+                    </div>
+                    <div style={{ fontSize: 14, color: "#202124" }}>
+                      {reportForm.before?.name || "-"}
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, color: "#5F6368" }}>
+                      ประเภท
+                    </div>
+                    <div style={{ fontSize: 14, color: "#202124" }}>
+                      {reportForm.before?.type || "-"}
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, color: "#5F6368" }}>
+                      ความจุ (คน)
+                    </div>
+                    <div style={{ fontSize: 14, color: "#202124" }}>
+                      {reportForm.before?.capacity ?? "-"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 12, color: "#5F6368" }}>
+                      อาจารย์ประจำห้อง
+                    </div>
+                    <div style={{ fontSize: 14, color: "#202124" }}>
+                      {reportForm.before?.teacher || "-"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ข้อมูลที่ต้องการแก้ไข (Proposed) */}
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: 14,
+                    borderRadius: 12,
+                    background: "#FFFFFF",
+                    border: "1px solid #DADCE0",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 14,
+                      color: "#202124",
+                      marginBottom: 12,
+                    }}
+                  >
+                    ข้อมูลที่ต้องการแก้ไข
+                  </div>
+
+                  <Field label="หัวข้อ">
+                    <Input
+                      placeholder="เช่น ขอแก้ไขข้อมูลห้อง 211"
+                      onChange={(e) =>
+                        setReportForm((f) => ({
+                          ...f,
+                          subject: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="ชื่อสถานที่">
+                    <Input
+                      placeholder="เช่น ห้อง 211"
+                      onChange={(e) =>
+                        setReportForm((f) => ({
+                          ...f,
+                          name: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="ประเภท">
+                    <Input
+                      placeholder="เช่น ห้องปฏิบัติการ"
+                      // value={reportForm.type}
+                      onChange={(e) =>
+                        setReportForm((f) => ({
+                          ...f,
+                          type: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="ความจุ (คน)">
+                    <Input
+                      type="number"
+                      placeholder="เช่น 40 (กรุณากรอกเป็นตัวเลข)"
+                      onChange={(e) =>
+                        setReportForm((f) => ({
+                          ...f,
+                          capacity: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="อาจารย์ประจำห้อง">
+                    <Input
+                      placeholder="เช่น ผศ.ดร.นพดล ชัยโย"
+                      onChange={(e) =>
+                        setReportForm((f) => ({
+                          ...f,
+                          teacher: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
+              </>
+            ) : null}
+
+            {/* แก้ถึงนี่ */}
+            <Field label="รายละเอียดเพิ่มเติม">
+              <Textarea value={reportForm.note} onChange={(e) => setReportForm((f) => ({ ...f, note: e.target.value }))} placeholder="อธิบายสิ่งที่ผิดหรือสิ่งที่ต้องการให้แก้ไข" />
+            </Field>
+
+            <Btn onClick={submitReport} disabled={reportSending} style={{ width: "100%", marginTop: 6 }}>
+              {reportSending ? "กำลังส่ง…" : "ส่งคำร้อง"}
+            </Btn>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 🎪 การ์ดรายละเอียดกิจกรรม — ข้อมูลตามที่ฝ่ายประชาสัมพันธ์กรอกไว้ + ปุ่มกดสนใจ */}
+      {eventCard ? (() => {
+        const on = !!myInterest(eventCard.id);
+        return (
+          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 2200, padding: "0 10px calc(10px + env(safe-area-inset-bottom))", pointerEvents: "none" }}>
+            <div style={{ width: "min(520px, 100%)", margin: "0 auto", background: "#FFFFFF", borderRadius: "20px 20px 14px 14px", overflow: "hidden", boxShadow: "0 -4px 24px rgba(32,33,36,.28)", pointerEvents: "auto" }}>
+              <div style={{ width: 38, height: 4, borderRadius: 999, background: "#DADCE0", margin: "9px auto 4px" }} />
+              <div style={{ padding: "10px 16px 16px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <span style={{ width: 40, height: 40, flex: "none", borderRadius: "50%", background: "#1A73E8", display: "grid", placeItems: "center" }}>
+                    <span style={{ width: 21, height: 21, background: "#fff", WebkitMask: `url('${EVENT_PIN_ICON}') center/contain no-repeat`, mask: `url('${EVENT_PIN_ICON}') center/contain no-repeat` }} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 18, color: "#202124" }}>{eventCard.name}</div>
+                    <div style={{ marginTop: 3, fontSize: 11.5, color: "#5F6368" }}>กิจกรรมจากฝ่ายประชาสัมพันธ์</div>
+                  </div>
+                  <button onClick={() => setEventCard(null)} aria-label="ปิด" style={{ width: 32, height: 32, borderRadius: "50%", border: 0, background: "#F1F3F4", color: "#5F6368", cursor: "pointer", fontSize: 16 }}>✕</button>
+                </div>
+
+                <div style={{ fontSize: 13.5, color: "#3C4043", lineHeight: 1.6, marginTop: 10, maxHeight: 92, overflowY: "auto" }}>
+                  {eventCard.detail || "ไม่มีรายละเอียดเพิ่มเติม"}
+                </div>
+
+                <div style={{ fontSize: 12.5, color: "#5F6368", lineHeight: 1.8, marginTop: 10 }}>
+                  🕘 {fmtEventTime(eventCard.startAt)} — {fmtEventTime(eventCard.endAt)}<br />
+                  📍 {eventCard.placeName || "ไม่ระบุสถานที่"}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                  <button
+                    onClick={() => toggleInterest(eventCard)}
+                    style={{ flex: 1, padding: "12px 0", border: on ? "1px solid #D93025" : "none", borderRadius: 12, background: on ? "#FCE8E6" : "#D93025", color: on ? "#D93025" : "#fff", fontWeight: 800, fontSize: 14.5, cursor: "pointer" }}>
+                    {on ? "✓ สนใจแล้ว — กดเพื่อยกเลิก" : "⭐ สนใจเข้าร่วมกิจกรรม"}
+                  </button>
+                  <button
+                    onClick={() => { setEventCard(null); openPlaceCard(eventCard.placeName || eventCard.name, [Number(eventCard.lon), Number(eventCard.lat)], {}); }}
+                    style={{ flex: "none", padding: "12px 16px", border: "1px solid #DADCE0", borderRadius: 12, background: "#fff", color: "#1A73E8", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                    <CompassIcon size={15} color="#1A73E8" /> เส้นทาง
+                  </button>
+                </div>
+
+                {on ? <div style={{ fontSize: 11.5, color: "#D93025", marginTop: 9, fontWeight: 700 }}>กิจกรรมนี้จะแสดงเป็นหมุดสีแดงเด่นบนแผนที่ตลอดเวลา</div> : null}
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
 
       {/* Chips เปิด/ปิดเลเยอร์ (ทางเชื่อม/Skywalk, ห้องน้ำ) */}
       {!nav?.active ? (
@@ -1394,9 +1853,11 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
               {routeData.routes[routeData.best] ? (() => {
                 const r = routeData.routes[routeData.best];
                 return (
-                  <button onClick={() => ctx.current.select(r.index)} className={"bdi-route-opt" + (active === r.index ? " on" : "")}>
+                  <div role="button" tabIndex={0} onClick={() => ctx.current.select(r.index)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ctx.current.select(r.index); } }}
+                    className={"bdi-route-opt" + (active === r.index ? " on" : "")}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span className="bdi-badge">🧭 เส้นทางแนะนำ</span>
+                      <span className="bdi-badge"><CompassIcon size={13} color="currentColor" /> เส้นทางแนะนำ</span>
                     </div>
                     <div className="bdi-stats">
                       <span>📏 {(r.distance_m / 1000).toFixed(2)} KM</span>
@@ -1407,7 +1868,7 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
                       <button onClick={(e) => { e.stopPropagation(); startNav(r.index); }} className="bdi-btn" style={{ fontSize: 12, padding: "6px 12px" }}>🚶 เริ่มนำทาง</button>
                       <button onClick={(e) => { e.stopPropagation(); startSim(r.index); }} className="bdi-btn ghost" style={{ fontSize: 12, padding: "6px 12px" }}>▶ จำลอง</button>
                     </div>
-                  </button>
+                  </div>
                 );
               })() : null}
             </div>

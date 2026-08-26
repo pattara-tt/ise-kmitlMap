@@ -1,3 +1,11 @@
+<<<<<<< HEAD
 node_modules/
 .next/
 .env.local
+=======
+node_modules
+.next
+.env
+.env.local
+*.dump
+>>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
