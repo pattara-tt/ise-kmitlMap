@@ -11,6 +11,7 @@ export const TABLES = {
   users: "users",
   requests: "requests",
   requestQuota: "request_quota",
+  notifications: "notifications",
   feedback: "feedback",
   mapEdits: "map_edits",
   contracts: "contracts",

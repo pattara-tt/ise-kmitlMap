@@ -44,21 +44,39 @@ INSERT INTO feedback (id, user_id, user_name, topic, detail, status, reply, crea
 INSERT INTO requests (id, user_id, subject, detail, room_id, node_id, before, after, status, note, created_at) VALUES
 (
     'RQ-1001', 'U007', 'ขอแก้ไขข้อมูลห้อง 106', 'ขอเปลี่ยนประเภทห้อง 106 จากห้องเรียนเป็นห้องปฏิบัติการ', 'RM-01', 'Sc8StudyRoom1F1',
+<<<<<<< HEAD
     '{"name": "ห้อง 106", "type": "ห้องเรียน", "capacity": 45, "teacher": "อ.ดร. ปรีชา วงศ์ทอง"}',
     '{"name": "ห้อง 106", "type": "ห้องปฏิบัติการ", "capacity": 45, "teacher": "อ.ดร. ปรีชา วงศ์ทอง"}',
     'pending', '', '2026-08-24'
+=======
+    '{"name":"ห้อง 106","type":"ห้องเรียน","capacity":45,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
+    '{"name":"ห้อง 106","type":"ห้องปฏิบัติการ","capacity":45,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
+    'pending', '','2026-08-24'
+>>>>>>> 0b0a067bca13a247840c2570d416c09804d7d52a
 ),
 (
     'RQ-1002', 'U007', 'แจ้งข้อมูลอาจารย์ประจำห้อง 107 ไม่ถูกต้อง', 'ชื่ออาจารย์ประจำห้อง 107 ไม่ตรงกับข้อมูลที่แสดงในระบบ', 'RM-02', 'Sc8StudyRoom2F1',
+<<<<<<< HEAD
     '{"name": "ห้อง 107", "type": "ห้องปฏิบัติการ", "capacity": 40, "teacher": "อ.ดร. สุนิสา ภูผา"}',
     '{"name": "ห้อง 107", "type": "ห้องปฏิบัติการ", "capacity": 40, "teacher": "อ.ดร. วิชัย ใจดี"}',
     'pending', '', '2026-08-24'
+=======
+    '{"name":"ห้อง 107","type":"ห้องปฏิบัติการ","capacity":40,"teacher":"อ.ดร. สุนิสา ภูผา"}',
+    '{"name":"ห้อง 107","type":"ห้องปฏิบัติการ","capacity":40,"teacher":"อ.ดร. วิชัย ใจดี"}',
+    'pending', '','2026-08-24'
+>>>>>>> 0b0a067bca13a247840c2570d416c09804d7d52a
 ),
 (
     'RQ-1003', 'U008', 'แจ้งข้อมูลความจุ Coworking Space KDAI', 'ขอให้ตรวจสอบจำนวนที่นั่งของ Coworking Space KDAI', 'RM-03', 'Sc8StudyRoom3F1',
+<<<<<<< HEAD
     '{"name": "Coworking Space KDAI", "type": "พื้นที่ทำงานร่วม", "capacity": 60, "teacher": "-"}',
     '{"name": "Coworking Space KDAI", "type": "พื้นที่ทำงานร่วม", "capacity": 70, "teacher": "-"}',
     'pending', '', '2026-08-24'
+=======
+    '{"name":"Coworking Space KDAI","type":"พื้นที่ทำงานร่วม","capacity":60,"teacher":"-"}',
+    '{"name":"Coworking Space KDAI","type":"พื้นที่ทำงานร่วม","capacity":70,"teacher":"-"}',
+    'pending', '','2026-08-24'
+>>>>>>> 0b0a067bca13a247840c2570d416c09804d7d52a
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -154,6 +172,16 @@ INSERT INTO map_assets (id, name, kind, file, updated_at) VALUES
   ('MA-03','ภาพอาคาร Sc8','image','/data/places/sc8.png','2026-07-28')
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO map_drafts (id, name, note, saved_at, saved_by, status) VALUES
+  ('MD-01','ปรับพิกัดทางเข้าอาคาร Sc8','ย้ายจุดทางเข้าฝั่งเหนือ 3 เมตร','2026-08-22 11:15','ธานอส ซัง','draft')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO map_edits (id, at, actor_id, actor_name, action, target, before, after) VALUES
+  ('ML-3001','2026-08-20 14:02','U003','ธานอส ซัง','แก้ไขขอบเขตแผนผัง','ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)','polygon v2','polygon v3'),
+  ('ML-3002','2026-08-19 09:41','U006','ฮง ไลเคน','แก้ไขข้อมูลห้อง','ห้อง 107 ชั้น 1','ห้องเรียนรวม','ห้องปฏิบัติการ'),
+  ('ML-3003','2026-08-17 16:20','U005','อาสะ คิม','เพิ่มตำแหน่งกิจกรรม','ISE Open House 2026','-','ลานหน้าอาคาร Sc8')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO usage (month, active_users, searches, routes) VALUES
   ('2026-03',1820,9120,4310), ('2026-04',2110,10480,5020), ('2026-05',2450,12240,6110),
   ('2026-06',1980,8830,3990), ('2026-07',2680,13910,6840), ('2026-08',3120,16240,7930)
@@ -162,7 +190,7 @@ ON CONFLICT (month) DO NOTHING;
 <<<<<<< HEAD
 =======
 INSERT INTO notifications (id, user_id, kind, title, body, read, created_at) VALUES
-  ('NT-001', 'U008','account','บัญชีถูกระงับ','บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ', FALSE,'2026-08-26');
+  ('NT-001', 'U008','account','บัญชีถูกระงับ','บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ', FALSE,'2026-08-26')
 ON CONFLICT (id) DO NOTHING;
 
 >>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
