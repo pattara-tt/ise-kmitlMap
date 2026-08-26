@@ -12,11 +12,16 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
+// Express 4 ไม่จับ rejection ของ async handler เอง — ถ้าไม่ห่อไว้ error ตัวเดียว
+// จะกลายเป็น unhandled rejection แล้ว Node 22 จะ kill process ทั้งคอนเทนเนอร์
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+
 // ── health check สำหรับ docker healthcheck / load balancer ──
 app.get("/health", (_req, res) => res.json({ ok: true, backend: "scimap", storage: USE_PG ? "postgres" : "memory" }));
 
 /* ═══════════════ auth ═══════════════ */
-app.post("/api/auth", async (req, res) => {
+app.post("/api/auth", wrap(async (req, res) => {
   const body = req.body || {};
   const email = String(body.email || "").trim().toLowerCase();
   const users = await list("users");
@@ -47,7 +52,7 @@ app.post("/api/auth", async (req, res) => {
   }
 
   return res.status(400).json({ ok: false, error: "action ไม่ถูกต้อง" });
-});
+}));
 
 /* ═══════════════ CRUD กลางของทุก collection ═══════════════ */
 const ALLOWED = new Set([
@@ -67,12 +72,13 @@ function guard(req, res) {
   return false;
 }
 
-app.get("/api/data/:name", async (req, res) => {
+
+app.get("/api/data/:name", wrap(async (req, res) => {
   if (!guard(req, res)) return;
   res.json({ ok: true, items: await list(req.params.name) });
-});
+}));
 
-app.post("/api/data/:name", async (req, res) => {
+app.post("/api/data/:name", wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
   const { _actor, ...item } = req.body || {};
@@ -81,9 +87,9 @@ app.post("/api/data/:name", async (req, res) => {
     await logMapEdit({ actorName: _actor?.name, actorId: _actor?.id, action: "เพิ่ม" + MAP_COLLECTIONS[name], target: row.name || row.label || row.code || row.id, after: "สร้างใหม่" });
   }
   res.json({ ok: true, item: row });
-});
+}));
 
-app.patch("/api/data/:name", async (req, res) => {
+app.patch("/api/data/:name", wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
   const { id, _actor, ...patch } = req.body || {};
@@ -93,9 +99,9 @@ app.patch("/api/data/:name", async (req, res) => {
     await logMapEdit({ actorName: _actor?.name, actorId: _actor?.id, action: "แก้ไข" + MAP_COLLECTIONS[name], target: row.name || row.label || row.code || row.id, after: JSON.stringify(patch).slice(0, 80) });
   }
   res.json({ ok: true, item: row });
-});
+}));
 
-app.delete("/api/data/:name", async (req, res) => {
+app.delete("/api/data/:name", wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
   const id = req.query.id;
@@ -106,10 +112,10 @@ app.delete("/api/data/:name", async (req, res) => {
     await logMapEdit({ actorName: actor, action: "ลบ" + MAP_COLLECTIONS[name], target: before.name || before.label || before.code || id, before: "มีอยู่", after: "ถูกลบ" });
   }
   res.json({ ok });
-});
+}));
 
 /* ═══════════════ สถิติรวม ═══════════════ */
-app.get("/api/stats", async (_req, res) => {
+app.get("/api/stats", wrap(async (_req, res) => {
   const [users, requests, feedback, news, events, eventStats, rooms, contracts, usage] = await Promise.all([
     list("users"), list("requests"), list("feedback"), list("news"),
     list("events"), list("eventStats"), list("rooms"), list("contracts"), list("usage"),
@@ -143,11 +149,20 @@ app.get("/api/stats", async (_req, res) => {
     contracts: contracts.map((c) => ({ ...c, daysLeft: daysLeft(c.endDate) })),
     eventStats: eventStats.map((s) => ({ ...s, title: (events.find((e) => e.id === s.eventId) || {}).name || s.eventId })),
   });
-});
+}));
 
 /* ═══════════════ พร็อกซี OpenStreetMap ═══════════════ */
 app.get("/api/osm", osmHandler);
 app.get("/api/walknet", walknetHandler);
+
+// ── ตัวจับ error สุดท้าย: ตอบ 500 แทนที่จะให้ process ตาย ──
+app.use((err, _req, res, _next) => {
+  console.error("[scimap-backend] error:", err);
+  res.status(500).json({ ok: false, error: "เกิดข้อผิดพลาดภายในระบบ" });
+});
+
+// กันไม่ให้ error ที่หลุดรอดออกมาทำให้คอนเทนเนอร์ restart วนไปเรื่อยๆ
+process.on("unhandledRejection", (e) => console.error("[scimap-backend] unhandledRejection:", e));
 
 const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, "0.0.0.0", () => {

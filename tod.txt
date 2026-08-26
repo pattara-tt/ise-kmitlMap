@@ -1,0 +1,2058 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Nav3D from "./Nav3D";
+import PlaceInput from "./PlaceInput";
+import { speak, speakNow, unlockSpeech, loadVoices, hasThaiVoice } from "./speech";
+import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
+import {
+  CENTER, ZOOM, DEMO_BBOX,
+  SD_BOUNDS, SD_OUTLINE, SD_FLOORS, SD_NODE_TYPES, SD_FLOOR1_NODES, SD_FLOOR1_EDGES, SD_FLOOR2_NODES, SD_FLOOR2_EDGES,
+  SD_FLOORM_NODES, SD_FLOORM_EDGES,
+  SD_ALL_NODES, SD_NODE_FLOOR, SD_EXTERIOR_LINKS,
+  SKYWALK_SVG, SKYWALK_BOUNDS, SKYWALK_OUTLINE,
+  BACC_BOUNDS, BACC_OUTLINE, BACC_FLOORS, BACC_FLOOR_NODES, BACC_FLOOR_EDGES,
+  BACC_ALL_NODES_FULL, BACC_NODE_FLOOR, BACC_EXTERIOR_LINKS,
+  CEN_BOUNDS, CEN_OUTLINE, CEN_FLOORS, SC_FLOOR1_NODES, SC_FLOOR1_EDGES, SC_FLOOR2_NODES, SC_FLOOR2_EDGES,
+  SC_ALL_NODES_FULL, SC_NODE_FLOOR, SC_EXTERIOR_LINKS,
+  LD_BOUNDS, LD_OUTLINE, LD_FLOORS, LD_FLOOR1_NODES, LD_FLOOR1_EDGES, LD_FLOOR2_NODES, LD_FLOOR2_EDGES,
+  LD_ALL_NODES_FULL, LD_NODE_FLOOR, LD_EXTERIOR_LINKS,
+  CAT, MAN, ROAD_EN, catColor, thaiInstr, roadEN,
+  OVERPASS_MIRRORS, SKYWALK_LIGHT_DEFAULT_HOURS,
+} from "./mapConstants";
+import {
+  sdFloorRoute,
+  loadLeaflet, haversine, bearing, turnTH, walkFrom, turnAt, turnSide,
+  sampleLine, ratioNear, countNear, lampDensityScore, sunPosition,
+  pointToSegM, nearPolyline, nearestOnRoute, underCovered, angDiff,
+  shadedBySun, shadowPerM, pip, shadowPrep, ptShaded, buildingIndex, inBuilding, shadeRatio,
+  fetchOSM, timeWeights, scoreRoutes, comfortColor, popupHtml, fetchWalkNet, buildGraph, mergeIndoorGraph, routeSegments, SEGMENT_COLORS, isBulbOn,
+  buildLampGrid, lampNearGrid, lampCountNearGrid, graphRoute, pickRoutes,
+  resolveLandmark, resolvePlace, geocodeNominatim, pointAtDistance,
+  queuedGeocode, reverseGeocode, queuedReverse, suggestPlaces, LANDMARKS,
+} from "./mapGeo";
+
+export default function MapView({ apiRef }) {
+  const mapEl = useRef(null);
+  const mapRef = useRef(null);
+  const ctx = useRef({ L: null, routeLayer: null, problems: [], osmPromise: null, select: () => {}, scored: null, voiceOn: true, voiceLang: "th", crossings: [], placeCache: {} });
+  const [toilets, setToilets] = useState(null);
+  const [cams, setCams] = useState(null);
+  const [routeData, setRouteData] = useState(null);
+  const [active, setActive] = useState(null);
+  const [nav, setNav] = useState(null);
+  const [voice, setVoice] = useState(true);
+  const [voiceLang, setVoiceLang] = useState("th");
+  const [nav3d, setNav3D] = useState(null);
+  const [sFrom, setSFrom] = useState("");
+  const [sTo, setSTo] = useState("");
+  // chips คุมเลเยอร์แผนที่ตามดีไซน์ Figma + สถานะเปิด/ปิดแผงค้นหา ("จะไปไหนดี?")
+  const [chips, setChips] = useState({ light: true, cross: false, toilet: false });
+  const [mapZoom, setMapZoom] = useState(ZOOM); // ใช้ควบคุมการแสดง skyNodes เมื่อ zoom >= 16
+  const [mapReady, setMapReady] = useState(false); // ให้ effect วาด skyNodes หลัง Leaflet พร้อม
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [routeSheetOpen, setRouteSheetOpen] = useState(false); // ดีฟอลต์พับ — กดขยายเมื่ออยากดูรายละเอียดทุกเส้น
+  const [floor, setFloor] = useState("2"); // ปุ่มเลือกชั้นห้าง 2/1/M/G (Figma: Frame 59)
+  const [routeHour, setRouteHour] = useState(null); // เลือกเวลาเดินทางรายชั่วโมง (null = ตอนนี้) — Figma: Frame 51
+  const [sdOpen, setSdOpen] = useState(false); // แผงผังตึก Siam Discovery เปิดอยู่ไหม (กดตึก/ซูมเข้า)
+  const sdOpenRef = useRef(sdOpen);
+  useEffect(() => { sdOpenRef.current = sdOpen; }, [sdOpen]);
+  const [sdFloor, setSdFloor] = useState(SD_FLOORS[0].id); // ชั้นที่กำลังโชว์ — ดีฟอลต์ชั้นบนสุด
+  // 🧭 เลือกกราฟ node/edge ตามชั้นที่กำลังดูอยู่ — รองรับทั้งชั้น 1 และชั้น 2 (เพิ่มชั้นอื่นในอนาคตแค่ต่อ ternary นี้)
+  const sdFloorNodes = sdFloor === "1" ? SD_FLOOR1_NODES : sdFloor === "2" ? SD_FLOOR2_NODES : sdFloor === "M" ? SD_FLOORM_NODES : {};
+  const sdFloorEdges = sdFloor === "1" ? SD_FLOOR1_EDGES : sdFloor === "2" ? SD_FLOOR2_EDGES : sdFloor === "M" ? SD_FLOORM_EDGES : [];
+  const [sdCalibrate, setSdCalibrate] = useState(false); // โหมดลากมุมภาพให้ตรงกับตึกจริงบนแผนที่
+  const [sdCalReadout, setSdCalReadout] = useState(null); // ค่า NW/SE ปัจจุบันระหว่างลาก (โชว์ให้ก็อปส่งกลับมา)
+  const [sdNodeMode, setSdNodeMode] = useState(false); // โหมดปักหมุด node บนผังตึก (ตามชั้นที่กำลังดูอยู่)
+  const [sdNodes, setSdNodes] = useState([]); // [{id, lat, lon, type}] หมุดที่ปักไว้ — ไว้ก็อปออกไปสร้างกราฟนำทางในตึก
+  const [sdNodeType, setSdNodeType] = useState("path"); // ประเภทที่จะปักหมุดถัดไป
+  const [sdRouteFrom, setSdRouteFrom] = useState(""); // ทดสอบหาเส้นทางในตึกชั้น 2 — จุดเริ่ม
+  const [sdRouteTo, setSdRouteTo] = useState(""); // ทดสอบหาเส้นทางในตึกชั้น 2 — จุดปลาย
+  const [sdRouteResult, setSdRouteResult] = useState(null); // {path, distance} จาก sdFloor2Route
+
+  const [baccOpen, setBaccOpen] = useState(false); // แผงผัง BACC เปิดอยู่ไหม (กดตัวอาคาร/ซูมเข้า)
+  const baccOpenRef = useRef(baccOpen);
+  useEffect(() => { baccOpenRef.current = baccOpen; }, [baccOpen]);
+  const [baccFloor, setBaccFloor] = useState(BACC_FLOORS[0].id); // ชั้นที่กำลังโชว์ — ดีฟอลต์ชั้นบนสุด (9)
+  // 🧭 เลือกกราฟ node/edge สำหรับหาเส้นทาง ตามชั้นที่กำลังดูอยู่ (ว่างไว้ก่อนจนกว่าจะมีข้อมูลสำรวจจริง)
+  const baccFloorNodes = BACC_FLOOR_NODES[baccFloor] || {};
+  const baccFloorEdges = BACC_FLOOR_EDGES[baccFloor] || [];
+  const [baccCalibrate, setBaccCalibrate] = useState(false); // โหมดลากมุมภาพให้ตรงกับตึกจริงบนแผนที่
+  const [baccCalReadout, setBaccCalReadout] = useState(null); // ค่า NW/SE ปัจจุบันระหว่างลาก (โชว์ให้ก็อปส่งกลับมา)
+  const [baccNodeMode, setBaccNodeMode] = useState(false); // โหมดปักหมุด node บนผัง BACC (ตามชั้นที่กำลังดูอยู่)
+  const [baccNodes, setBaccNodes] = useState([]); // [{id, lat, lon, type, floor}] หมุดที่ปักไว้ — ไว้ก็อปออกไปสร้างกราฟนำทางในตึก
+  const [baccNodeType, setBaccNodeType] = useState("path"); // ประเภทที่จะปักหมุดถัดไป
+  const [baccRouteFrom, setBaccRouteFrom] = useState(""); // ทดสอบหาเส้นทางในตึก BACC — จุดเริ่ม
+  const [baccRouteTo, setBaccRouteTo] = useState(""); // ทดสอบหาเส้นทางในตึก BACC — จุดปลาย
+  const [baccRouteResult, setBaccRouteResult] = useState(null); // {path, distance} จาก sdFloorRoute
+
+  const [cenOpen, setCenOpen] = useState(false); // แผงผัง Siam Center เปิดอยู่ไหม (กดตึก/ซูมเข้า)
+  const cenOpenRef = useRef(cenOpen);
+  useEffect(() => { cenOpenRef.current = cenOpen; }, [cenOpen]);
+  const [cenFloor, setCenFloor] = useState(CEN_FLOORS[0].id); // ชั้นที่กำลังโชว์ — ดีฟอลต์ชั้นบนสุด
+  const cenFloorRef = useRef(cenFloor);
+  useEffect(() => { cenFloorRef.current = cenFloor; ctx.current.drawFloorOverlay?.(); }, [cenFloor]);
+  // 🧭 เลือกกราฟ node/edge ตามชั้นที่กำลังดูอยู่ (Siam Center มี 2 ชั้น)
+  const cenFloorNodes = cenFloor === "1" ? SC_FLOOR1_NODES : cenFloor === "2" ? SC_FLOOR2_NODES : {};
+  const cenFloorEdges = cenFloor === "1" ? SC_FLOOR1_EDGES : cenFloor === "2" ? SC_FLOOR2_EDGES : [];
+  const [cenRouteFrom, setCenRouteFrom] = useState(""); // ทดสอบหาเส้นทางในตึก Siam Center — จุดเริ่ม
+  const [cenRouteTo, setCenRouteTo] = useState(""); // ทดสอบหาเส้นทางในตึก Siam Center — จุดปลาย
+  const [cenRouteResult, setCenRouteResult] = useState(null); // {path, distance} จาก sdFloorRoute
+  const [cenNodeMode, setCenNodeMode] = useState(false); // โหมดปักหมุด node บนผัง Siam Center (ตามชั้นที่กำลังดูอยู่)
+  const [cenNodes, setCenNodes] = useState([]); // [{id, lat, lon, type, floor}] หมุดที่ปักไว้ — ไว้ก็อปออกไปสร้างกราฟนำทางในตึก
+  const [cenNodeType, setCenNodeType] = useState("path"); // ประเภทที่จะปักหมุดถัดไป
+
+  const [ldOpen, setLdOpen] = useState(false); // แผงผัง Lido Connect เปิดอยู่ไหม (กดตึก/ซูมเข้า)
+  const ldOpenRef = useRef(ldOpen);
+  useEffect(() => { ldOpenRef.current = ldOpen; }, [ldOpen]);
+  const [ldFloor, setLdFloor] = useState(LD_FLOORS[0].id); // ชั้นที่กำลังโชว์ — ดีฟอลต์ชั้นบนสุด
+  const ldFloorRef = useRef(ldFloor);
+  useEffect(() => { ldFloorRef.current = ldFloor; ctx.current.drawFloorOverlay?.(); }, [ldFloor]);
+  // 🧭 เลือกกราฟ node/edge ตามชั้นที่กำลังดูอยู่ (Lido Connect มี 2 ชั้น)
+  const ldFloorNodes = ldFloor === "1" ? LD_FLOOR1_NODES : ldFloor === "2" ? LD_FLOOR2_NODES : {};
+  const ldFloorEdges = ldFloor === "1" ? LD_FLOOR1_EDGES : ldFloor === "2" ? LD_FLOOR2_EDGES : [];
+  const [ldRouteFrom, setLdRouteFrom] = useState(""); // ทดสอบหาเส้นทางในตึก Lido — จุดเริ่ม
+  const [ldRouteTo, setLdRouteTo] = useState(""); // ทดสอบหาเส้นทางในตึก Lido — จุดปลาย
+  const [ldRouteResult, setLdRouteResult] = useState(null); // {path, distance} จาก sdFloorRoute
+  const [ldNodeMode, setLdNodeMode] = useState(false); // โหมดปักหมุด node บนผัง Lido (ตามชั้นที่กำลังดูอยู่)
+  const [ldNodes, setLdNodes] = useState([]); // [{id, lat, lon, type, floor}] หมุดที่ปักไว้ — ไว้ก็อปออกไปสร้างกราฟนำทางในตึก
+  const [ldNodeType, setLdNodeType] = useState("path"); // ประเภทที่จะปักหมุดถัดไป
+
+  const [skyOpen, setSkyOpen] = useState(false); // แผงผัง Skywalk Platum เปิดอยู่ไหม (กดที่สะพาน/ซูมเข้า)
+  const [skyNodes, setSkyNodes] = useState([
+    { id: 1, lat: 13.7463647, lon: 100.5300824, type: "light" },
+    { id: 2, lat: 13.7463739, lon: 100.5300153, type: "light" },
+    { id: 3, lat: 13.7462827, lon: 100.5300703, type: "light" },
+    { id: 4, lat: 13.7462892, lon: 100.5300140, type: "light" },
+    { id: 5, lat: 13.7462176, lon: 100.5300623, type: "light" },
+    { id: 6, lat: 13.7462202, lon: 100.5300046, type: "light" },
+    { id: 7, lat: 13.7462306, lon: 100.5299416, type: "light" },
+    { id: 8, lat: 13.7462293, lon: 100.5298531, type: "light" },
+    { id: 9, lat: 13.7462332, lon: 100.5297981, type: "light" },
+    { id: 10, lat: 13.7463439, lon: 100.5301736, type: "light" },
+    { id: 11, lat: 13.7462632, lon: 100.5301682, type: "light" },
+    { id: 12, lat: 13.7462723, lon: 100.5305223, type: "light" },
+    { id: 13, lat: 13.7461929, lon: 100.5305089, type: "light" },
+
+    { id: 14, lat: 13.7462436, lon: 100.5302326, type: "light" },
+    { id: 15, lat: 13.7462267, lon: 100.5303211, type: "light" },
+    { id: 16, lat: 13.7462137, lon: 100.5303962, type: "light" },
+    { id: 17, lat: 13.7461981, lon: 100.5304633, type: "light" },
+    { id: 18, lat: 13.7463257, lon: 100.5302514, type: "light" },
+    { id: 19, lat: 13.7463074, lon: 100.5303305, type: "light" },
+    { id: 20, lat: 13.7462892, lon: 100.5304029, type: "light" },
+    { id: 21, lat: 13.7462801, lon: 100.5304794, type: "light" },
+    { id: 22, lat: 13.7462697, lon: 100.5307597, type: "light" },
+    { id: 23, lat: 13.7460600, lon: 100.5307369, type: "light" },
+    { id: 24, lat: 13.7461291, lon: 100.5306497, type: "light" },
+    { id: 25, lat: 13.7460978, lon: 100.5308254, type: "light" },
+    { id: 26, lat: 13.7462306, lon: 100.5306658, type: "light" },
+    { id: 27, lat: 13.7461889, lon: 100.5308482, type: "light" },
+    { id: 28, lat: 13.7463791, lon: 100.5305732, type: "light" },
+    { id: 29, lat: 13.7464533, lon: 100.5306711, type: "light" },
+    { id: 30, lat: 13.7459272, lon: 100.5309005, type: "light" },
+    { id: 31, lat: 13.7459663, lon: 100.5308254, type: "light" },
+    { id: 32, lat: 13.7460496, lon: 100.5309702, type: "light" },
+    { id: 33, lat: 13.7459780, lon: 100.5309823, type: "light" },
+    { id: 34, lat: 13.7461134, lon: 100.5304700, type: "light" },
+    { id: 35, lat: 13.7460353, lon: 100.5304727, type: "light" },
+    { id: 36, lat: 13.7460249, lon: 100.5303788, type: "light" },
+    { id: 37, lat: 13.7459441, lon: 100.5303842, type: "light" },
+    { id: 38, lat: 13.7459363, lon: 100.5302795, type: "light" },
+    { id: 39, lat: 13.7458426, lon: 100.5302822, type: "light" },
+    { id: 40, lat: 13.7457671, lon: 100.5309783, type: "light" },
+    { id: 41, lat: 13.7457215, lon: 100.5309273, type: "light" },
+    { id: 42, lat: 13.7456629, lon: 100.5308683, type: "light" },
+    { id: 43, lat: 13.7464507, lon: 100.5309796, type: "light" },
+    { id: 44, lat: 13.7464910, lon: 100.5310413, type: "light" },
+    { id: 45, lat: 13.7465327, lon: 100.5310788, type: "light" },
+    { id: 46, lat: 13.7462996, lon: 100.5310735, type: "light" },
+    { id: 47, lat: 13.7463413, lon: 100.5311325, type: "light" },
+
+    { id: 65, lat: 13.7463569, lon: 100.5311861, type: "light", activeHours: "06:00-24:00" },
+    { id: 66, lat: 13.7464481, lon: 100.5307543, type: "light", activeHours: "06:00-24:00" },
+    { id: 67, lat: 13.7464832, lon: 100.5307771, type: "light", activeHours: "06:00-24:00" },
+    { id: 68, lat: 13.7465223, lon: 100.5307851, type: "light", activeHours: "06:00-24:00" },
+    { id: 69, lat: 13.7465288, lon: 100.5308173, type: "light", activeHours: "06:00-24:00" },
+    { id: 70, lat: 13.7465588, lon: 100.5308401, type: "light", activeHours: "06:00-24:00" },
+    { id: 71, lat: 13.7465913, lon: 100.5308723, type: "light", activeHours: "06:00-24:00" },
+    { id: 72, lat: 13.7466395, lon: 100.5308589, type: "light", activeHours: "06:00-24:00" },
+    { id: 73, lat: 13.7467150, lon: 100.5308509, type: "light", activeHours: "06:00-24:00" },
+    { id: 74, lat: 13.7467762, lon: 100.5308442, type: "light", activeHours: "06:00-24:00" },
+    { id: 75, lat: 13.7468517, lon: 100.5308643, type: "light", activeHours: "06:00-24:00" },
+    { id: 76, lat: 13.7468908, lon: 100.5308857, type: "light", activeHours: "06:00-24:00" },
+    { id: 77, lat: 13.7469325, lon: 100.5309166, type: "light", activeHours: "06:00-24:00" },
+    { id: 78, lat: 13.7469351, lon: 100.5310279, type: "light", activeHours: "06:00-24:00" },
+    { id: 79, lat: 13.7469481, lon: 100.5309729, type: "light", activeHours: "06:00-24:00" },
+    { id: 80, lat: 13.7469807, lon: 100.5309099, type: "light", activeHours: "06:00-24:00" },
+    { id: 81, lat: 13.7470406, lon: 100.5308951, type: "light", activeHours: "06:00-24:00" },
+    { id: 82, lat: 13.7471018, lon: 100.5308777, type: "light", activeHours: "06:00-24:00" },
+    { id: 83, lat: 13.7471564, lon: 100.5308629, type: "light", activeHours: "06:00-24:00" },
+    { id: 84, lat: 13.7472072, lon: 100.5308374, type: "light", activeHours: "06:00-24:00" },
+    { id: 85, lat: 13.7472281, lon: 100.5307731, type: "light", activeHours: "06:00-24:00" },
+    { id: 86, lat: 13.7472294, lon: 100.5307007, type: "light", activeHours: "06:00-24:00" },
+    // เปลี่ยน type ของชุดเดิม (id 48-64) เป็น bulb
+{ id: 48, lat: 13.7459503, lon: 100.5316944, type: "bulb" },
+{ id: 49, lat: 13.7458852, lon: 100.5316837, type: "bulb" },
+{ id: 50, lat: 13.7458175, lon: 100.5316716, type: "bulb" },
+{ id: 51, lat: 13.7457498, lon: 100.5316609, type: "bulb" },
+{ id: 52, lat: 13.7456730, lon: 100.5316461, type: "bulb" },
+{ id: 53, lat: 13.7455831, lon: 100.5316300, type: "bulb" },
+{ id: 54, lat: 13.7454842, lon: 100.5316139, type: "bulb" },
+{ id: 55, lat: 13.7453904, lon: 100.5315965, type: "bulb" },
+{ id: 56, lat: 13.7453110, lon: 100.5315791, type: "bulb" },
+{ id: 57, lat: 13.7452524, lon: 100.5315670, type: "bulb" },
+{ id: 58, lat: 13.7451729, lon: 100.5315590, type: "bulb" },
+{ id: 59, lat: 13.7451130, lon: 100.5315455, type: "bulb" },
+{ id: 60, lat: 13.7450505, lon: 100.5315362, type: "bulb" },
+{ id: 61, lat: 13.7449594, lon: 100.5315187, type: "bulb" },
+{ id: 62, lat: 13.7448878, lon: 100.5315093, type: "bulb" },
+{ id: 63, lat: 13.7448109, lon: 100.5314946, type: "bulb" },
+{ id: 64, lat: 13.7447484, lon: 100.5314839, type: "bulb" },
+
+// ไฟริมทาง (ต่อ id)
+{ id: 87, lat: 13.7462076, lon: 100.5314389, type: "bulb" },
+{ id: 88, lat: 13.7461737, lon: 100.5316025, type: "bulb" },
+{ id: 89, lat: 13.7461476, lon: 100.5317581, type: "bulb" },
+{ id: 90, lat: 13.7461190, lon: 100.5319136, type: "bulb" },
+{ id: 91, lat: 13.7459497, lon: 100.5318868, type: "bulb" },
+{ id: 92, lat: 13.7460010, lon: 100.5325413, type: "bulb" },
+{ id: 93, lat: 13.7460219, lon: 100.5324286, type: "bulb" },
+{ id: 94, lat: 13.7460466, lon: 100.5322999, type: "bulb" },
+{ id: 95, lat: 13.7460701, lon: 100.5321859, type: "bulb" },
+{ id: 96, lat: 13.7460844, lon: 100.5320933, type: "bulb" },
+
+// ชุดหลอดไฟ (ต่อ id)
+{ id: 97, lat: 13.7456031, lon: 100.5305216, type: "bulb" },
+{ id: 98, lat: 13.7458811, lon: 100.5303727, type: "bulb" },
+{ id: 99, lat: 13.7458251, lon: 100.5304196, type: "bulb" },
+{ id: 100, lat: 13.7457717, lon: 100.5304652, type: "bulb" },
+{ id: 101, lat: 13.7457105, lon: 100.5305175, type: "bulb" },
+{ id: 102, lat: 13.7455243, lon: 100.5305068, type: "bulb" },
+{ id: 103, lat: 13.7454409, lon: 100.5304921, type: "bulb" },
+{ id: 104, lat: 13.7453063, lon: 100.5304813, type: "bulb" },
+{ id: 105, lat: 13.7451761, lon: 100.5304492, type: "bulb" },
+{ id: 106, lat: 13.7450563, lon: 100.5304277, type: "bulb" },
+{ id: 107, lat: 13.7448818, lon: 100.5304009, type: "bulb" },
+{ id: 108, lat: 13.7447464, lon: 100.5303928, type: "bulb" },
+{ id: 109, lat: 13.7446135, lon: 100.5303687, type: "bulb" },
+{ id: 110, lat: 13.7445172, lon: 100.5303687, type: "bulb" },
+{ id: 111, lat: 13.7442255, lon: 100.5303177, type: "bulb" },
+{ id: 112, lat: 13.7440614, lon: 100.5302963, type: "bulb" },
+{ id: 113, lat: 13.7439025, lon: 100.5302668, type: "bulb" },
+{ id: 114, lat: 13.7437618, lon: 100.5302480, type: "bulb" },
+{ id: 115, lat: 13.7435821, lon: 100.5302212, type: "bulb" },
+{ id: 116, lat: 13.7456862, lon: 100.5304894, type: "bulb" },
+{ id: 117, lat: 13.7434280, lon: 100.5302131, type: "bulb" },
+{ id: 118, lat: 13.7432848, lon: 100.5301836, type: "bulb" },
+{ id: 119, lat: 13.7431077, lon: 100.5301487, type: "bulb" },
+{ id: 120, lat: 13.7428785, lon: 100.5301273, type: "bulb" },
+{ id: 121, lat: 13.7459953, lon: 100.5313852, type: "bulb" },
+{ id: 122, lat: 13.7459745, lon: 100.5312753, type: "bulb" },
+{ id: 123, lat: 13.7460083, lon: 100.5314684, type: "bulb" },
+{ id: 124, lat: 13.7459953, lon: 100.5315784, type: "bulb" },
+{ id: 125, lat: 13.7459157, lon: 100.5311841, type: "bulb" },
+{ id: 126, lat: 13.7458688, lon: 100.5310982, type: "bulb" },
+{ id: 127, lat: 13.7457542, lon: 100.5309749, type: "bulb" },
+{ id: 128, lat: 13.7456683, lon: 100.5308729, type: "bulb" },
+{ id: 129, lat: 13.7455120, lon: 100.5307737, type: "bulb" },
+{ id: 130, lat: 13.7453662, lon: 100.5307496, type: "bulb" },
+{ id: 131, lat: 13.7452542, lon: 100.5307281, type: "bulb" },
+{ id: 132, lat: 13.7451135, lon: 100.5307120, type: "bulb" },
+{ id: 133, lat: 13.7450145, lon: 100.5306986, type: "bulb" },
+{ id: 134, lat: 13.7448374, lon: 100.5306798, type: "bulb" },
+{ id: 135, lat: 13.7446760, lon: 100.5306557, type: "bulb" },
+{ id: 136, lat: 13.7445353, lon: 100.5306530, type: "bulb" },
+{ id: 137, lat: 13.7444598, lon: 100.5306342, type: "bulb" },
+{ id: 137, lat: 13.7448409, lon: 100.5307858, type: "bulb" },
+  { id: 138, lat: 13.7448174, lon: 100.5309387, type: "bulb" },
+  { id: 139, lat: 13.7447914, lon: 100.5310942, type: "bulb" },
+  { id: 140, lat: 13.7447732, lon: 100.5312632, type: "bulb" },
+  { id: 141, lat: 13.7447497, lon: 100.5314000, type: "bulb" },
+  { id: 142, lat: 13.7448487, lon: 100.5308763, type: "bulb" },
+  { id: 143, lat: 13.7448278, lon: 100.5310064, type: "bulb" },
+  { id: 144, lat: 13.7448005, lon: 100.5311740, type: "bulb" },
+  { id: 145, lat: 13.7447810, lon: 100.5313336, type: "bulb" },
+  { id: 146, lat: 13.7447367, lon: 100.5315589, type: "bulb" },
+  { id: 147, lat: 13.7446996, lon: 100.5318164, type: "bulb" },
+  { id: 148, lat: 13.7447270, lon: 100.5316555, type: "bulb" },
+  { id: 149, lat: 13.7447139, lon: 100.5317386, type: "bulb" },
+  { id: 150, lat: 13.7446814, lon: 100.5319036, type: "bulb" },
+  { id: 151, lat: 13.7447382, lon: 100.5319928, type: "bulb" },
+  { id: 152, lat: 13.7448892, lon: 100.5320303, type: "bulb" },
+  { id: 153, lat: 13.7457409, lon: 100.5321644, type: "bulb" },
+  { id: 154, lat: 13.7455169, lon: 100.5321242, type: "bulb" },
+  { id: 155, lat: 13.7453034, lon: 100.5320947, type: "bulb" },
+  { id: 156, lat: 13.7446527, lon: 100.5321128, type: "bulb" },
+  { id: 157, lat: 13.7446370, lon: 100.5322201, type: "bulb" },
+  { id: 158, lat: 13.7446110, lon: 100.5323596, type: "bulb" },
+  { id: 159, lat: 13.7445915, lon: 100.5324856, type: "bulb" },
+  { id: 160, lat: 13.7445537, lon: 100.5326787, type: "bulb" }
+    
+  ]);
+  // 💡 เก็บ skyNodes ล่าสุดไว้ใน ref กันปัญหา closure ค้างค่าเก่าใน rebuildLamps (ถูกสร้างครั้งเดียวตอน mount)
+  const skyNodesRef = useRef(skyNodes);
+  useEffect(() => { skyNodesRef.current = skyNodes; ctx.current.rebuildLamps?.(ctx.current.routeHour); }, [skyNodes]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const L = await loadLeaflet();
+      if (cancelled || mapRef.current) return;
+      ctx.current.L = L;
+      loadVoices();
+      try { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => { loadVoices(); if (!hasThaiVoice()) { ctx.current.voiceLang = "en"; setVoiceLang("en"); } }; } catch (e) {}
+      setTimeout(() => { if (!hasThaiVoice()) { ctx.current.voiceLang = "en"; setVoiceLang("en"); } }, 800);
+      const map = L.map(mapEl.current, { zoomControl: false }).setView(CENTER, ZOOM);
+      L.control.zoom({ position: "topright" }).addTo(map);
+      mapRef.current = map;
+      setMapZoom(map.getZoom());
+      setMapReady(true);
+      // 🏢 เลนแยกสำหรับผัง SVG ตึก — z-index ต่ำกว่า overlayPane เริ่มต้น (400) ที่เส้นทางเดินใช้อยู่ ทำให้เส้นทางวาดทับผังตึกได้เสมอ
+      map.createPane("bdiFloorPane");
+      map.getPane("bdiFloorPane").style.zIndex = 350;
+      // 💡 pane แยกสำหรับ skyNodes เพื่อให้จุดไฟอยู่เหนือ SVG และเลเยอร์ฐานเสมอ
+      map.createPane("skyLightPane");
+      map.getPane("skyLightPane").style.zIndex = 460;
+      // แผนที่พื้นขาวแบบ Google Maps: ถนนไล่เทา, น้ำสีฟ้า, อาคารสีเหลืองอ่อน และมีเส้นขอบบาง
+      drawGoogleLikeBaseMap(L, map, DEMO_BBOX).then((layers) => {
+        if (layers) ctx.current.googleLikeBase = layers;
+      }).catch(() => {});
+      // 📍 ระบุตำแหน่งผู้ใช้ทันทีตอนเปิดแอป (ไม่ต้องรอกดนำทางก่อน) — ขอ permission ครั้งเดียวตอน mount
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (cancelled || !mapRef.current) return;
+            const lon = pos.coords.longitude, lat = pos.coords.latitude;
+            ctx.current.myLocation = [lon, lat];
+            if (!ctx.current.myLocMarker) {
+              ctx.current.myLocMarker = L.marker([lat, lon], {
+                icon: L.divIcon({ className: "", html: '<div style="width:16px;height:16px;border-radius:50%;background:#1A73E8;border:3px solid #fff;box-shadow:0 1px 8px rgba(26,115,232,.65)"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+                zIndexOffset: 900,
+              }).bindPopup("ตำแหน่งของฉัน").addTo(mapRef.current);
+            } else {
+              ctx.current.myLocMarker.setLatLng([lat, lon]);
+            }
+            // ซูมไปตำแหน่งจริงเฉพาะตอนยังไม่มีการค้นหาเส้นทางค้างอยู่ (กันกระโดดทับผลค้นหาที่ผู้ใช้เพิ่งดู)
+            if (!ctx.current.routeKey) mapRef.current.setView([lat, lon], Math.max(mapRef.current.getZoom(), 16), { animate: true });
+          },
+          () => { /* ผู้ใช้ไม่อนุญาต/หา GPS ไม่เจอ — เงียบไว้ ใช้ศูนย์กลางย่าน demo ต่อไปตามเดิม */ },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      }
+      // เลเยอร์คุมผ่าน "chips" ตามดีไซน์ Figma (Street light / ทางเชื่อม / ห้องน้ำ)
+      const toiletsLayer = L.layerGroup();               // chip: ห้องน้ำ (เริ่มปิด)
+      const lightLayer = L.layerGroup().addTo(map);      // chip: Street light (ไฟถนนจริง BMA)
+      const crossLayer = L.layerGroup();                 // chip: ทางเชื่อม/skywalk (เริ่มปิด)
+      const routeLayer = L.layerGroup().addTo(map);
+
+      // 💡 รวมไฟถนน BMA จริง (bmaLamps) เข้ากับ skyNodes ที่สำรวจ/ปักเอง (type light/bulb) — กรองด้วยเวลาจริงว่าดวงไหน "ติดอยู่" ตอนนั้น
+      // เรียกใหม่ทุกครั้งที่เปลี่ยนเวลา (slider) หรือ skyNodes เปลี่ยน (เพิ่ม/ลบหลอดไฟ) ให้คะแนนสว่าง/routing ใช้ข้อมูลล่าสุดเสมอ
+      ctx.current.rebuildLamps = (hour) => {
+        const hh = hour ?? new Date().getHours();
+        const skyLamps = (skyNodesRef.current || [])
+          .filter((n) => (n.type === "light" || n.type === "bulb") && isBulbOn(n.onHour ?? SKYWALK_LIGHT_DEFAULT_HOURS.on, n.offHour ?? SKYWALK_LIGHT_DEFAULT_HOURS.off, hh))
+          .map((n) => [n.lon, n.lat]);
+        ctx.current.lamps = [...(ctx.current.bmaLamps || []), ...skyLamps];
+        ctx.current.lampGrid = buildLampGrid(ctx.current.lamps); // ดัชนีไฟสำหรับ routing กลางคืน
+      };
+      // 🏢 เปิดผังตึกได้ทีละอันเดียวเท่านั้น (กันซ้อนทับกันตอนซูมเข้าใกล้หลายตึกพร้อมกัน) — skywalk แยกอิสระ ไม่เกี่ยวกับ SD/BACC
+      ctx.current.openOnly = (which) => {
+        setSdOpen(which === "sd");
+        setBaccOpen(which === "bacc");
+        setCenOpen(which === "cen");
+        setLdOpen(which === "ld");
+      };
+      // 📍 แตะที่แผนที่เพื่อปักหมุด แล้วเลือกว่าจะตั้งเป็นต้นทาง/ปลายทาง (แบบแอปแผนที่ทั่วไป) — ไม่ต้องพิมพ์ค้นหาก็ได้
+      map.on("click", (e) => {
+        if (ctx.current.navActive || ctx.current.sdCalibrateActive || ctx.current.baccCalibrateActive) return; // ไม่ให้ชนกับโหมดนำทาง/ปรับเทียบผังตึก
+        const { lat, lng } = e.latlng;
+        // 📍 โหมดปักหมุด node บนผังตึก — แตะแล้วปักหมุดพร้อมประเภทที่เลือกไว้ ไม่เด้ง popup ต้นทาง/ปลายทาง
+        if (ctx.current.sdNodeModeActive) {
+          ctx.current.sdAddNode?.(lat, lng);
+          return;
+        }
+        if (ctx.current.baccNodeModeActive) {
+          ctx.current.baccAddNode?.(lat, lng);
+          return;
+        }
+        if (ctx.current.cenNodeModeActive) {
+          ctx.current.cenAddNode?.(lat, lng);
+          return;
+        }
+        if (ctx.current.ldNodeModeActive) {
+          ctx.current.ldAddNode?.(lat, lng);
+          return;
+        }
+        if (ctx.current.pinMarker) map.removeLayer(ctx.current.pinMarker);
+        // 🏢📍 แตะขณะเปิดผังตึกอยู่ + แตะโดนตัวตึกจริง → สแนปไปที่ node ในชั้นที่กำลังเปิดดูอยู่ (ไม่ใช่พิกัดดิบที่แตะ)
+        // ทำให้ routing เริ่ม/จบที่ node ชั้นนั้นจริง ตรงกับที่ผู้ใช้ตั้งใจปักในชั้นที่เปิดค้างไว้
+        let snapLat = lat, snapLng = lng;
+        const nearestInFloor = (nodesObj, maxM = 80) => {
+          let bestId = null, bestD = maxM;
+          for (const id in nodesObj) {
+            const n = nodesObj[id];
+            const d = haversine([lng, lat], [n.lon, n.lat]);
+            if (d < bestD) { bestD = d; bestId = id; }
+          }
+          return bestId ? nodesObj[bestId] : null;
+        };
+        if (sdOpenRef.current && pip(lat, lng, SD_OUTLINE)) {
+          const floorNodes = Object.fromEntries(Object.keys(SD_ALL_NODES).filter((id) => SD_NODE_FLOOR[id] === sdFloorRef.current).map((id) => [id, SD_ALL_NODES[id]]));
+          const near = nearestInFloor(floorNodes);
+          if (near) { snapLat = near.lat; snapLng = near.lon; }
+        } else if (baccOpenRef.current && pip(lat, lng, BACC_OUTLINE)) {
+          // ⚠️ BACC_OUTLINE เป็นแค่กรอบสี่เหลี่ยมคร่าวๆ (ยังไม่มีรูปทรงตึกจริงแบบ SD_OUTLINE) — ลดระยะสแนปให้เข้มขึ้น กันแตะนอกตัวตึกจริงแล้วโดนดูดเข้า node ผิด
+          const near = nearestInFloor(BACC_FLOOR_NODES[baccFloorRef.current] || {}, 35);
+          if (near) { snapLat = near.lat; snapLng = near.lon; }
+        } else if (cenOpenRef.current && pip(lat, lng, CEN_OUTLINE)) {
+          const near = nearestInFloor(cenFloorRef.current === "1" ? SC_FLOOR1_NODES : SC_FLOOR2_NODES);
+          if (near) { snapLat = near.lat; snapLng = near.lon; }
+        } else if (ldOpenRef.current && pip(lat, lng, LD_OUTLINE)) {
+          const near = nearestInFloor(ldFloorRef.current === "1" ? LD_FLOOR1_NODES : LD_FLOOR2_NODES);
+          if (near) { snapLat = near.lat; snapLng = near.lon; }
+        }
+        ctx.current.pinMarker = L.marker([snapLat, snapLng], {
+          icon: L.divIcon({ className: "", html: '<div style="width:14px;height:14px;background:#D93025;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.4)"></div>', iconSize: [14, 14], iconAnchor: [7, 14] }),
+        }).addTo(map);
+        const box = document.createElement("div");
+        box.style.cssText = "display:flex;flex-direction:column;gap:6px;min-width:160px";
+        const mk = (txt, bg) => { const b = document.createElement("button"); b.textContent = txt; b.style.cssText = `padding:8px 10px;border:none;border-radius:8px;background:${bg};color:#fff;font-weight:700;cursor:pointer;font-size:13px`; return b; };
+        const btnFrom = mk("⦿ ตั้งเป็นต้นทาง", "#1A73E8");
+        const btnTo = mk("📍 ตั้งเป็นปลายทาง", "#188038");
+        box.appendChild(btnFrom); box.appendChild(btnTo);
+        const setPin = (setter) => async () => {
+          map.closePopup();
+          let label = `หมุด ${snapLat.toFixed(5)},${snapLng.toFixed(5)}`;
+          try { const g = await queuedReverse([snapLng, snapLat]); if (g && (g.place || g.road)) label = g.place || g.road; } catch (err) {}
+          ctx.current.placeCache[label] = { coord: [snapLng, snapLat], name: label };
+          setter(label);
+        };
+        btnFrom.onclick = setPin(setSFrom);
+        btnTo.onclick = setPin(setSTo);
+        L.popup({ closeButton: true, offset: [0, -8] }).setLatLng([snapLat, snapLng]).setContent(box).openOn(map);
+      });
+      // 🏢 พื้นที่ตึก Siam Discovery — กดที่ตัวอาคาร หรือซูมเข้าใกล้พอ (≥17) แล้วเปิดผังชั้นอัตโนมัติ
+      // ใช้รูปทรงขอบอาคารจริง (SD_OUTLINE) แทนสี่เหลี่ยม เพื่อให้พื้นที่กดตรงกับขอบตึกเป๊ะ
+      // ไม่มี tooltip กล่องข้อความอีกต่อไป — ตอนกดจะให้ตัวผัง SVG สว่างวาบแทนเพื่อยืนยันว่ากดโดน
+      ctx.current.sdFlash = () => {
+        ctx.current.openOnly("sd");
+        setTimeout(() => {
+          const img = ctx.current.sdOverlay?.getElement?.();
+          if (!img) return;
+          img.style.transition = "filter .15s ease";
+          img.style.filter = "brightness(2.2)";
+          setTimeout(() => { img.style.filter = "brightness(1)"; }, 220);
+        }, 30); // รอเฟรมนึงให้ sdOverlay ถูกวาดก่อน (เพิ่งเปิด sdOpen)
+      };
+      const sdRect = L.polygon(SD_OUTLINE, { stroke: false, fill: false, interactive: true })
+        .on("click", () => ctx.current.sdFlash())
+        .addTo(map);
+      ctx.current.sdRect = sdRect;
+      const sdBoundsL = sdRect.getBounds();
+      // 🏛️ พื้นที่ตึก BACC — เหมือน SD ทุกอย่าง (กด/ซูมเข้าเปิดผัง + flash ยืนยันว่ากดโดน)
+      ctx.current.baccFlash = () => {
+        ctx.current.openOnly("bacc");
+        setTimeout(() => {
+          const img = ctx.current.baccOverlay?.getElement?.();
+          if (!img) return;
+          img.style.transition = "filter .15s ease";
+          img.style.filter = "brightness(2.2)";
+          setTimeout(() => { img.style.filter = "brightness(1)"; }, 220);
+        }, 30); // รอเฟรมนึงให้ baccOverlay ถูกวาดก่อน (เพิ่งเปิด baccOpen)
+      };
+      const baccRect = L.polygon(BACC_OUTLINE, { stroke: false, fill: false, interactive: true })
+        .on("click", () => ctx.current.baccFlash())
+        .addTo(map);
+      ctx.current.baccRect = baccRect;
+      const baccBoundsL = baccRect.getBounds();
+      // 🏢 พื้นที่ตึก Siam Center — เหมือน SD ทุกอย่าง (กด/ซูมเข้าเปิดผัง + flash ยืนยันว่ากดโดน)
+      ctx.current.cenFlash = () => {
+        ctx.current.openOnly("cen");
+        setTimeout(() => {
+          const img = ctx.current.cenOverlay?.getElement?.();
+          if (!img) return;
+          img.style.transition = "filter .15s ease";
+          img.style.filter = "brightness(2.2)";
+          setTimeout(() => { img.style.filter = "brightness(1)"; }, 220);
+        }, 30);
+      };
+      const cenRect = L.polygon(CEN_OUTLINE, { stroke: false, fill: false, interactive: true })
+        .on("click", () => ctx.current.cenFlash())
+        .addTo(map);
+      ctx.current.cenRect = cenRect;
+      const cenBoundsL = cenRect.getBounds();
+      // 🏢 พื้นที่ตึก Lido Connect — เหมือน SD ทุกอย่าง (กด/ซูมเข้าเปิดผัง + flash ยืนยันว่ากดโดน)
+      ctx.current.ldFlash = () => {
+        ctx.current.openOnly("ld");
+        setTimeout(() => {
+          const img = ctx.current.ldOverlay?.getElement?.();
+          if (!img) return;
+          img.style.transition = "filter .15s ease";
+          img.style.filter = "brightness(2.2)";
+          setTimeout(() => { img.style.filter = "brightness(1)"; }, 220);
+        }, 30);
+      };
+      const ldRect = L.polygon(LD_OUTLINE, { stroke: false, fill: false, interactive: true })
+        .on("click", () => ctx.current.ldFlash())
+        .addTo(map);
+      ctx.current.ldRect = ldRect;
+      const ldBoundsL = ldRect.getBounds();
+      // 🌉 พื้นที่ Skywalk Platum — เหมือน SD ทุกอย่าง (กด/ซูมเข้าเปิดผัง + flash ยืนยันว่ากดโดน)
+      ctx.current.skyFlash = () => {
+        setSkyOpen(true);
+        setTimeout(() => {
+          const img = ctx.current.skyOverlay?.getElement?.();
+          if (!img) return;
+          img.style.transition = "filter .15s ease";
+          img.style.filter = "brightness(2.2)";
+          setTimeout(() => { img.style.filter = "brightness(1)"; }, 220);
+        }, 30); // รอเฟรมนึงให้ skyOverlay ถูกวาดก่อน (เพิ่งเปิด skyOpen)
+      };
+      const skyRect = L.polygon(SKYWALK_OUTLINE, { stroke: false, fill: false, interactive: true })
+        .on("click", () => ctx.current.skyFlash())
+        .addTo(map);
+      ctx.current.skyRect = skyRect;
+      const skyBoundsL = skyRect.getBounds();
+      map.on("zoomend moveend", () => {
+        const z = map.getZoom();
+        setMapZoom(z);
+        if (z < 15) { ctx.current.openOnly(null); return; } // ซูมออกไกล — ปิดผังตึกทั้งหมด
+        if (z < 17) return; // โซนกลาง (15-16) ไม่ auto เปิด/ปิด — คงสถานะที่ผู้ใช้เลือกเอง (กด/แตะตึก) ไว้
+        const center = map.getCenter();
+        // 🏢 ซูมเข้า ≥17 — เข้าเขตได้มากกว่า 1 ตึกพร้อมกันเพราะอยู่ใกล้กันมาก เลือก "ตึกที่ศูนย์กลางใกล้ที่สุด" เพียงตึกเดียว กันแผงซ้อนทับกัน
+        const candidates = [
+          { id: "sd", bounds: sdBoundsL },
+          { id: "bacc", bounds: baccBoundsL },
+          { id: "cen", bounds: cenBoundsL },
+          { id: "ld", bounds: ldBoundsL },
+        ].filter((b) => b.bounds.pad(0.6).contains(center));
+        if (!candidates.length) return;
+        let best = candidates[0], bestD = Infinity;
+        for (const cand of candidates) {
+          const d = center.distanceTo(cand.bounds.getCenter());
+          if (d < bestD) { bestD = d; best = cand; }
+        }
+        ctx.current.openOnly(best.id);
+      });
+      ctx.current.routeLayer = routeLayer;
+      ctx.current.layers = { toilets: toiletsLayer, light: lightLayer, cross: crossLayer };
+      const crossIcon = L.divIcon({ className: "", html: '<div class="bdi-cross-ic"></div>', iconSize: [12, 12], iconAnchor: [6, 6] });
+      ctx.current.crossSeen = new Set();
+      ctx.current.addCrossMarkers = (pts) => {
+        for (const p of (pts || [])) {
+          const k = p[0].toFixed(5) + "," + p[1].toFixed(5);
+          if (ctx.current.crossSeen.has(k)) continue;
+          ctx.current.crossSeen.add(k);
+          L.marker([p[1], p[0]], { icon: crossIcon }).bindPopup("ทางข้าม/ทางม้าลาย (OSM)").addTo(crossLayer);
+        }
+      };
+      // Skywalk / ทางเชื่อมมีหลังคา (จาก OSM coveredWays เช่น R-Walk สยาม–ชิดลม, ทางเชื่อม BTS) → เส้นเขียวบน chip ทางเชื่อม
+      ctx.current.skySeen = new Set();
+      ctx.current.addSkywalks = (ways) => {
+        for (const line of (ways || [])) {
+          if (!line || line.length < 2) continue;
+          const k = line[0][0].toFixed(5) + "," + line[0][1].toFixed(5) + "|" + line.length;
+          if (ctx.current.skySeen.has(k)) continue;
+          ctx.current.skySeen.add(k);
+          L.polyline(line.map(([lon, lat]) => [lat, lon]), { color: "#4285F4", weight: 4, opacity: 0.75, dashArray: "8 7", lineCap: "round" }).bindPopup("Skywalk / ทางเดินมีหลังคา (OSM)").addTo(crossLayer);
+        }
+      };
+      // ไฟถนนจริงจาก BMA เขตปทุมวัน (3,708 ต้น) — วาดด้วย canvas เพื่อความลื่น · เหลือง=ปกติ แดง=มีปัญหา
+      const lampCanvas = L.canvas({ padding: 0.4 });
+      (async () => {
+        try {
+          const res = await fetch("/data/bma_streetlight_pathumwan.json");
+          if (!res.ok) return;
+          const d = await res.json();
+          ctx.current.bmaLamps = (d.lamps || []).map((a) => [a[0], a[1]]); // 🔦 ไฟถนน BMA จริง (ดิบ) เก็บแยกไว้ ไม่ให้ปนกับ skyNodes ตอน rebuild
+          ctx.current.rebuildLamps?.(ctx.current.routeHour); // รวมกับ skyNodes (ไฟที่สำรวจ/ปักเอง) ทันทีที่โหลดเสร็จ
+          for (const [lon, lat, s] of (d.lamps || [])) {
+            const cl = s === 1 ? "#ffd94a" : "#ff6b6b";
+            const m = L.circleMarker([lat, lon], { renderer: lampCanvas, radius: 2.5, color: cl, fillColor: cl, fillOpacity: 0.85, weight: 0.5 }).addTo(lightLayer);
+            if (s !== 1) m.bindPopup("ไฟถนน BMA — สถานะมีปัญหา");
+          }
+        } catch (e) {}
+      })();
+      // ── แผนผัง "ตึกที่เดินผ่าน" MBK → BTS สยาม วาดลงบนแผนที่จริง (ตาม Figma frame "route+noti" / Siam_dis_f2) ──
+
+      // แผนผังตึกโชว์เฉพาะตอน (1) เลือกเส้น Skywalk และ (2) ซูมใกล้พอ (≥16) — กันเห็นเป็น "กล่องดำ" ตอนมองภาพรวม
+      ctx.current.updateIndoor = () => {
+        const m = mapRef.current; if (!m || !ctx.current.indoorLayer) return;
+        if (ctx.current.indoorOn && m.getZoom() >= 16) ctx.current.indoorLayer.addTo(m);
+        else m.removeLayer(ctx.current.indoorLayer);
+      };
+      map.on("zoomend", () => ctx.current.updateIndoor?.());
+
+      const toiletIcon = L.divIcon({ className: "", html: '<div style="font-size:12px;line-height:18px;background:#2a9d8f;color:white;border-radius:50%;width:18px;height:18px;text-align:center;font-weight:700">W</div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+      // วาดหมุดห้องน้ำ/กล้องแบบกันซ้ำ — ใช้ทั้งตอนโหลดย่าน demo และตอนค้นเส้นทางที่ออกนอกย่าน
+      // เพื่อให้ "หมุด W บนแผนที่" ตรงกับ "ห้องน้ำที่ AI ตอบ" (ก่อนหน้านี้คนละชุดข้อมูลเลยไม่สัมพันธ์กัน)
+      ctx.current.toiletSeen = new Set(); ctx.current.camSeen = new Set();
+      // 🏢🌳 สร้างกราฟทางเท้ากลางแจ้งแล้ว merge กราฟในตึก (ทางเดิน/บันได/ลิฟต์/จุดเชื่อมออกนอกตึก) เข้าไปด้วยเสมอ
+      // ให้ routing เดินทะลุจากพื้นธรรมดา → เข้าตึก → ขึ้น/ลงชั้น → ออกอีกฝั่งเป็นเส้นเดียวได้ทุกครั้งที่ rebuild กราฟ
+      ctx.current.setWalkNet = (ways) => { ctx.current.walkNet = mergeIndoorGraph(buildGraph(ways, ctx.current.bldgs, ctx.current.skywalkWays)); };
+      ctx.current.osmToilets = []; ctx.current.osmCameras = []; // เก็บไว้ส่งให้โหมด 3D ด้วย
+      ctx.current.addOsmMarkers = (osm) => {
+        if (!osm) return;
+        for (const t of (osm.toilets || [])) { const [lon, lat] = t.pt; const k = lon.toFixed(5) + "," + lat.toFixed(5); if (ctx.current.toiletSeen.has(k)) continue; ctx.current.toiletSeen.add(k); ctx.current.osmToilets.push(t); const name = t.tags?.name || t.tags?.["name:th"] || "ห้องน้ำสาธารณะ"; L.marker([lat, lon], { icon: toiletIcon }).bindPopup(`<b>ห้องน้ำ: ${name}</b>`).addTo(toiletsLayer); }
+        setToilets(ctx.current.toiletSeen.size); setCams(ctx.current.camSeen.size);
+      };
+
+      // ความสูงตึกจริง 374 หลัง (Google Open Buildings 2.5D — ไฟล์เดียวกับ shade demo 3D)
+      // ใช้คำนวณ "% ร่มจากเงาตึก" ของแต่ละเส้นทาง
+      (async () => {
+        try {
+          const r = await fetch("/data/walkbkk_heights_2023.geojson");
+          if (!r.ok) return;
+          const gj = await r.json();
+          const bl = [];
+          for (const f of gj.features || []) {
+            const g = f.geometry; if (!g) continue;
+            const h = (f.properties && (f.properties.height || f.properties.height_mean)) || 12;
+            const rings = g.type === "Polygon" ? [g.coordinates[0]] : g.type === "MultiPolygon" ? g.coordinates.map((cc) => cc[0]) : [];
+            for (const ring of rings) if (ring && ring.length >= 4) bl.push({ ring, h });
+          }
+          ctx.current.bldgs = bl;
+          // กราฟทางเท้าอาจสร้างเสร็จก่อนข้อมูลตึก → rebuild เพื่อตัด snap edge ที่ลัดทะลุตึกออก แล้วคิดเส้นใหม่
+          if (ctx.current.walkNetWays) { ctx.current.setWalkNet(ctx.current.walkNetWays); ctx.current.refresh?.(ctx.current.lastOsm || null, false); }
+          // 🚫 เอากล่องสีเทาทับตึกสูงออกแล้วตามที่ขอ — ข้อมูล bldgs ยังใช้คำนวณเงา/กันเส้นลัดทะลุตึกตามปกติ แค่ไม่วาดทับให้เห็นบนแผนที่
+        } catch (e) {}
+      })();
+
+      // 🟩 สนามกีฬา/สนามหญ้า (leisure=stadium/pitch) — ระบายเขียวอ่อนทับ tile ให้เด่นตามสไตล์ที่ต้องการ
+      (async () => {
+        try {
+          const [s, w_, n, e] = DEMO_BBOX;
+          const q = `[out:json][timeout:20];(way["leisure"~"stadium|pitch|sports_centre"](${s},${w_},${n},${e}););out geom;`;
+          let data = null;
+          for (const base of OVERPASS_MIRRORS) {
+            try { const r = await fetch(base, { method: "POST", body: q }); if (r.ok) { data = await r.json(); break; } } catch (e) {}
+          }
+          if (!data || cancelled) return;
+          const stadiumLayer = L.layerGroup().addTo(map);
+          for (const el of data.elements || []) {
+            if (!el.geometry) continue;
+            const latlngs = el.geometry.map((p) => [p.lat, p.lon]);
+            L.polygon(latlngs, { color: "#A8C7A0", weight: 1, fillColor: "#DDEFD8", fillOpacity: 0.82 }).addTo(stadiumLayer);
+          }
+        } catch (e) {}
+      })();
+
+      // โหลดโครงข่ายทางเท้า OSM มาสร้างกราฟสำหรับ routing ถ่วงน้ำหนักไฟ/ร่ม (cache ใน localStorage)
+      // พร้อมเมื่อไหร่ → คำนวณเส้นทางที่ค้างอยู่ใหม่ทันที (กันกรณีผู้ใช้ค้นหาก่อนกราฟโหลดเสร็จ)
+      fetchWalkNet(DEMO_BBOX).then((d) => {
+        if (cancelled || !d) return;
+        ctx.current.walkNetWays = d.ways; // เก็บ ways ดิบไว้ rebuild เมื่อข้อมูลตึกมาถึง (กรอง snap ทะลุตึกได้ครบ)
+        ctx.current.setWalkNet(d.ways);
+        ctx.current.refresh?.(ctx.current.lastOsm || null, false);
+      }).catch(() => {});
+      ctx.current.osmPromise = fetchOSM(DEMO_BBOX).then((osm) => {
+        if (cancelled) return osm;
+        ctx.current.addOsmMarkers(osm); ctx.current.crossings = osm.crossings || [];
+        ctx.current.addCrossMarkers?.(osm.crossings);
+        ctx.current.addSkywalks?.(osm.coveredWays);
+        // 🌉 รวมเส้น skywalk จริง (เส้นเดียวกับที่วาดสีฟ้าบนแผนที่) เข้ากราฟ routing โดยตรง
+        // กันกรณีกราฟทางเดินหลัก (walknet ไฟล์สำเร็จรูป/overpass คนละชุด) ไม่มีสะพานนี้ หรือเรียบง่ายกว่าเส้นจริง
+        // ทำให้เส้นทางที่คำนวณออกมา "เกาะ" ทับเส้น skywalk เป๊ะ ไม่ตัดตรงข้ามสะพานเอง
+        if (osm.coveredWays && osm.coveredWays.length) {
+          const merged = (ctx.current.walkNetWays || []).concat(osm.coveredWays);
+          ctx.current.walkNetWays = merged;
+          ctx.current.skywalkWays = osm.coveredWays; // 🌉 เก็บ reference ไว้ให้ buildGraph รู้ว่า way ไหนคือ skywalk จริง (tag edge.skywalk)
+          ctx.current.setWalkNet(merged);
+          ctx.current.refresh?.(osm, false);
+        }
+        return osm;
+      });
+
+    })();
+    return () => { cancelled = true; setMapReady(false); if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+  }, []);
+
+  // 🏢 วาด/ลบ overlay ผังชั้น Siam Discovery ตาม state เปิด/ปิด และชั้นที่เลือก
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    if (c.sdOverlay) { m.removeLayer(c.sdOverlay); c.sdOverlay = null; }
+    if (!sdOpen) return;
+    const f = SD_FLOORS.find((x) => x.id === sdFloor);
+    if (f && f.svg && !sdCalibrate) {
+      c.sdOverlay = L.imageOverlay(f.svg, SD_BOUNDS, { opacity: 0.96, interactive: false, pane: "bdiFloorPane" }).addTo(m);
+    }
+    // ถ้าชั้นที่เลือกยังไม่มีไฟล์ผัง (f.svg == null) จะไม่วาดอะไร — UI ฝั่งแถบเลือกชั้นจะโชว์ข้อความแจ้งแทน
+  }, [sdOpen, sdFloor, sdCalibrate]);
+
+  // 🏛️ วาด/ลบ overlay ผังชั้น BACC ตาม state เปิด/ปิด และชั้นที่เลือก (เหมือน SD ทุกอย่าง)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    if (c.baccOverlay) { m.removeLayer(c.baccOverlay); c.baccOverlay = null; }
+    if (!baccOpen) return;
+    const f = BACC_FLOORS.find((x) => x.id === baccFloor);
+    if (f && f.svg && !baccCalibrate) {
+      c.baccOverlay = L.imageOverlay(f.svg, BACC_BOUNDS, { opacity: 0.96, interactive: false, pane: "bdiFloorPane" }).addTo(m);
+    }
+  }, [baccOpen, baccFloor, baccCalibrate]);
+
+  // 🏢 วาด/ลบ overlay ผังชั้น Siam Center ตาม state เปิด/ปิด และชั้นที่เลือก (เหมือน SD ทุกอย่าง)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    if (c.cenOverlay) { m.removeLayer(c.cenOverlay); c.cenOverlay = null; }
+    if (!cenOpen) return;
+    const f = CEN_FLOORS.find((x) => x.id === cenFloor);
+    if (f && f.svg) c.cenOverlay = L.imageOverlay(f.svg, CEN_BOUNDS, { opacity: 0.96, interactive: false, pane: "bdiFloorPane" }).addTo(m);
+  }, [cenOpen, cenFloor]);
+
+  // 🏢 วาด/ลบ overlay ผังชั้น Lido Connect ตาม state เปิด/ปิด และชั้นที่เลือก (เหมือน SD ทุกอย่าง)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    if (c.ldOverlay) { m.removeLayer(c.ldOverlay); c.ldOverlay = null; }
+    if (!ldOpen) return;
+    const f = LD_FLOORS.find((x) => x.id === ldFloor);
+    if (f && f.svg) c.ldOverlay = L.imageOverlay(f.svg, LD_BOUNDS, { opacity: 0.96, interactive: false, pane: "bdiFloorPane" }).addTo(m);
+  }, [ldOpen, ldFloor]);
+
+  // 🌉 วาด/ลบ overlay ผัง Skywalk Platum ตาม state เปิด/ปิด (ไม่มีหลายชั้นเหมือน SD — ภาพเดียว)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    if (c.skyOverlay) { m.removeLayer(c.skyOverlay); c.skyOverlay = null; }
+    if (!skyOpen && mapZoom < 16) return; // แสดงตลอดเมื่อซูม ≥16 หรือผู้ใช้กดปุ่มเปิดเอง
+    c.skyOverlay = L.imageOverlay(SKYWALK_SVG, SKYWALK_BOUNDS, { opacity: 1, interactive: false, pane: "bdiFloorPane" }).addTo(m);
+  }, [skyOpen, mapZoom]);
+
+  // เก็บ flag ล่าสุดไว้ใน ctx เพื่อให้ map click handler (ผูกครั้งเดียวตอน mount) อ่านค่าปัจจุบันได้เสมอ ไม่ใช่ค่าตอน mount
+  useEffect(() => { ctx.current.navActive = !!nav?.active; }, [nav]);
+  useEffect(() => { ctx.current.sdCalibrateActive = sdCalibrate; }, [sdCalibrate]);
+  useEffect(() => { ctx.current.sdNodeModeActive = sdNodeMode; }, [sdNodeMode]);
+  useEffect(() => { ctx.current.baccCalibrateActive = baccCalibrate; }, [baccCalibrate]);
+  useEffect(() => { ctx.current.baccNodeModeActive = baccNodeMode; }, [baccNodeMode]);
+  useEffect(() => { ctx.current.cenNodeModeActive = cenNodeMode; }, [cenNodeMode]);
+  useEffect(() => { ctx.current.ldNodeModeActive = ldNodeMode; }, [ldNodeMode]);
+  useEffect(() => { setBaccRouteResult(null); setBaccRouteFrom(""); setBaccRouteTo(""); }, [baccFloor]);
+  // 🔧 โหมดปรับเทียบ — ลากมุม NW/SE ของภาพให้ตรงกับตึกจริงบนแผนที่ฐาน แล้วอ่านค่าพิกัดที่ถูกต้องออกมา
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    const cleanup = () => {
+      if (c.calNW) { m.removeLayer(c.calNW); c.calNW = null; }
+      if (c.calSE) { m.removeLayer(c.calSE); c.calSE = null; }
+      if (c.calImg) { m.removeLayer(c.calImg); c.calImg = null; }
+    };
+    if (!sdOpen || !sdCalibrate) { cleanup(); return; }
+    const f = SD_FLOORS.find((x) => x.id === sdFloor);
+    if (!f || !f.svg) return;
+    let nw = [SD_BOUNDS[1][0], SD_BOUNDS[0][1]]; // [north, west]
+    let se = [SD_BOUNDS[0][0], SD_BOUNDS[1][1]]; // [south, east]
+    const update = () => {
+      const bounds = [[se[0], nw[1]], [nw[0], se[1]]];
+      if (c.calImg) m.removeLayer(c.calImg);
+      c.calImg = L.imageOverlay(f.svg, bounds, { opacity: 0.85, interactive: false, pane: "bdiFloorPane" }).addTo(m);
+      const dms = (d) => { const dir = d >= 0 ? "" : "-"; d = Math.abs(d); const deg = Math.floor(d); const minF = (d - deg) * 60; const min = Math.floor(minF); const sec = ((minF - min) * 60).toFixed(2); return `${dir}${deg}°${min}'${sec}"`; };
+      setSdCalReadout({
+        nw: `${dms(nw[0])}N ${dms(nw[1])}E`,
+        se: `${dms(se[0])}N ${dms(se[1])}E`,
+        nwDec: [+nw[0].toFixed(7), +nw[1].toFixed(7)],
+        seDec: [+se[0].toFixed(7), +se[1].toFixed(7)],
+      });
+    };
+    const mk = (pos, color) => L.marker(pos, { draggable: true, icon: L.divIcon({ className: "", html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.6)"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }), zIndexOffset: 2000 }).addTo(m);
+    c.calNW = mk(nw, "#16a34a").bindTooltip("มุมบนซ้าย (NW)", { permanent: false });
+    c.calSE = mk(se, "#dc2626").bindTooltip("มุมล่างขวา (SE)", { permanent: false });
+    c.calNW.on("drag", (e) => { const p = e.target.getLatLng(); nw = [p.lat, p.lng]; update(); });
+    c.calSE.on("drag", (e) => { const p = e.target.getLatLng(); se = [p.lat, p.lng]; update(); });
+    update();
+    return cleanup;
+  }, [sdOpen, sdCalibrate, sdFloor]);
+
+  // 🔧 โหมดปรับเทียบ BACC — ลากมุม NW/SE ของภาพให้ตรงกับตึกจริงบนแผนที่ฐาน แล้วอ่านค่าพิกัดที่ถูกต้องออกมา
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    const cleanup = () => {
+      if (c.baccCalNW) { m.removeLayer(c.baccCalNW); c.baccCalNW = null; }
+      if (c.baccCalSE) { m.removeLayer(c.baccCalSE); c.baccCalSE = null; }
+      if (c.baccCalImg) { m.removeLayer(c.baccCalImg); c.baccCalImg = null; }
+    };
+    if (!baccOpen || !baccCalibrate) { cleanup(); return; }
+    const f = BACC_FLOORS.find((x) => x.id === baccFloor);
+    if (!f || !f.svg) return;
+    let nw = [BACC_BOUNDS[1][0], BACC_BOUNDS[0][1]]; // [north, west]
+    let se = [BACC_BOUNDS[0][0], BACC_BOUNDS[1][1]]; // [south, east]
+    const update = () => {
+      const bounds = [[se[0], nw[1]], [nw[0], se[1]]];
+      if (c.baccCalImg) m.removeLayer(c.baccCalImg);
+      c.baccCalImg = L.imageOverlay(f.svg, bounds, { opacity: 0.85, interactive: false, pane: "bdiFloorPane" }).addTo(m);
+      const dms = (d) => { const dir = d >= 0 ? "" : "-"; d = Math.abs(d); const deg = Math.floor(d); const minF = (d - deg) * 60; const min = Math.floor(minF); const sec = ((minF - min) * 60).toFixed(2); return `${dir}${deg}°${min}'${sec}"`; };
+      setBaccCalReadout({
+        nw: `${dms(nw[0])}N ${dms(nw[1])}E`,
+        se: `${dms(se[0])}N ${dms(se[1])}E`,
+        nwDec: [+nw[0].toFixed(7), +nw[1].toFixed(7)],
+        seDec: [+se[0].toFixed(7), +se[1].toFixed(7)],
+      });
+    };
+    const mk = (pos, color) => L.marker(pos, { draggable: true, icon: L.divIcon({ className: "", html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.6)"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }), zIndexOffset: 2000 }).addTo(m);
+    c.baccCalNW = mk(nw, "#16a34a").bindTooltip("มุมบนซ้าย (NW)", { permanent: false });
+    c.baccCalSE = mk(se, "#dc2626").bindTooltip("มุมล่างขวา (SE)", { permanent: false });
+    c.baccCalNW.on("drag", (e) => { const p = e.target.getLatLng(); nw = [p.lat, p.lng]; update(); });
+    c.baccCalSE.on("drag", (e) => { const p = e.target.getLatLng(); se = [p.lat, p.lng]; update(); });
+    update();
+    return cleanup;
+  }, [baccOpen, baccCalibrate, baccFloor]);
+
+  // 📍 โหมดปักหมุด node บนผังตึก — วาด marker ตามประเภท ลากปรับตำแหน่งได้ คลิกขวาลบ
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    (c.sdNodeMarkers || []).forEach((mk) => m.removeLayer(mk));
+    c.sdNodeMarkers = [];
+    if (!sdOpen) return;
+    sdNodes.filter((n) => n.floor === sdFloor).forEach((n) => {
+      const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+      const mk = L.marker([n.lat, n.lon], {
+        draggable: true,
+        icon: L.divIcon({ className: "", html: `<div style="width:22px;height:22px;border-radius:50%;background:${t.color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:grid;place-items:center;font-size:11px;color:#fff">${t.icon}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
+        zIndexOffset: 1800,
+        pane: "bdiFloorPane",
+      }).addTo(m).bindTooltip(`${t.label} #${n.id}`, { permanent: false });
+      mk.on("drag", (e) => { const p = e.target.getLatLng(); setSdNodes((prev) => prev.map((x) => (x.id === n.id ? { ...x, lat: p.lat, lon: p.lng } : x))); });
+      mk.on("contextmenu", () => setSdNodes((prev) => prev.filter((x) => x.id !== n.id))); // คลิกขวา = ลบหมุดนั้น
+      c.sdNodeMarkers.push(mk);
+    });
+  }, [sdOpen, sdFloor, sdNodes]);
+
+  // 📍 โหมดปักหมุด node บนผัง Siam Center — วาด marker ตามประเภท ลากปรับตำแหน่งได้ คลิกขวาลบ (กรองตามชั้นที่กำลังดู)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    (c.cenNodeMarkers || []).forEach((mk) => m.removeLayer(mk));
+    c.cenNodeMarkers = [];
+    if (!cenOpen) return;
+    cenNodes.filter((n) => n.floor === cenFloor).forEach((n) => {
+      const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+      const mk = L.marker([n.lat, n.lon], {
+        draggable: true,
+        icon: L.divIcon({ className: "", html: `<div style="width:22px;height:22px;border-radius:50%;background:${t.color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:grid;place-items:center;font-size:11px;color:#fff">${t.icon}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
+        zIndexOffset: 1800,
+        pane: "bdiFloorPane",
+      }).addTo(m).bindTooltip(`${t.label} #${n.id}`, { permanent: false });
+      mk.on("drag", (e) => { const p = e.target.getLatLng(); setCenNodes((prev) => prev.map((x) => (x.id === n.id ? { ...x, lat: p.lat, lon: p.lng } : x))); });
+      mk.on("contextmenu", () => setCenNodes((prev) => prev.filter((x) => x.id !== n.id))); // คลิกขวา = ลบหมุดนั้น
+      c.cenNodeMarkers.push(mk);
+    });
+  }, [cenOpen, cenFloor, cenNodes]);
+
+  // 📍 โหมดปักหมุด node บนผัง Lido — วาด marker ตามประเภท ลากปรับตำแหน่งได้ คลิกขวาลบ (กรองตามชั้นที่กำลังดู)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    (c.ldNodeMarkers || []).forEach((mk) => m.removeLayer(mk));
+    c.ldNodeMarkers = [];
+    if (!ldOpen) return;
+    ldNodes.filter((n) => n.floor === ldFloor).forEach((n) => {
+      const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+      const mk = L.marker([n.lat, n.lon], {
+        draggable: true,
+        icon: L.divIcon({ className: "", html: `<div style="width:22px;height:22px;border-radius:50%;background:${t.color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:grid;place-items:center;font-size:11px;color:#fff">${t.icon}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
+        zIndexOffset: 1800,
+        pane: "bdiFloorPane",
+      }).addTo(m).bindTooltip(`${t.label} #${n.id}`, { permanent: false });
+      mk.on("drag", (e) => { const p = e.target.getLatLng(); setLdNodes((prev) => prev.map((x) => (x.id === n.id ? { ...x, lat: p.lat, lon: p.lng } : x))); });
+      mk.on("contextmenu", () => setLdNodes((prev) => prev.filter((x) => x.id !== n.id))); // คลิกขวา = ลบหมุดนั้น
+      c.ldNodeMarkers.push(mk);
+    });
+  }, [ldOpen, ldFloor, ldNodes]);
+
+
+  // 📍 โหมดปักหมุด node บนผัง BACC — วาด marker ตามประเภท ลากปรับตำแหน่งได้ คลิกขวาลบ (กรองตามชั้นที่กำลังดู)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    (c.baccNodeMarkers || []).forEach((mk) => m.removeLayer(mk));
+    c.baccNodeMarkers = [];
+    if (!baccOpen) return;
+    baccNodes.filter((n) => n.floor === baccFloor).forEach((n) => {
+      const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+      const mk = L.marker([n.lat, n.lon], {
+        draggable: true,
+        icon: L.divIcon({ className: "", html: `<div style="width:22px;height:22px;border-radius:50%;background:${t.color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:grid;place-items:center;font-size:11px;color:#fff">${t.icon}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
+        zIndexOffset: 1800,
+        pane: "bdiFloorPane",
+      }).addTo(m).bindTooltip(`${t.label} #${n.id}`, { permanent: false });
+      mk.on("drag", (e) => { const p = e.target.getLatLng(); setBaccNodes((prev) => prev.map((x) => (x.id === n.id ? { ...x, lat: p.lat, lon: p.lng } : x))); });
+      mk.on("contextmenu", () => setBaccNodes((prev) => prev.filter((x) => x.id !== n.id))); // คลิกขวา = ลบหมุดนั้น
+      c.baccNodeMarkers.push(mk);
+    });
+  }, [baccOpen, baccFloor, baccNodes]);
+
+  // 🧭 วาดกราฟ BACC ที่ฝังใน mapConstants.js: node, edge และผลเส้นทางทดสอบ
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+
+    (c.baccGraphLayer || []).forEach((ly) => m.removeLayer(ly));
+    c.baccGraphLayer = [];
+
+    if (!baccOpen || !Object.keys(baccFloorNodes).length) {
+      setBaccRouteResult(null);
+      return;
+    }
+
+    // วาด node ที่ฝังไว้ใน BACC_FLOOR_NODES (ไม่วาดเส้น edge เชื่อม — เหมือน SD ที่โชว์แค่จุด ไม่มีเส้นดำเชื่อมโครงข่าย)
+    for (const id of Object.keys(baccFloorNodes)) {
+      const n = baccFloorNodes[id];
+      if (!Number.isFinite(n?.lat) || !Number.isFinite(n?.lon)) {
+        console.warn(`[BACC] พิกัด node ไม่ถูกต้อง: ${id}`, n);
+        continue;
+      }
+      const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+      const marker = L.circleMarker([n.lat, n.lon], {
+        radius: 5,
+        color: "#FFFFFF",
+        weight: 1.5,
+        fillColor: t.color,
+        fillOpacity: 0.95,
+        pane: "bdiFloorPane",
+      }).addTo(m);
+      // 🟣 จุดเปลี่ยนชั้น (บันไดเลื่อน/ลิฟต์) — กดเพื่อดู label เต็มๆ แทนที่จะแค่ hover
+      if (n.type === "escalator" || n.type === "lift") marker.bindPopup(`${t.icon} ${t.label} #${id}${n.label ? "<br>" + n.label : ""}`);
+      else marker.bindTooltip(`${id}${n.label ? " · " + n.label : ""}`, { permanent: false });
+      c.baccGraphLayer.push(marker);
+    }
+
+    // เน้นเส้นทางที่ผู้ใช้เลือกทดสอบ
+    if (baccRouteResult?.path?.length > 1) {
+      const latlngs = baccRouteResult.path
+        .map((id) => baccFloorNodes[id])
+        .filter(Boolean)
+        .map((n) => [n.lat, n.lon]);
+      if (latlngs.length > 1) {
+        const routeLine = L.polyline(latlngs, {
+          color: "#F9AB00",
+          weight: 6,
+          opacity: 0.95,
+          pane: "bdiFloorPane",
+        }).addTo(m);
+        c.baccGraphLayer.push(routeLine);
+      }
+    }
+
+    return () => {
+      (c.baccGraphLayer || []).forEach((ly) => {
+        if (m.hasLayer(ly)) m.removeLayer(ly);
+      });
+      c.baccGraphLayer = [];
+    };
+  }, [baccOpen, baccFloor, baccFloorNodes, baccFloorEdges, baccRouteResult]);
+
+  // 🧭 วาดกราฟ Siam Center ที่ฝังใน mapConstants.js: node ตามชั้นที่เลือก (เหมือน SD/BACC ทุกอย่าง)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    (c.cenGraphLayer || []).forEach((ly) => m.removeLayer(ly));
+    c.cenGraphLayer = [];
+    if (!cenOpen || !Object.keys(cenFloorNodes).length) { setCenRouteResult(null); return; }
+    for (const id of Object.keys(cenFloorNodes)) {
+      const n = cenFloorNodes[id];
+      if (!Number.isFinite(n?.lat) || !Number.isFinite(n?.lon)) continue;
+      const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+      const marker = L.circleMarker([n.lat, n.lon], { radius: 5, color: "#FFFFFF", weight: 1.5, fillColor: t.color, fillOpacity: 0.95, pane: "bdiFloorPane" }).addTo(m);
+      if (n.type === "escalator" || n.type === "lift") marker.bindPopup(`${t.icon} ${t.label} #${id}${n.label ? "<br>" + n.label : ""}`);
+      else marker.bindTooltip(`${id}${n.label ? " · " + n.label : ""}`, { permanent: false });
+      c.cenGraphLayer.push(marker);
+    }
+    // เน้นเส้นทางที่ผู้ใช้เลือกทดสอบ
+    if (cenRouteResult?.path?.length > 1) {
+      const latlngs = cenRouteResult.path.map((id) => cenFloorNodes[id]).filter(Boolean).map((n) => [n.lat, n.lon]);
+      if (latlngs.length > 1) c.cenGraphLayer.push(L.polyline(latlngs, { color: "#F9AB00", weight: 6, opacity: 0.95, pane: "bdiFloorPane" }).addTo(m));
+    }
+    return () => { (c.cenGraphLayer || []).forEach((ly) => { if (m.hasLayer(ly)) m.removeLayer(ly); }); c.cenGraphLayer = []; };
+  }, [cenOpen, cenFloor, cenFloorNodes, cenRouteResult]);
+
+  // 🧭 วาดกราฟ Lido Connect ที่ฝังใน mapConstants.js: node ตามชั้นที่เลือก (เหมือน SD/BACC ทุกอย่าง)
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    (c.ldGraphLayer || []).forEach((ly) => m.removeLayer(ly));
+    c.ldGraphLayer = [];
+    if (!ldOpen || !Object.keys(ldFloorNodes).length) { setLdRouteResult(null); return; }
+    for (const id of Object.keys(ldFloorNodes)) {
+      const n = ldFloorNodes[id];
+      if (!Number.isFinite(n?.lat) || !Number.isFinite(n?.lon)) continue;
+      const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+      const marker = L.circleMarker([n.lat, n.lon], { radius: 5, color: "#FFFFFF", weight: 1.5, fillColor: t.color, fillOpacity: 0.95, pane: "bdiFloorPane" }).addTo(m);
+      if (n.type === "escalator" || n.type === "lift") marker.bindPopup(`${t.icon} ${t.label} #${id}${n.label ? "<br>" + n.label : ""}`);
+      else marker.bindTooltip(`${id}${n.label ? " · " + n.label : ""}`, { permanent: false });
+      c.ldGraphLayer.push(marker);
+    }
+    // เน้นเส้นทางที่ผู้ใช้เลือกทดสอบ
+    if (ldRouteResult?.path?.length > 1) {
+      const latlngs = ldRouteResult.path.map((id) => ldFloorNodes[id]).filter(Boolean).map((n) => [n.lat, n.lon]);
+      if (latlngs.length > 1) c.ldGraphLayer.push(L.polyline(latlngs, { color: "#F9AB00", weight: 6, opacity: 0.95, pane: "bdiFloorPane" }).addTo(m));
+    }
+    return () => { (c.ldGraphLayer || []).forEach((ly) => { if (m.hasLayer(ly)) m.removeLayer(ly); }); c.ldGraphLayer = []; };
+  }, [ldOpen, ldFloor, ldFloorNodes, ldRouteResult]);
+
+
+  useEffect(() => {
+    ctx.current.baccAddNode = (lat, lon) => {
+      setBaccNodes((prev) => [...prev, { id: (prev[prev.length - 1]?.id || 0) + 1, lat, lon, type: baccNodeTypeRef.current, floor: baccFloorRef.current }]);
+    };
+  }, []);
+  // เก็บค่าล่าสุดไว้ใน ref เพราะ baccAddNode ถูกสร้างครั้งเดียวตอน mount (ป้องกัน closure ค้างค่าเก่า)
+  const baccNodeTypeRef = useRef(baccNodeType);
+  useEffect(() => { baccNodeTypeRef.current = baccNodeType; }, [baccNodeType]);
+  const baccFloorRef = useRef(baccFloor);
+  useEffect(() => { baccFloorRef.current = baccFloor; ctx.current.drawFloorOverlay?.(); }, [baccFloor]); // ผู้ใช้กดเปลี่ยนชั้น BACC เอง → เน้น/จางเส้นทางที่แนะนำใหม่ตามชั้นที่เลือกดู
+
+  // 💡 แสดงตำแหน่งจาก skyNodes โดยตรงเมื่อเปิด Street light และ zoom >= 16
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!mapReady || !L || !m) return;
+
+    if (!c.skyLightLayer) c.skyLightLayer = L.layerGroup();
+    c.skyLightLayer.clearLayers();
+
+    const shouldShow = chips.light && mapZoom >= 16;
+    if (!shouldShow) {
+      if (m.hasLayer(c.skyLightLayer)) m.removeLayer(c.skyLightLayer);
+      return;
+    }
+
+    skyNodes
+      .filter(node => node.type === "light" || node.type === "bulb")
+      .forEach((node) => {
+        L.circleMarker([node.lat, node.lon], {
+          radius: 3,
+          color: "#ffd94a",
+          fillColor: "#ffd94a",
+          fillOpacity: 0.95,
+          weight: 0.6,
+          interactive: false,
+          pane: "skyLightPane",
+        }).addTo(c.skyLightLayer);
+      });
+
+    if (!m.hasLayer(c.skyLightLayer)) c.skyLightLayer.addTo(m);
+
+    return () => {
+      if (m.hasLayer(c.skyLightLayer)) m.removeLayer(c.skyLightLayer);
+    };
+  }, [mapReady, mapZoom, chips.light, skyNodes]);
+
+  useEffect(() => {
+    ctx.current.sdAddNode = (lat, lon) => {
+      setSdNodes((prev) => [...prev, { id: (prev[prev.length - 1]?.id || 0) + 1, lat, lon, type: sdNodeTypeRef.current, floor: sdFloorRef.current }]);
+    };
+    ctx.current.cenAddNode = (lat, lon) => {
+      setCenNodes((prev) => [...prev, { id: (prev[prev.length - 1]?.id || 0) + 1, lat, lon, type: cenNodeTypeRef.current, floor: cenFloorRef.current }]);
+    };
+    ctx.current.ldAddNode = (lat, lon) => {
+      setLdNodes((prev) => [...prev, { id: (prev[prev.length - 1]?.id || 0) + 1, lat, lon, type: ldNodeTypeRef.current, floor: ldFloorRef.current }]);
+    };
+  }, []);
+  // เก็บค่าล่าสุดไว้ใน ref เพราะ cenAddNode/ldAddNode ถูกสร้างครั้งเดียวตอน mount (ป้องกัน closure ค้างค่าเก่า)
+  const cenNodeTypeRef = useRef(cenNodeType);
+  useEffect(() => { cenNodeTypeRef.current = cenNodeType; }, [cenNodeType]);
+  const ldNodeTypeRef = useRef(ldNodeType);
+  useEffect(() => { ldNodeTypeRef.current = ldNodeType; }, [ldNodeType]);
+  // เก็บค่าล่าสุดไว้ใน ref เพราะ sdAddNode ถูกสร้างครั้งเดียวตอน mount (ป้องกัน closure ค้างค่าเก่า)
+  const sdNodeTypeRef = useRef(sdNodeType);
+  useEffect(() => { sdNodeTypeRef.current = sdNodeType; }, [sdNodeType]);
+  const sdFloorRef = useRef(sdFloor);
+  useEffect(() => { sdFloorRef.current = sdFloor; ctx.current.drawFloorOverlay?.(); }, [sdFloor]); // ผู้ใช้กดเปลี่ยนชั้นเอง → เน้น/จางเส้นทางที่แนะนำใหม่ตามชั้นที่เลือกดู (ไม่ต้องคำนวณสีใหม่ทั้งหมด)
+
+  // 🧭 วาดจุด/เส้นทางของกราฟชั้นที่สำรวจจริง (SD_FLOOR1/2_NODES/EDGES ตาม sdFloor) + ผลลัพธ์เส้นทางที่หาได้จาก sdFloorRoute
+  useEffect(() => {
+    const c = ctx.current, L = c.L, m = mapRef.current;
+    if (!L || !m) return;
+    (c.sdF2Layer || []).forEach((ly) => m.removeLayer(ly));
+    c.sdF2Layer = [];
+    if (!sdOpen || (sdFloor !== "1" && sdFloor !== "2" && sdFloor !== "M")) { setSdRouteResult(null); return; }
+    // จุดกราฟทั้งหมด (จาง ๆ ไว้เป็นตัวเลือกอ้างอิง)
+    for (const id in sdFloorNodes) {
+      const n = sdFloorNodes[id];
+      const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+      const mk = L.circleMarker([n.lat, n.lon], { radius: 5, color: "#fff", weight: 1.5, fillColor: t.color, fillOpacity: 0.85, pane: "bdiFloorPane" }).addTo(m);
+      // 🟣 จุดเปลี่ยนชั้น (บันไดเลื่อน/ลิฟต์) — กดเพื่อดู label เต็มๆ แทนที่จะแค่ hover
+      if (n.type === "escalator" || n.type === "lift") mk.bindPopup(`${t.icon} ${t.label} #${id}${n.label ? "<br>" + n.label : ""}`);
+      else mk.bindTooltip(`${id}${n.label ? " · " + n.label : ""}`, { permanent: false });
+      c.sdF2Layer.push(mk);
+    }
+    // เส้นทางที่หาได้ (ถ้ามี) — วาดทับเน้นสีส้ม
+    if (sdRouteResult?.path?.length > 1) {
+      const latlngs = sdRouteResult.path.map((id) => [sdFloorNodes[id].lat, sdFloorNodes[id].lon]);
+      const pl = L.polyline(latlngs, { color: "#F9AB00", weight: 6, opacity: 0.95, pane: "bdiFloorPane" }).addTo(m);
+      c.sdF2Layer.push(pl);
+    }
+  }, [sdOpen, sdFloor, sdRouteResult]);
+
+  useEffect(() => {
+    if (!apiRef) return;
+    apiRef.current = {
+      showRoutes: async (from, to) => {
+        const c = ctx.current, L = c.L; if (!L) return null;
+        const key = `${from || ""}|${to || ""}`;
+        if (c.routeKey === key && c.scored) { c.select(c.best); return c.scored; }
+        c.routeLayer.clearLayers(); setRouteData({ loading: true });
+        c.indoorOn = false; c.updateIndoor?.(); // ล้างแผนผังในตึกของการค้นครั้งก่อน
+        let sName = "สยาม (BTS)", eName = "รพ.จุฬาฯ", sCoord = null, eCoord = null, note = null;
+        // ไม่ได้พิมพ์ต้นทาง → ใช้ตำแหน่งจริงที่ระบุไว้ตั้งแต่ตอนเปิดแอป (ถ้ามี) แทนจุดดีฟอลต์ตายตัว
+        if (!from && c.myLocation) { sCoord = c.myLocation; sName = "ตำแหน่งของฉัน"; }
+        const resolve = async (x) => { if (!x) return null; const pc = c.placeCache && c.placeCache[x]; if (pc) return pc; return (await resolvePlace(x)) || (await geocodeNominatim(x)); };
+        const [gFrom, gTo] = await Promise.all([resolve(from), resolve(to)]);
+        if (from) { if (gFrom) { sCoord = gFrom.coord; sName = gFrom.name; } else note = `หา "${from}" ไม่เจอ (ใช้สยามแทน) — ลองพิมพ์ชื่อให้ชัดขึ้น เช่น สนามกีฬาแห่งชาติ`; }
+        if (to) { if (gTo) { eCoord = gTo.coord; eName = gTo.name; } else note = (note ? note + " · " : "") + `หา "${to}" ไม่เจอ (ใช้ รพ.จุฬาฯ แทน)`; }
+        let data;
+        try {
+          const qs = new URLSearchParams();
+          if (sCoord) { qs.set("slon", sCoord[0]); qs.set("slat", sCoord[1]); }
+          if (eCoord) { qs.set("elon", eCoord[0]); qs.set("elat", eCoord[1]); }
+          const res = await fetch("/api/route?" + qs.toString()); data = await res.json();
+          if (data.error) { setRouteData({ error: data.error }); return null; }
+        } catch (e) { setRouteData({ error: String(e) }); return null; }
+        const { routes, start, end } = data;
+        if (!routes.length || routes[0].distance_m < 30) { setRouteData({ error: "หาเส้นทางไม่ได้ ลองระบุชื่อสถานที่ให้ชัดขึ้น" }); return null; }
+        // ใช้เฉพาะเส้นทางจาก API และเส้นที่คำนวณจากกราฟ OSM เท่านั้น
+        c.baseRoutes = routes; c.lastStart = start; c.lastEnd = end; c.sName = sName; c.eName = eName; c.note = note; c.lastOsm = null;
+        c.routeKey = key;
+        // หมุดปักชัดเจน: วงกลมใหญ่ขอบขาว + หางปักลงจุด + ป้ายกำกับด้านบน (start=เขียว, end=แดง)
+        const pinIcon = (letter, bg, tag, glow) => L.divIcon({
+          className: "",
+          html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 5px rgba(0,0,0,.6))">
+            <div style="background:${bg};color:#fff;font-weight:800;font-size:10.5px;letter-spacing:.5px;padding:2px 9px;border-radius:999px;white-space:nowrap;border:1.5px solid #fff;margin-bottom:2px">${tag}</div>
+            <div style="background:${bg};color:#fff;border:3px solid #fff;border-radius:50%;width:32px;height:32px;display:grid;place-items:center;font-weight:800;font-size:16px;line-height:1;box-shadow:0 0 0 4px ${glow}">${letter}</div>
+            <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:12px solid #fff;margin-top:-1px"></div>
+          </div>`,
+          iconSize: [80, 68], iconAnchor: [40, 64],
+        });
+        // วาดหมุด+เส้นใหม่ทุกรอบ (เส้นจากกราฟเปลี่ยนรูปตามเวลา) · โชว์เฉพาะ 2 เส้นที่ถูกเลือก
+        c.redrawRoutes = (cands) => {
+          c.routeLayer.clearLayers();
+          // 📍 หมุด S/E ปักที่ "จุดที่ผู้ใช้ค้น" เสมอ — ไม่เกาะปลายเส้น (เส้นชนะแต่ละเวลาเริ่ม/จบต่างกัน หมุดจะกระโดดไปมา)
+          // ปลายเส้นจริงห่างหมุด >25 ม. → วาดเส้นประเชื่อมให้เห็นว่าเดินเข้า/ออกแนวเส้นทางอีกนิด
+          const bc = (cands[c.best] && cands[c.best].coordinates) || [[start[0], start[1]], [end[0], end[1]]];
+          // ปลายเส้นใกล้จุดค้น ≤60 ม. = ที่เดียวกัน (พิกัดแลนด์มาร์กหยาบกว่าเส้นที่วาดจบตรงทางเข้าจริง เช่นบันได BTS ของ Skywalk) → ปักที่ปลายเส้นซึ่งแม่นกว่า
+          const anchor = (searched, pt) => (!searched || haversine(searched, pt) <= 60) ? pt : searched;
+          const sPt = anchor(c.lastStart, bc[0]), ePt = anchor(c.lastEnd, bc[bc.length - 1]);
+          const connectPin = (pin, pt) => { if (haversine(pin, pt) > 25) L.polyline([[pin[1], pin[0]], [pt[1], pt[0]]], { color: "#AECBFA", weight: 3, opacity: 0.7, dashArray: "3 7" }).addTo(c.routeLayer); };
+          connectPin(sPt, bc[0]); connectPin(ePt, bc[bc.length - 1]);
+          L.marker([sPt[1], sPt[0]], { icon: pinIcon("S", "#16a34a", "จุดเริ่ม", "rgba(22,163,74,.35)"), zIndexOffset: 1000 }).bindPopup("จุดเริ่ม: " + sName).addTo(c.routeLayer);
+          L.marker([ePt[1], ePt[0]], { icon: pinIcon("E", "#dc2626", "ปลายทาง", "rgba(220,38,38,.35)"), zIndexOffset: 1000 }).bindPopup("ปลายทาง: " + eName).addTo(c.routeLayer);
+          c.polylines = cands.map((r) => L.polyline(r.coordinates.map(([lon, lat]) => [lat, lon]), { color: "#9AA0A6", weight: 5, opacity: 0.72, dashArray: "8 8", lineCap: "round" }).addTo(c.routeLayer));
+          c.select = (i) => {
+            c.polylines.forEach((pl, j) => {
+              const shown = !c.picks || j === c.picks.comfortIdx || j === c.picks.fastIdx;
+              if (!shown) { pl.setStyle({ opacity: 0 }); return; }
+              // เส้นที่เลือก: ซ่อนเส้นสีเดียวเดิม (คงไว้เป็นพื้นที่กดเลือกเฉยๆ) แล้วให้เส้นหลายสีตามหมวดจริงด้านล่างแสดงแทน
+              if (j === i) pl.setStyle({ color: "#1A73E8", weight: 7, opacity: 0, lineCap: "round", lineJoin: "round", dashArray: null }).bringToFront();
+              else pl.setStyle({ color: "#8AB4F8", weight: 5, opacity: 0.62, dashArray: "7 8", lineCap: "round", lineJoin: "round" });
+            });
+            // 🎨 เส้นทางที่เลือก = สีตามหมวดจริงของแต่ละช่วง
+            // กลางวัน: ฟ้า=ในอาคาร เขียว=ร่มนอกอาคาร เหลือง=นอกอาคารแดด / กลางคืน: ฟ้า=สว่างพอ ม่วง=มืด
+            if (c.segLayer) c.routeLayer.removeLayer(c.segLayer);
+            c.segLayer = L.layerGroup();
+            const segs = routeSegments(cands[i].coordinates, c.lastOsm, c.bldgs, c.routeHour, c.lamps);
+            const SEGMENT_LABELS = { indoor: "🔵 ทางเดินในอาคาร", shade: "🟢 ทางร่ม", sun: "🟡 แดดกลางแจ้ง", lit: "🔵 ทางสว่าง", dark: "🟣 ทางเปลี่ยว" };
+            for (const seg of segs) {
+              if (seg.coordinates.length < 2) continue; // จุดเดียวไม่ใช่เส้น (edge case ปลายสุดพอดี)
+              L.polyline(seg.coordinates.map(([lon, lat]) => [lat, lon]), { color: SEGMENT_COLORS[seg.cat] || "#1A73E8", weight: 7, opacity: 1, lineCap: "round", lineJoin: "round" })
+                .bindPopup(SEGMENT_LABELS[seg.cat] || seg.cat)
+                .addTo(c.segLayer);
+            }
+            c.segLayer.addTo(c.routeLayer);
+
+            // 🏢🟣 จุดเปลี่ยนชั้น (escalator/lift/ประตู) + จางเส้นทางชั้นที่ไม่ตรงกับชั้นที่กำลังดูอยู่ — รองรับทั้ง siam_discovery และ bacc
+            const BLDG_CFG = {
+              siam_discovery: { nodes: SD_ALL_NODES, floorOf: SD_NODE_FLOOR, doorIds: new Set(SD_EXTERIOR_LINKS.map((e) => e.node)), floorRef: sdFloorRef, setFloor: setSdFloor, setOpen: setSdOpen },
+              bacc: { nodes: BACC_ALL_NODES_FULL, floorOf: BACC_NODE_FLOOR, doorIds: new Set(BACC_EXTERIOR_LINKS.map((e) => e.node)), floorRef: baccFloorRef, setFloor: setBaccFloor, setOpen: setBaccOpen },
+              siam_center: { nodes: SC_ALL_NODES_FULL, floorOf: SC_NODE_FLOOR, doorIds: new Set(SC_EXTERIOR_LINKS.map((e) => e.node)), floorRef: cenFloorRef, setFloor: setCenFloor, setOpen: setCenOpen },
+              lido: { nodes: LD_ALL_NODES_FULL, floorOf: LD_NODE_FLOOR, doorIds: new Set(LD_EXTERIOR_LINKS.map((e) => e.node)), floorRef: ldFloorRef, setFloor: setLdFloor, setOpen: setLdOpen },
+            };
+            const nk = cands[i].nodeKeys || [];
+            const info = nk.map((k) => {
+              if (!k) return null;
+              const m = /^IN:([^:]+):(.+)$/.exec(k);
+              if (!m) return null;
+              const [, bldg, id] = m;
+              const cfg = BLDG_CFG[bldg];
+              const n = cfg && cfg.nodes[id];
+              if (!cfg || !n) return null;
+              return { bldg, id, floor: cfg.floorOf[id] || null, type: n.type, label: n.label, isDoor: cfg.doorIds.has(id) };
+            });
+            // ชั้นที่ใช้เข้าอาคาร (node ในตึกจุดแรกที่ path เจอ ต่อตึก) — ใช้เป็นชั้นเริ่มต้นตอนแสดงผลเส้นทางนี้ "ครั้งแรก" เท่านั้น (ไม่ทับซ้ำตอนแค่เลื่อนเวลา/คะแนนใหม่ของเส้นทางค้นหาเดิม)
+            const searchKey = c.lastStart + "|" + c.lastEnd;
+            if (c.lastEntranceKey !== searchKey) {
+              const seenBldg = new Set();
+              for (const it of info) {
+                if (!it || !it.floor || seenBldg.has(it.bldg)) continue;
+                seenBldg.add(it.bldg);
+                const cfg = BLDG_CFG[it.bldg];
+                cfg.setFloor(it.floor); cfg.setOpen(true); cfg.floorRef.current = it.floor;
+              }
+              c.lastEntranceKey = searchKey;
+            }
+            c.drawFloorOverlay = () => {
+              if (c.floorLayer) c.routeLayer.removeLayer(c.floorLayer);
+              c.floorLayer = L.layerGroup();
+              const curOf = (bldg) => BLDG_CFG[bldg]?.floorRef.current;
+              const coordsArr = cands[i].coordinates;
+              // 🌫️ ช่วงที่อยู่คนละชั้นกับที่กำลังดู (ของตึกนั้นๆ) — ทับด้วยเส้นขาวโปร่งแสงให้ดูจางลง (ไม่ต้องคำนวณสีใหม่)
+              let runStart = null;
+              for (let idx = 0; idx <= coordsArr.length; idx++) {
+                const it = idx < coordsArr.length ? info[idx] : null;
+                const dim = it && it.floor && it.floor !== curOf(it.bldg);
+                if (dim && runStart == null) runStart = idx;
+                if (!dim && runStart != null) {
+                  const pts = coordsArr.slice(runStart, idx + 1); // รวมจุดขอบท้ายให้เส้นจางต่อเนื่องไม่ขาด
+                  if (pts.length >= 2) L.polyline(pts.map(([lon, lat]) => [lat, lon]), { color: "#fff", weight: 7, opacity: 0.55, lineCap: "round", lineJoin: "round" }).addTo(c.floorLayer);
+                  runStart = null;
+                }
+              }
+              // 🟣 จุดเปลี่ยนชั้น/ประตู — วงกลมม่วงทับเส้นทาง กดดู label ได้
+              for (let idx = 0; idx < coordsArr.length; idx++) {
+                const it = info[idx];
+                if (!it || !(it.type === "escalator" || it.type === "lift" || it.isDoor)) continue;
+                const [lon, lat] = coordsArr[idx];
+                L.circleMarker([lat, lon], { radius: 8, color: "#fff", weight: 2, fillColor: "#8E24AA", fillOpacity: 0.95, pane: "bdiFloorPane" })
+                  .bindPopup(`${it.label || it.id}${it.floor ? " · ชั้น " + it.floor : ""}`)
+                  .addTo(c.floorLayer);
+              }
+              c.floorLayer.addTo(c.routeLayer);
+            };
+            c.drawFloorOverlay();
+
+            c.indoorOn = !!cands[i]?.skywalk; c.updateIndoor?.();
+            setActive(i);
+          };
+        };
+        // คำนวณ candidates + คะแนน + วาด — ใช้ร่วมกัน 3 ทาง: ตอบเร็ว (osm=null), เติม OSM แล้ว, และตอนเลื่อนเวลา
+        c.refresh = (osm, fit) => {
+          const cands = c.baseRoutes.map((r, i) => ({ ...r, index: i }));
+          // คำนวณจากต้นทางและปลายทางจริง ไม่มีการบังคับเปลี่ยนไปยังจุด fixed
+          const g = c.walkNet
+            ? graphRoute(c.walkNet, c.lastStart, c.lastEnd, c.routeHour, c.lampGrid, c.bldgs, osm)
+            : null;
+          if (g) { g.index = cands.length; cands.push(g); }
+          const scored = scoreRoutes(cands, osm || { ok: false, trees: [], green: [], toilets: [], cameras: [] }, c.problems, c.lamps, c.bldgs, c.routeHour);
+          const picks = pickRoutes(scored);
+          c.picks = picks;
+          const best = picks.comfortIdx;
+          c.best = best; c.scored = scored.map((r, i) => ({ ...r, recommended: i === best }));
+          c.redrawRoutes(cands);
+          c.select(best);
+          if (fit && mapRef.current && c.polylines[best]) mapRef.current.fitBounds(c.polylines[best].getBounds().pad(0.15));
+          setRouteData({ routes: scored, best, picks, graphOk: !!g, osmOk: !!(osm && osm.ok), startName: c.sName, endName: c.eName, note: c.note, scoring: !osm });
+          return scored;
+        };
+        c.refresh(null, true); // ตอบทันที ไม่รอ OSM
+        // เติมข้อมูล OSM (ร่มต้นไม้/ห้องน้ำ/ทางข้าม) เบื้องหลัง แล้วคิดใหม่
+        let lons = [], lats = []; routes.forEach((r) => r.coordinates.forEach(([lo, la]) => { lons.push(lo); lats.push(la); }));
+        const within = Math.min(...lats) >= DEMO_BBOX[0] && Math.min(...lons) >= DEMO_BBOX[1] && Math.max(...lats) <= DEMO_BBOX[2] && Math.max(...lons) <= DEMO_BBOX[3];
+        const mg = 0.004;
+        const lo0 = Math.min(...lons), la0 = Math.min(...lats), lo1 = Math.max(...lons), la1 = Math.max(...lats);
+        (async () => {
+          const osm = within ? await c.osmPromise : await fetchOSM([la0 - mg, lo0 - mg, la1 + mg, lo1 + mg]);
+          if (c.routeKey !== key) return;
+          if (osm.crossings && osm.crossings.length) { c.crossings = osm.crossings; c.addCrossMarkers?.(osm.crossings); }
+          c.addSkywalks?.(osm.coveredWays);
+          if (c.addOsmMarkers) c.addOsmMarkers(osm); // วาดหมุดห้องน้ำ/กล้องของย่านเส้นทางนี้
+          c.lastOsm = osm;
+          const full = c.refresh(osm, false);
+          // เติมชื่อตึก/ย่านของห้องน้ำด้วย reverse geocode (เบื้องหลัง + cache)
+          (async () => {
+            const seen = {};
+            for (const r of full) {
+              for (const t of (r.toiletList || [])) {
+                if (!t.pt) continue;
+                const kk = t.pt.map((x) => x.toFixed(5)).join(",");
+                if (!(kk in seen)) seen[kk] = await queuedReverse(t.pt);
+                if (c.routeKey !== key) return;
+                const g = seen[kk];
+                if (g) { if (g.place) t.place = g.place; if (!t.road && g.road) t.road = g.road; }
+              }
+            }
+            c.scored = full.map((r, i) => ({ ...r, recommended: i === c.best }));
+          })();
+        })();
+        return c.scored;
+      },
+      getRoutes: () => ctx.current.scored,
+    };
+  }, [apiRef]);
+
+  // ---------- โหมดนำทาง GPS ----------
+  function updateNav(u) {
+    const c = ctx.current, n = c.nav; if (!n) return;
+    const lang = c.voiceLang || "th";
+    c.userMarker?.setLatLng([u[1], u[0]]);
+    if (c.prevPos && c.userMarker && c.L && haversine(c.prevPos, u) > 1.5) {
+      const hd = bearing(c.prevPos, u);
+      c.userMarker.setIcon(c.L.divIcon({ className: "", html: `<div style="width:24px;height:24px;line-height:24px;text-align:center;font-size:22px;color:#1d6fb8;transform:rotate(${hd}deg)">\u25B2</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }));
+    }
+    c.prevPos = u;
+    if (mapRef.current) mapRef.current.setView([u[1], u[0]], Math.max(mapRef.current.getZoom(), 17), { animate: true });
+    let idx = 0, bd = Infinity;
+    for (let i = 0; i < n.coords.length; i++) { const d = haversine(u, n.coords[i]); if (d < bd) { bd = d; idx = i; } }
+    const distDest = Math.max(0, Math.round(n.cum[n.cum.length - 1] - n.cum[idx]));
+    let k = n.steps.findIndex((st) => idx <= st.wpEnd); if (k < 0) k = n.steps.length - 1;
+    let mWp = null, mTurn = null, mName = "";
+    for (let j = k + 1; j < n.steps.length; j++) {
+      const wp = n.steps[j].wpStart;
+      const tt = turnAt(n.coords, wp);
+      if (tt && tt !== "ตรงไป") { mWp = wp; mName = n.steps[j].name || ""; const ts = turnSide(n.coords, wp, u); mTurn = (ts && ts !== "ตรงไป") ? ts : tt; break; }
+    }
+    const distTurn = mWp != null ? Math.max(0, Math.round(n.cum[mWp] - n.cum[idx])) : distDest;
+    const nameEN = roadEN(mName);
+    const instr = lang === "en"
+      ? (TURN_EN[mTurn] || "continue to the destination") + (nameEN ? " onto " + nameEN : "")
+      : (mTurn || "ตรงไปยังปลายทาง") + (mName ? ` เข้า ${mName}` : "");
+    let crossAhead = null, cbest = Infinity;
+    for (const cp of c.crossings || []) {
+      if (haversine(u, cp) > 60) continue;
+      let ci = 0, cb = Infinity; for (let i = 0; i < n.coords.length; i++) { const dd = haversine(cp, n.coords[i]); if (dd < cb) { cb = dd; ci = i; } }
+      if (cb > 10 || ci < idx) continue; // ต้องอยู่บนเส้นทางจริง (≤10 ม.) ไม่ใช่ทางข้ามของซอยข้างๆ
+      // เตือน "ข้ามถนน" เฉพาะเมื่อมีจุดเลี้ยวจริงของเส้นทางอยู่ใกล้หมุดทางข้าม (±25 ม.) — กันเตือนผิดตอนเดินตรงยาว
+      let nearTurn = false;
+      for (const st of n.steps) {
+        const wp = st.wpStart;
+        if (wp <= 0 || wp >= n.coords.length - 1) continue;
+        if (Math.abs(n.cum[wp] - n.cum[ci]) > 25) continue;
+        const tt = turnAt(n.coords, wp);
+        if (tt && tt !== "ตรงไป") { nearTurn = true; break; }
+      }
+      if (!nearTurn) continue;
+      const al = Math.round(n.cum[ci] - n.cum[idx]);
+      if (al >= 0 && al < cbest) { cbest = al; crossAhead = { dist: al, id: cp.join(",") }; }
+    }
+    let hazard = null, hbest = Infinity, hid = null;
+    for (const p of c.problems) {
+      if (haversine(u, p.pt) > 80) continue;
+      let pidx = 0, pbd = Infinity; for (let i = 0; i < n.coords.length; i++) { const dd = haversine(p.pt, n.coords[i]); if (dd < pbd) { pbd = dd; pidx = i; } }
+      if (pbd > 28 || pidx < idx - 4) continue;
+      const along = Math.round(n.cum[pidx] - n.cum[idx]);
+      if (along > 90) continue;
+      const near = Math.abs(along);
+      if (near < hbest) { hbest = near; hazard = { label: CAT[p.cat]?.label || "จุดเสี่ยง", dist: Math.max(0, along) }; hid = p.pt.join(","); }
+    }
+    // ห้องน้ำใกล้สุด "ข้างหน้า" ตามแนวเดิน (ใช้ along ที่วัดแบบตั้งฉากแม่นแล้ว) — ตรงกับสถานการณ์ "เดินอยู่แล้วอยากเข้าห้องน้ำ"
+    let toiletAhead = null, tbest = Infinity;
+    const userAlong = n.cum[idx];
+    for (const t of (n.toilets || [])) {
+      if (!t || t.along == null) continue;
+      const ahead = t.along - userAlong;          // ระยะตามแนวเดินถึงห้องน้ำ
+      if (ahead < -10 || ahead > 300) continue;   // ผ่านไปแล้ว / ไกลเกินไป
+      if ((t.off || 0) > 90) continue;            // เบี่ยงออกจากทางไกลเกิน
+      const walk = Math.max(0, ahead) + (t.off || 0); // ระยะเดินจริงโดยประมาณ (เลือกอันที่ถึงเร็วสุด)
+      if (walk < tbest) { tbest = walk; toiletAhead = { dist: Math.max(0, Math.round(ahead)), off: Math.round(t.off || 0), name: t.name || "ห้องน้ำ", where: [t.place, t.road].filter(Boolean).join(" · "), id: (t.pt || []).join(",") }; }
+    }
+    const arrived = distDest < 20;
+    setNav({ active: true, instr, distTurn, distDest, hazard, arrived, cross: crossAhead, toilet: toiletAhead });
+    if (c.voiceOn) {
+      const rnd = (m) => Math.max(10, Math.round(m / 10) * 10);
+      const en = lang === "en";
+      if (crossAhead && crossAhead.dist <= 35 && c.spokenCross && !c.spokenCross.has(crossAhead.id)) {
+        c.spokenCross.add(crossAhead.id);
+        speakNow(en ? "Prepare to cross the road, watch for traffic" : "เตรียมข้ามถนน ระวังรถ", lang);
+      } else if (mWp != null && distTurn <= 55 && !c.spokenTurns.has(mWp)) {
+        c.spokenTurns.add(mWp);
+        const m = rnd(distTurn);
+        if (distTurn <= 12) speakNow(instr, lang);
+        else speakNow(en ? `In ${m} meters, ${TURN_EN[mTurn] || "continue"}${nameEN ? " onto " + nameEN : ""}` : `ในอีก ${m} เมตร ${instr}`, lang);
+      }
+      if ((mWp == null || distTurn > 90) && distDest > 40 && !c.straightSpoken) { c.straightSpoken = true; speakNow(en ? "Continue straight" : "เดินตรงไป", lang); }
+      if (mWp != null && distTurn < 60) c.straightSpoken = false;
+      if (hazard && hazard.dist < 50 && !c.spokenHaz.has(hid)) { c.spokenHaz.add(hid); speak(en ? "Caution, obstacle ahead" : `ระวัง ${hazard.label} ข้างหน้า`, lang); }
+      if (toiletAhead && toiletAhead.dist <= 45 && c.spokenToilet && !c.spokenToilet.has(toiletAhead.id)) { c.spokenToilet.add(toiletAhead.id); const tm = rnd(toiletAhead.dist); speak(en ? `Toilet ${tm} meters ahead` : `ห้องน้ำอีก ${tm} เมตรข้างหน้า`, lang); }
+      if (arrived && !c.spokenArrived) { c.spokenArrived = true; speak(en ? "You have arrived" : "ถึงปลายทางแล้ว", lang); }
+    }
+  }
+  function onPos(pos) { updateNav([pos.coords.longitude, pos.coords.latitude]); }
+  function onErr() { setNav((p) => ({ ...(p || { active: true }), instr: "เปิด GPS ไม่สำเร็จ — อนุญาตตำแหน่ง แล้วเปิดเว็บแบบ HTTPS บนมือถือ", distTurn: null, distDest: null, hazard: null })); }
+  function startNav(i) {
+    const c = ctx.current, L = c.L; const r = c.scored?.[i]; if (!r || !L) return;
+    const coords = r.coordinates; const cum = [0];
+    for (let k = 1; k < coords.length; k++) cum[k] = cum[k - 1] + haversine(coords[k - 1], coords[k]);
+    c.nav = { coords, cum, steps: r.steps || [], toilets: r.toiletList || [] };
+    c.spokenTurns = new Set(); c.spokenHaz = new Set(); c.spokenCross = new Set(); c.spokenToilet = new Set(); c.spokenArrived = false; c.prevPos = null; c.straightSpoken = false;
+    if (!c.userMarker) c.userMarker = L.marker([coords[0][1], coords[0][0]], { icon: L.divIcon({ className: "", html: '<div style="width:18px;height:18px;border-radius:50%;background:#1A73E8;border:3px solid #fff;box-shadow:0 1px 8px rgba(26,115,232,.65)"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(mapRef.current);
+    setNav({ active: true, instr: "กำลังหาตำแหน่ง…", distTurn: null, distDest: Math.round(cum[cum.length - 1]), hazard: null, arrived: false });
+    if (!navigator.geolocation) { onErr(); return; }
+    c.navWatch = navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
+  }
+  function startSim(i) {
+    const c = ctx.current, L = c.L; const r = c.scored?.[i]; if (!r || !L) return;
+    if (c.simTimer) { clearInterval(c.simTimer); c.simTimer = null; }
+    const coords = r.coordinates; const cum = [0];
+    for (let k = 1; k < coords.length; k++) cum[k] = cum[k - 1] + haversine(coords[k - 1], coords[k]);
+    c.nav = { coords, cum, steps: r.steps || [], toilets: r.toiletList || [] };
+    c.spokenTurns = new Set(); c.spokenHaz = new Set(); c.spokenCross = new Set(); c.spokenToilet = new Set(); c.spokenArrived = false; c.prevPos = null; c.straightSpoken = false;
+    if (!c.userMarker) c.userMarker = L.marker([coords[0][1], coords[0][0]], { icon: L.divIcon({ className: "", html: '<div style="width:18px;height:18px;border-radius:50%;background:#1A73E8;border:3px solid #fff;box-shadow:0 1px 8px rgba(26,115,232,.65)"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(mapRef.current);
+    setNav({ active: true, instr: "เริ่มเดิน (โหมดจำลอง)", distTurn: null, distDest: Math.round(cum[cum.length - 1]), hazard: null, arrived: false });
+    let d = 0; const total = cum[cum.length - 1];
+    c.simTimer = setInterval(() => {
+      d += 7; if (d > total) d = total;
+      updateNav(pointAtDistance(coords, cum, d));
+      if (d >= total) { clearInterval(c.simTimer); c.simTimer = null; }
+    }, 650);
+  }
+  function stopNav() {
+    const c = ctx.current;
+    if (c.navWatch != null) { navigator.geolocation.clearWatch(c.navWatch); c.navWatch = null; }
+    if (c.simTimer) { clearInterval(c.simTimer); c.simTimer = null; }
+    if (c.userMarker && mapRef.current) { mapRef.current.removeLayer(c.userMarker); c.userMarker = null; }
+    c.nav = null; setNav(null);
+  }
+
+  function toggleVoice() { const c = ctx.current; c.voiceOn = !c.voiceOn; setVoice(c.voiceOn); if (!c.voiceOn && window.speechSynthesis) window.speechSynthesis.cancel(); }
+  function toggleVoiceLang() { const c = ctx.current; c.voiceLang = c.voiceLang === "en" ? "th" : "en"; setVoiceLang(c.voiceLang); }
+  function doSearch() { const f = sFrom.trim(), t = sTo.trim(); setSearchOpen(false); setRouteSheetOpen(false); try { apiRef?.current?.showRoutes?.(f || null, t || null); } catch (e) {} }
+  // เปลี่ยน "เวลาเดินทาง" → คำนวณเส้นจากกราฟ + คะแนนใหม่ทั้งชุด (เส้น comfort เปลี่ยนรูปตามเวลา!)
+  function rescore(h) {
+    const c = ctx.current;
+    c.routeHour = h;
+    c.rebuildLamps?.(h); // 💡 หลอดไฟที่มี onHour/offHour (เช่น ไฟ skywalk เริ่ม 18:00) ต้องคำนวณใหม่ตามเวลาที่เลือก
+    if (c.refresh && c.baseRoutes) c.refresh(c.lastOsm || null, false);
+  }
+  // เปิด/ปิดเลเยอร์บนแผนที่ตาม chip (Figma: Street_light / button_Skywalk / traffyF / buttonToilet)
+  function toggleChip(k) {
+    const c = ctx.current;
+    setChips((p) => {
+      const on = !p[k];
+      if (c.layers && mapRef.current) {
+        const groups = { light: [c.layers.light], cross: [c.layers.cross], toilet: [c.layers.toilets] }[k] || [];
+        groups.forEach((g) => { if (!g) return; if (on) g.addTo(mapRef.current); else mapRef.current.removeLayer(g); });
+      }
+      return { ...p, [k]: on };
+    });
+  }
+  const CHIP_DEFS = [
+    { k: "light", label: "💡 Street light" },
+    { k: "cross", label: "🚶 ทางเชื่อม /Skywalk" },
+    { k: "toilet", label: "🚻 ห้องน้ำ" },
+  ];
+
+  const navTarget = active ?? (routeData && !routeData.error && !routeData.loading ? routeData.best : null);
+
+  return (
+    <div className="bdi-mapwrap" style={{ position: "relative", height: "100%", width: "100%" }}>
+      <style>{`
+        .bdi-mapwrap{
+          --gm-blue:#1A73E8;--gm-blue-dark:#1967D2;--gm-blue-soft:#E8F0FE;
+          --gm-green:#188038;--gm-red:#D93025;--gm-yellow:#F9AB00;
+          --gm-text:#202124;--gm-muted:#5F6368;--gm-line:#DADCE0;--gm-bg:#F8F9FA;
+          --bdi-surface:#FFFFFF;--bdi-surface-2:#F8F9FA;--bdi-text:#202124;--bdi-text-dim:#5F6368;
+          --bdi-line:#DADCE0;--bdi-green:#1A73E8;--bdi-danger:#D93025;
+          font-family:Roboto,Arial,"Noto Sans Thai",sans-serif;background:#FFFFFF;color:var(--gm-text);
+          -webkit-font-smoothing:antialiased;
+        }
+        .bdi-mapwrap *{box-sizing:border-box}
+        .bdi-mapwrap button,.bdi-mapwrap input{font:inherit}
+        .bdi-mapwrap .leaflet-control-zoom{border:0!important;box-shadow:0 1px 6px rgba(60,64,67,.30)!important;border-radius:8px!important;overflow:hidden;margin-top:84px!important;margin-right:12px!important}
+        .bdi-mapwrap .leaflet-control-zoom a{width:40px!important;height:40px!important;line-height:40px!important;color:#3C4043!important;background:#fff!important;border-color:#E8EAED!important;font-size:22px!important;font-weight:400!important}
+        .bdi-mapwrap .leaflet-control-zoom a:hover{background:#F8F9FA!important}
+        .bdi-mapwrap .leaflet-control-attribution{background:rgba(255,255,255,.9)!important;color:#5F6368!important;font-size:10px!important}
+        .bdi-mapwrap .leaflet-popup-content-wrapper{border-radius:12px;box-shadow:0 3px 14px rgba(60,64,67,.30);color:#202124;padding:3px}
+        .bdi-mapwrap .leaflet-popup-content{margin:12px 14px;line-height:1.45}
+        .bdi-mapwrap .leaflet-popup-tip{box-shadow:2px 2px 4px rgba(60,64,67,.12)}
+        .wb-card,.bdi-card{background:#fff;border:0;color:var(--gm-text);box-shadow:0 2px 8px rgba(60,64,67,.28);font-family:inherit}
+        .wb-card{position:absolute;z-index:1000}
+        .wb-search{left:12px;right:64px;top:calc(12px + env(safe-area-inset-top));padding:0;z-index:3000!important;border-radius:12px;overflow:visible;display:block!important;visibility:visible!important;opacity:1!important}
+        .gm-search-collapsed{height:52px;display:flex!important;align-items:center;gap:13px;padding:0 16px;cursor:pointer;border-radius:12px;background:#fff;min-width:0}
+        .gm-menu{width:22px;height:22px;display:grid;place-items:center;color:#5F6368;font-size:20px}
+        .gm-search-text{flex:1;min-width:0;font-size:16px;color:#3C4043;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .gm-avatar{width:30px;height:30px;border-radius:50%;background:#1A73E8;color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+        .gm-search-open{padding:12px;border-radius:12px;background:#fff}
+        .gm-search-head{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+        .gm-back{width:36px;height:36px;border:0;background:transparent;border-radius:50%;cursor:pointer;color:#5F6368;font-size:21px}
+        .gm-back:hover{background:#F1F3F4}
+        .gm-route-inputs{position:relative;display:flex;flex-direction:column;gap:8px;padding-left:32px}
+        .gm-route-inputs:before{content:"";position:absolute;left:14px;top:18px;bottom:18px;border-left:2px dotted #9AA0A6}
+        .gm-origin-dot,.gm-dest-pin{position:absolute;left:8px;z-index:2;background:#fff}
+        .gm-origin-dot{top:14px;width:12px;height:12px;border:3px solid #5F6368;border-radius:50%}
+        .gm-dest-pin{bottom:13px;width:12px;height:12px;background:#D93025;border-radius:50% 50% 50% 0;transform:rotate(-45deg)}
+        .gm-search-action{width:100%;margin-top:10px;height:42px;border-radius:21px}
+        .wb-nav{top:0;left:0;right:0;border-radius:0 0 16px 16px;background:#1A73E8;color:#fff;padding:calc(14px + env(safe-area-inset-top)) 16px 14px;z-index:1700;border:none;box-shadow:0 3px 12px rgba(26,115,232,.35)}
+        .wb-startbtn{display:block;width:100%;margin-top:8px;padding:12px;border:none;border-radius:22px;background:#1A73E8;color:#fff;font-weight:600;font-size:14px;cursor:pointer;box-shadow:none;transition:background .15s ease}
+        .wb-startbtn:hover,.bdi-btn:hover{background:#1967D2}
+        .bdi-btn{border:0;border-radius:20px;background:#1A73E8;color:#fff;padding:10px 18px;font-weight:600;cursor:pointer;transition:background .15s ease}
+        .bdi-btn.ghost{background:#E8F0FE!important;color:#1967D2!important}
+        .bdi-chips{position:absolute;left:12px;right:8px;z-index:1250;display:flex;gap:8px;overflow-x:auto;padding:2px 4px 8px 0;scrollbar-width:none}
+        .bdi-chips::-webkit-scrollbar{display:none}
+        .bdi-chip{height:36px;white-space:nowrap;border:1px solid #DADCE0;border-radius:18px;background:#fff;color:#3C4043;padding:0 14px;font-size:13px;font-weight:500;box-shadow:0 1px 3px rgba(60,64,67,.20);cursor:pointer;display:flex;align-items:center;gap:6px}
+        .bdi-chip:hover{background:#F8F9FA}
+        .bdi-chip.on{background:#E8F0FE;border-color:#AECBFA;color:#1967D2}
+        .gm-bottom-stack{position:absolute;left:0!important;right:0!important;bottom:0!important;z-index:1300!important;gap:0!important}
+        .gm-time-card{margin:0 12px 8px;border-radius:14px!important;padding:10px 14px!important}
+        .gm-route-sheet{max-height:44vh!important;border-radius:18px 18px 0 0!important;padding:0 16px calc(12px + env(safe-area-inset-bottom))!important;overflow:auto!important;box-shadow:0 -2px 12px rgba(60,64,67,.22)!important}
+        .bdi-sheet-handle{display:flex;justify-content:space-between;align-items:center;cursor:pointer;border-radius:18px 18px 0 0;min-height:54px;font-weight:600}
+        .bdi-sheet-handle:before{content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);width:36px;height:4px;border-radius:2px;background:#DADCE0}
+        .bdi-route-opt{width:100%;text-align:left;background:#fff;border:0;border-top:1px solid #ECEFF1;border-radius:0;padding:14px 2px;margin:0;color:#202124;cursor:pointer}
+        .bdi-route-opt:first-of-type{border-top:0}
+        .bdi-route-opt.on{background:#F8FBFF;box-shadow:inset 4px 0 0 #1A73E8;padding-left:12px}
+        .bdi-badge{display:inline-flex;align-items:center;border-radius:4px;background:#E8F0FE;color:#1967D2;padding:3px 7px;font-size:11px;font-weight:600}
+        .bdi-stats{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;color:#5F6368;font-size:12px}
+        .bdi-cross-ic{width:12px;height:12px;border-radius:50%;background:#1A73E8;border:2px solid #fff;box-shadow:0 1px 4px rgba(60,64,67,.35)}
+        .bdi-poi-icon{width:12px;height:12px;display:block;line-height:0;user-select:none;filter:drop-shadow(0 1px 2px rgba(255,255,255,.95)) drop-shadow(0 1px 1px rgba(0,0,0,.22))}.bdi-poi-icon svg{display:block;width:12px;height:12px}
+        .bdi-lift,.bdi-wc,.bdi-esc{background:#fff;color:#1A73E8;border:1px solid #AECBFA;box-shadow:0 1px 4px rgba(60,64,67,.25)}
+        .bdi-lift{width:17px;height:17px;border-radius:4px;display:grid;place-items:center;font-size:12px;font-weight:800}
+        .bdi-wc{padding:1px 3px;border-radius:4px;font-size:9px;font-weight:800}
+        .bdi-esc{width:14px;height:16px;border-radius:3px;position:relative}
+        .gm-fab{position:absolute;right:12px;z-index:1200;width:48px;height:48px;border-radius:50%;border:0;background:#fff;color:#1A73E8;font-size:22px;display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgba(60,64,67,.3)}
+        .gm-fab:hover{background:#F8F9FA}
+        input:focus{border-color:#1A73E8!important;box-shadow:0 0 0 1px #1A73E8!important;outline:none!important}
+        /* 🕐 แถบเลื่อนเวลาเดินทาง — ม่วงช่วงดึก/เช้ามืด (ก่อนตี5) และหลังหกโมงเย็น ไล่เข้าฟ้าปกติช่วงกลางวัน */
+        input[type=range].bdi-hour-slider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;cursor:pointer;
+          background:linear-gradient(90deg,#7c3aed 0%,#7c3aed 4%,#1A73E8 21.7%,#1A73E8 78.3%,#7c3aed 96%,#7c3aed 100%)}
+        input[type=range].bdi-hour-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #1A73E8;box-shadow:0 1px 4px rgba(0,0,0,.35);margin-top:-5px}
+        input[type=range].bdi-hour-slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #1A73E8;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+        input[type=range].bdi-hour-slider::-moz-range-track{height:6px;border-radius:3px;background:transparent}
+        @media(min-width:760px){
+          .wb-search{right:auto;width:392px}
+          .bdi-chips{right:auto;width:620px}
+          .gm-bottom-stack{left:12px!important;right:auto!important;bottom:12px!important;width:420px}
+          .gm-route-sheet{border-radius:18px!important;max-height:52vh!important}
+          .gm-time-card{margin:0 0 8px}
+        }
+      `}</style>
+
+      <div ref={mapEl} style={{ height: "100%", width: "100%" }} />
+
+      {nav?.active ? (
+        <div className="wb-card wb-nav">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              {nav.arrived ? (
+                <div style={{ fontSize: 20, fontWeight: 800 }}>🎉 ถึงปลายทางแล้ว</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>{nav.instr}</div>
+                  {nav.distTurn != null ? <div style={{ fontSize: 14, opacity: 0.9 }}>อีก {nav.distTurn} ม. · เหลือถึงปลายทาง {nav.distDest} ม.</div> : <div style={{ fontSize: 13, opacity: 0.9 }}>{nav.distDest != null ? `เหลือ ${nav.distDest} ม.` : ""}</div>}
+                </>
+              )}
+              {nav.cross ? <div style={{ marginTop: 6, background: "#e9a23b", borderRadius: 6, padding: "5px 8px", fontWeight: 700, fontSize: 14 }}>🚸 เตรียมข้ามถนน อีก ~{nav.cross.dist} ม.</div> : null}
+              {nav.hazard ? <div style={{ marginTop: 6, background: "#c1121f", borderRadius: 6, padding: "5px 8px", fontWeight: 700, fontSize: 14 }}>⚠️ ระวัง {nav.hazard.label} อีก ~{nav.hazard.dist} ม.</div> : null}
+              {nav.toilet ? <div style={{ marginTop: 6, background: "#0f8a8a", borderRadius: 6, padding: "5px 8px", fontWeight: 700, fontSize: 14 }}>🚻 ห้องน้ำข้างหน้า ~{nav.toilet.dist} ม.{nav.toilet.off ? ` (เบี่ยงจากทาง ~${nav.toilet.off} ม.)` : ""}{nav.toilet.where ? ` · ${nav.toilet.where}` : ""}</div> : null}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={toggleVoiceLang} style={{ background: "rgba(255,255,255,.25)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 10px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>{voiceLang === "en" ? "EN" : "ไทย"}</button>
+              <button onClick={toggleVoice} style={{ background: "rgba(255,255,255,.25)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 11px", fontWeight: 700, cursor: "pointer", fontSize: 16 }}>{voice ? "🔊" : "🔇"}</button>
+              <button onClick={stopNav} style={{ background: "rgba(255,255,255,.25)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 12px", fontWeight: 700, cursor: "pointer" }}>หยุด</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* กล่องค้นหาแบบ Figma — พับเป็นแถบ "จะไปไหนดี?" กดแล้วกางเป็น ต้นทาง/ปลายทาง (SrcDectPage) */}
+      {!nav?.active ? (
+      <div className="wb-card wb-search">
+        {!searchOpen ? (
+          <div className="gm-search-collapsed" onClick={() => setSearchOpen(true)}>
+            <span className="gm-menu">☰</span>
+            <span className="gm-search-text">{sTo ? `${sFrom || "ตำแหน่งของฉัน"} → ${sTo}` : "ค้นหาสถานที่และเส้นทาง"}</span>
+            {sTo ? (
+              <span onClick={(e) => {
+                  e.stopPropagation();
+                  setSFrom(""); setSTo(""); setRouteData(null);
+                  const c = ctx.current; c.routeKey = null; c.scored = null; c.routeLayer?.clearLayers?.();
+                }}
+                title="ออกจากการค้นหาเส้นทาง"
+                style={{ width: 26, height: 26, display: "grid", placeItems: "center", borderRadius: "50%", color: "#5F6368", fontSize: 15, cursor: "pointer", flex: "none" }}>✕</span>
+            ) : (
+              <span className="gm-avatar">P</span>
+            )}
+          </div>
+        ) : (
+          <div className="gm-search-open">
+            <div className="gm-search-head">
+              <button className="gm-back" onClick={() => setSearchOpen(false)} aria-label="ย้อนกลับ">←</button>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>เส้นทาง</div>
+            </div>
+            <div className="gm-route-inputs">
+              <span className="gm-origin-dot" />
+              <span className="gm-dest-pin" />
+              <PlaceInput value={sFrom} onChange={setSFrom} onEnter={doSearch} onPick={async (sg) => { let coord = sg.coord; if (sg.src === "landmark" && sg.lm) { try { const r = await resolveLandmark(sg.lm); if (r?.coord) coord = r.coord; } catch (e) {} } setSFrom(sg.name); ctx.current.placeCache[sg.name] = { coord, name: sg.name }; }} placeholder="ตำแหน่งของคุณ" />
+              <PlaceInput value={sTo} onChange={setSTo} onEnter={doSearch} onPick={async (sg) => { let coord = sg.coord; if (sg.src === "landmark" && sg.lm) { try { const r = await resolveLandmark(sg.lm); if (r?.coord) coord = r.coord; } catch (e) {} } setSTo(sg.name); ctx.current.placeCache[sg.name] = { coord, name: sg.name }; }} placeholder="เลือกปลายทาง" />
+            </div>
+            <button className="bdi-btn gm-search-action" onClick={doSearch}>ค้นหาเส้นทาง</button>
+          </div>
+        )}
+      </div>
+      ) : null}
+
+      {/* Chips เปิด/ปิดเลเยอร์ ตาม Figma (Frame 20) */}
+      {!nav?.active ? (
+        <div className="bdi-chips" style={{ top: `calc(${searchOpen ? 242 : 70}px + env(safe-area-inset-top))` }}>
+          {CHIP_DEFS.map((c) => (
+            <button type="button" key={c.k} className={"bdi-chip" + (chips[c.k] ? " on" : "")} onClick={() => toggleChip(c.k)}>{c.label}</button>
+          ))}
+        </div>
+      ) : null}
+
+      {/* แผงล่าง: การ์ดสไลเดอร์เวลา (แยกเดี่ยว เห็นตลอด) + ชีตรายละเอียดเส้นทาง (พับได้ ดีฟอลต์พับ) */}
+      {routeData && !nav?.active ? (
+        <div className="gm-bottom-stack" style={{ position: "absolute", left: 10, right: 10, bottom: 10, zIndex: 1300, display: "flex", flexDirection: "column", gap: 8 }}>
+          {!routeData.loading && !routeData.error && routeData.routes?.length ? (
+            <div className="bdi-card gm-time-card" style={{ padding: "10px 14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, color: "var(--bdi-text-dim)", marginBottom: 2 }}>
+                <span>🕐 เวลาเดินทาง: <b style={{ color: "#202124", fontSize: 14 }}>{String(routeHour ?? new Date().getHours()).padStart(2, "0")}:00</b> {(routeHour ?? new Date().getHours()) >= 7 && (routeHour ?? new Date().getHours()) < 18 ? "☀️" : "🌙"}</span>
+                <span onClick={() => { setRouteHour(null); rescore(null); }} style={{ color: "var(--bdi-green)", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>⟳ ตอนนี้</span>
+              </div>
+              <input type="range" min={0} max={23} step={1} value={routeHour ?? new Date().getHours()} className="bdi-hour-slider"
+                onChange={(e) => { const v = parseInt(e.target.value, 10); setRouteHour(v); rescore(v); }}
+                style={{ width: "100%" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--bdi-text-dim)" }}>
+                <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+              </div>
+              {routeData.graphOk === false ? <div style={{ fontSize: 11, color: "#f4b860", marginTop: 4 }}>⏳ โครงข่ายทางเท้า OSM กำลังโหลด — เส้นแนะนำจะแม่นขึ้นอัตโนมัติเมื่อพร้อม</div> : null}
+              {/* เส้นบนแผนที่ = เส้นคะแนนสูงสุดของเวลานั้นเสมอ */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 7, fontSize: 13 }}>
+                <span style={{ color: "var(--bdi-text-dim)" }}>เส้นที่ดีที่สุดเวลานี้: <b style={{ color: "var(--bdi-green)" }}>{routeData.routes[routeData.best]?.skywalk ? "🌉 ทางร่ม Skywalk" : routeData.routes[routeData.best]?.night ? "💡 ทางสว่างที่สุด" : "⛱ ทางร่มที่สุด"}</b>{routeData.picks && routeData.picks.comfortIdx === routeData.picks.fastIdx ? <span style={{ color: "var(--bdi-text-dim)" }}> (เส้นเดียวกับ ⚡ เร็วที่สุด)</span> : null}</span>
+                <b style={{ color: "var(--bdi-green)", fontSize: 17 }}>{routeData.routes[routeData.best]?.comfort ?? ""}</b>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="bdi-card gm-route-sheet" style={{ maxHeight: "38vh", overflow: "auto", padding: "0 14px 10px" }}>
+          <div className="bdi-sheet-handle" onClick={() => setRouteSheetOpen((v) => !v)} style={{ position: "sticky", top: 0, background: "#fff", margin: "0 -16px", padding: "18px 16px 10px", zIndex: 1 }}>
+            <span>{routeData.loading ? "กำลังหาเส้นทาง…" : `รายละเอียดเส้นทาง (${routeData.picks ? new Set([routeData.picks.comfortIdx, routeData.picks.fastIdx]).size : routeData.routes?.length || 0} เส้น)`}</span>
+            <span style={{ color: "var(--bdi-green)", fontSize: 15 }}>{routeSheetOpen ? "⌄" : "⌃"}</span>
+          </div>
+          {routeSheetOpen ? (routeData.loading ? <div style={{ fontSize: 13, color: "var(--bdi-text-dim)" }}>กำลังคำนวณเส้นทาง…</div> : routeData.error ? <div style={{ fontSize: 12, color: "var(--bdi-danger)" }}>ใช้ไม่ได้: {routeData.error}</div> : (
+            <div>
+              <div style={{ fontSize: 12.5, color: "var(--bdi-text-dim)", marginBottom: 6 }}>{routeData.startName || "สยาม"} → {routeData.endName || "จุฬาฯ"}</div>
+              {/* 🌉 เส้นที่เลือกเป็นทางเชื่อม → banner "ออกทางเชื่อม" + เปิดแผนผังชั้น (Figma: route+noti) */}
+              {routeData.routes[navTarget]?.skywalk && !routeData.routes[navTarget]?.mallClosed ? (
+                <div onClick={() => { if (mapRef.current) mapRef.current.setView([13.74616, 100.53228], 18); }} style={{ background: "rgba(183,235,62,.13)", border: "1px solid var(--bdi-green)", borderRadius: 12, padding: "10px 12px", margin: "2px 0 8px", cursor: "pointer" }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: "var(--bdi-green)" }}>🌉 ออกทางเชื่อม: ไปยังชั้น 2 ของ MBK เดินมาที่โซน A (ฝั่ง Don Don Donki)</div>
+                  <div style={{ fontSize: 11.5, color: "var(--bdi-text-dim)", marginTop: 2 }}>Skywalk → Siam Discovery → Siam Center → Paragon → BTS สยาม · แตะเพื่อซูมดูแผนผังในตึก</div>
+                </div>
+              ) : null}
+              {/* โชว์แค่ 2 ตัวเลือก: ทางร่ม/สว่างที่สุด + ทางเร็วที่สุด (ถ้าเป็นเส้นเดียวกันจะเห็นใบเดียว 2 ป้าย) */}
+              {[...new Set([routeData.picks?.comfortIdx ?? routeData.best, routeData.picks?.fastIdx].filter((x) => x != null && routeData.routes[x]))].map((idx) => {
+                const r = routeData.routes[idx];
+                const isComfort = idx === (routeData.picks?.comfortIdx ?? routeData.best);
+                const isFast = idx === routeData.picks?.fastIdx;
+                return (
+                  <button key={r.index} onClick={() => ctx.current.select(r.index)} className={"bdi-route-opt" + (active === r.index ? " on" : "")}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {isComfort ? <span className="bdi-badge">{r.skywalk ? "🌉 ทางร่ม Skywalk" : r.night ? "💡 ทางสว่างที่สุด" : "⛱ ทางร่มที่สุด"}</span> : null}
+                        {isFast ? <span className="bdi-badge" style={isComfort ? { background: "rgba(255,255,255,.15)", color: "#202124" } : {}}>⚡ เร็วที่สุด</span> : null}
+                      </span>
+                      {r.comfort != null ? <span style={{ fontWeight: 800, fontSize: 18, color: "var(--bdi-green)" }}>{r.comfort}</span> : null}
+                    </div>
+                    <div className="bdi-stats">
+                      {r.shade != null ? <span>⛱ ร่ม {r.shade}%</span> : null}
+                      {r.light != null ? <span>💡 สว่าง {r.light}%</span> : null}
+                      <span>📏 {(r.distance_m / 1000).toFixed(2)} KM</span>
+                      <span>🔥 {Math.round(r.distance_m * 0.053)} kcal</span>
+                      <span>⏱ {r.duration_min} MINS</span>
+                    </div>
+                    {r.skywalk ? <div style={{ fontSize: 11.5, color: "var(--bdi-green)", marginTop: 3 }}>เดินใต้หลังคา/ทะลุห้างเกือบตลอดเส้น — หลบแดดได้</div> : null}
+                    {r.mainroad ? <div style={{ fontSize: 11.5, color: "var(--bdi-text-dim)", marginTop: 3 }}>เดินเลียบพระราม 1 ไม่มุดซอย — % สว่างนับเฉพาะเสาไฟ กทม.</div> : null}
+                    {r.nightlamp ? <div style={{ fontSize: 11.5, color: "var(--bdi-green)", marginTop: 3 }}>💡 เลาะแนวเสาไฟ BMA หนาแน่น (~14 ต้นตลอดแนว) — ทางสว่าง ไม่เปลี่ยว ยอมอ้อมนิดเพื่อเดินใต้ไฟ</div> : null}
+                    {r.graphed ? <div style={{ fontSize: 11.5, color: "var(--bdi-green)", marginTop: 3 }}>🧭 คำนวณจากโครงข่ายทางเท้าจริง — เลือกเดินช่วงที่{r.night ? "มีไฟถนน BMA" : "อยู่ในเงาตึก/ใต้หลังคา"}</div> : null}
+                  </button>
+                );
+              })}
+              {navTarget != null ? (
+                <div style={{ marginTop: 8 }}>
+                  <button className="wb-startbtn" onClick={() => { unlockSpeech(); startNav(navTarget); }}>▶ เริ่มนำทาง (GPS)</button>
+                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                    <button className="wb-startbtn bdi-btn ghost" style={{ marginTop: 0, background: "rgba(255,255,255,.1)", color: "#202124" }} onClick={() => { unlockSpeech(); const r = ctx.current.scored?.[navTarget]; if (r) setNav3D({ route: r, problems: ctx.current.problems, toilets: ctx.current.osmToilets, cameras: ctx.current.osmCameras, destName: routeData?.endName || "ปลายทาง" }); }}>🧭 นำทาง 3D</button>
+                    <button className="wb-startbtn" style={{ marginTop: 0, background: "rgba(255,255,255,.1)", color: "#202124" }} onClick={() => { unlockSpeech(); startSim(navTarget); }}>🧪 จำลอง 2D</button>
+                  </div>
+                </div>
+              ) : null}
+              {routeData.note ? <div style={{ fontSize: 11, color: "#f4b860", marginTop: 4 }}>{routeData.note}</div> : null}
+              {routeData.routes[0]?.timeMode ? <div style={{ fontSize: 11, color: "var(--bdi-text-dim)", marginTop: 4 }}>โหมดเวลา: {routeData.routes[0].timeMode}</div> : null}
+              {routeData.scoring ? <div style={{ fontSize: 11, color: "var(--bdi-text-dim)" }}>กำลังเติมคะแนนร่ม/สวน/ห้องน้ำ…</div> : null}
+            </div>
+          )) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* ปุ่มเลือกชั้น 2/1/M/G ลอยซ้ายแบบ Figma — โชว์เมื่อเลือกเส้น Skywalk */}
+      {routeData?.routes?.[navTarget]?.skywalk && !nav?.active ? (
+        <div style={{ position: "absolute", left: 10, top: "34%", zIndex: 1200, display: "flex", flexDirection: "column", gap: 8 }}>
+          {["2", "1", "M", "G"].map((f) => (
+            <button key={f} onClick={() => setFloor(f)}
+              style={{ width: 38, height: 38, borderRadius: 12, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14, boxShadow: "0 3px 10px rgba(0,0,0,.45)", background: floor === f ? "#1A73E8" : "#FFFFFF", color: floor === f ? "#FFFFFF" : "#3C4043", border: "1px solid #DADCE0" }}>
+              {f}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {/* 🏢 แผงผังตึก Siam Discovery — เปิดตอนกดตัวอาคาร/ซูมเข้าใกล้ มีแถบเลือกชั้นด้านข้าง */}
+      {sdOpen && !nav?.active ? (
+        <>
+          <div style={{ position: "absolute", top: 150, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+            SIAM DISCOVERY · ชั้น {sdFloor}
+            <button onClick={() => setSdCalibrate((v) => !v)} style={{ background: sdCalibrate ? "#1A73E8" : "#F1F3F4", border: "none", color: sdCalibrate ? "#fff" : "#1A73E8", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer" }}>🔧 ปรับตำแหน่ง</button>
+            <button onClick={() => setSdNodeMode((v) => !v)} style={{ background: sdNodeMode ? "#F9AB00" : "#F1F3F4", border: "none", color: sdNodeMode ? "#fff" : "#F9AB00", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer" }}>📍 ปักหมุด{sdNodes.filter((n) => n.floor === sdFloor).length ? ` (${sdNodes.filter((n) => n.floor === sdFloor).length})` : ""}</button>
+            {(sdFloor === "2" || sdFloor === "1" || sdFloor === "M") && sdRouteResult ? (
+              <button onClick={() => setSdRouteResult(null)} style={{ background: "#F1F3F4", border: "none", color: "#D93025", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer" }}>ล้างเส้นทางทดสอบ</button>
+            ) : null}
+            <button onClick={() => setSdOpen(false)} style={{ background: "none", border: "none", color: "#5F6368", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+          {sdFloor === "2" || sdFloor === "1" || sdFloor === "M" ? (
+            <div style={{ position: "absolute", top: 196, right: 56, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, width: 200 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>🧭 ทดสอบหาเส้นทางในตึก</div>
+              <select value={sdRouteFrom} onChange={(e) => setSdRouteFrom(e.target.value)} style={{ width: "100%", marginBottom: 6, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดเริ่ม --</option>
+                {Object.keys(sdFloorNodes).map((id) => <option key={id} value={id}>{id}{sdFloorNodes[id].label ? ` (${sdFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <select value={sdRouteTo} onChange={(e) => setSdRouteTo(e.target.value)} style={{ width: "100%", marginBottom: 8, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดปลาย --</option>
+                {Object.keys(sdFloorNodes).map((id) => <option key={id} value={id}>{id}{sdFloorNodes[id].label ? ` (${sdFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <button onClick={() => { if (sdRouteFrom && sdRouteTo) setSdRouteResult(sdFloorRoute(sdRouteFrom, sdRouteTo, sdFloorNodes, sdFloorEdges)); }}
+                style={{ width: "100%", background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>หาเส้นทาง</button>
+              {sdRouteResult ? (
+                <div style={{ marginTop: 8 }}>
+                  {sdRouteResult.path ? <><b>ระยะทาง:</b> {sdRouteResult.distance.toFixed(1)} ม.<br /><b>เส้นทาง:</b> {sdRouteResult.path.join(" → ")}</> : <span style={{ color: "#D93025" }}>หาเส้นทางไม่ได้ (ไม่มี edge เชื่อมถึงกัน)</span>}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {sdNodeMode ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 270, lineHeight: 1.6, maxHeight: 300, overflowY: "auto" }}>
+              เลือกประเภท แล้วแตะบนแผนที่เพื่อปักหมุด — ลากปรับตำแหน่งได้ / คลิกขวาที่หมุดเพื่อลบ
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0" }}>
+                {SD_NODE_TYPES.map((t) => (
+                  <button key={t.id} onClick={() => setSdNodeType(t.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 4, background: sdNodeType === t.id ? t.color : "#F1F3F4", color: sdNodeType === t.id ? "#fff" : "#3C4043", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    <span>{t.icon}</span>{t.label}
+                  </button>
+                ))}
+              </div>
+              {sdNodes.filter((n) => n.floor === sdFloor).length ? sdNodes.filter((n) => n.floor === sdFloor).map((n) => {
+                const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+                return <div key={n.id}>#{n.id} [{t.label}]: {n.lat.toFixed(7)}, {n.lon.toFixed(7)}</div>;
+              }) : <i>ยังไม่มีหมุดในชั้นนี้</i>}
+              {sdNodes.length ? (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => {
+                      const txt = sdNodes.map((n) => `#${n.id} [${n.type}] ชั้น${n.floor}: ${n.lat.toFixed(7)}, ${n.lon.toFixed(7)}`).join("\n");
+                      navigator.clipboard?.writeText(txt).catch(() => {});
+                    }}
+                    style={{ background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>คัดลอกพิกัดทั้งหมด (ทุกชั้น)</button>
+                  <button onClick={() => setSdNodes((prev) => prev.filter((n) => n.floor !== sdFloor))} style={{ background: "#F1F3F4", color: "#D93025", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างหมุดชั้นนี้</button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {sdCalibrate && sdCalReadout ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 260, lineHeight: 1.6 }}>
+              ลากจุด <span style={{ color: "#4ade80" }}>เขียว</span> (มุมบนซ้าย NW) และ <span style={{ color: "#f87171" }}>แดง</span> (มุมล่างขวา SE) ของภาพให้ตรงกับขอบตึกจริงบนแผนที่<br /><br />
+              <b>NW:</b> {sdCalReadout.nw}<br />
+              <b>SE:</b> {sdCalReadout.se}<br /><br />
+              พอตรงแล้ว ก็อปข้อความนี้ทั้งหมดส่งกลับมาให้ผมได้เลย
+            </div>
+          ) : null}
+          {!SD_FLOORS.find((x) => x.id === sdFloor)?.svg ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "8px 12px", color: "var(--bdi-text-dim)", fontSize: 12, maxWidth: 220 }}>
+              ยังไม่มีไฟล์ผังของชั้นนี้
+            </div>
+          ) : null}
+          <div style={{ position: "absolute", right: 10, top: "30%", zIndex: 1250, display: "flex", flexDirection: "column", gap: 8 }}>
+            {SD_FLOORS.map((f) => (
+              <button key={f.id} onClick={() => setSdFloor(f.id)}
+                style={{ width: 38, height: 38, borderRadius: 12, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14, boxShadow: "0 3px 10px rgba(0,0,0,.45)", background: sdFloor === f.id ? "#1A73E8" : "#FFFFFF", color: sdFloor === f.id ? "#fff" : "#3C4043", border: "1px solid #DADCE0", opacity: f.svg ? 1 : 0.55 }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* 🏛️ แผงผังตึก BACC — เปิดตอนกดตัวอาคาร/ซูมเข้าใกล้ มีแถบเลือกชั้นด้านข้าง (เหมือน SD ทุกอย่าง) */}
+      {baccOpen && !nav?.active ? (
+        <>
+          <div style={{ position: "absolute", top: 150, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+            BACC · ชั้น {baccFloor}
+            <button onClick={() => setBaccCalibrate((v) => !v)} style={{ background: baccCalibrate ? "#1A73E8" : "#F1F3F4", border: "none", color: baccCalibrate ? "#fff" : "#1A73E8", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer" }}>🔧 ปรับตำแหน่ง</button>
+            <button onClick={() => setBaccNodeMode((v) => !v)} style={{ background: baccNodeMode ? "#F9AB00" : "#F1F3F4", border: "none", color: baccNodeMode ? "#fff" : "#F9AB00", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer" }}>📍 ปักหมุด{baccNodes.filter((n) => n.floor === baccFloor).length ? ` (${baccNodes.filter((n) => n.floor === baccFloor).length})` : ""}</button>
+            <button onClick={() => setBaccOpen(false)} style={{ background: "none", border: "none", color: "#5F6368", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+          {Object.keys(baccFloorNodes).length ? (
+            <div style={{ position: "absolute", top: 196, right: 56, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, width: 200 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>🧭 ทดสอบหาเส้นทางในตึก</div>
+              <select value={baccRouteFrom} onChange={(e) => setBaccRouteFrom(e.target.value)} style={{ width: "100%", marginBottom: 6, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดเริ่ม --</option>
+                {Object.keys(baccFloorNodes).map((id) => <option key={id} value={id}>{id}{baccFloorNodes[id].label ? ` (${baccFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <select value={baccRouteTo} onChange={(e) => setBaccRouteTo(e.target.value)} style={{ width: "100%", marginBottom: 8, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดปลาย --</option>
+                {Object.keys(baccFloorNodes).map((id) => <option key={id} value={id}>{id}{baccFloorNodes[id].label ? ` (${baccFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <button onClick={() => { if (baccRouteFrom && baccRouteTo) setBaccRouteResult(sdFloorRoute(baccRouteFrom, baccRouteTo, baccFloorNodes, baccFloorEdges)); }}
+                style={{ width: "100%", background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>หาเส้นทาง</button>
+              {baccRouteResult ? (
+                <div style={{ marginTop: 8 }}>
+                  {baccRouteResult.path ? <><b>ระยะทาง:</b> {baccRouteResult.distance.toFixed(1)} ม.<br /><b>เส้นทาง:</b> {baccRouteResult.path.join(" → ")}</> : <span style={{ color: "#D93025" }}>หาเส้นทางไม่ได้ (ไม่มี edge เชื่อมถึงกัน)</span>}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {baccNodeMode ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 270, lineHeight: 1.6, maxHeight: 300, overflowY: "auto" }}>
+              เลือกประเภท แล้วแตะบนแผนที่เพื่อปักหมุด — ลากปรับตำแหน่งได้ / คลิกขวาที่หมุดเพื่อลบ
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0" }}>
+                {SD_NODE_TYPES.map((t) => (
+                  <button key={t.id} onClick={() => setBaccNodeType(t.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 4, background: baccNodeType === t.id ? t.color : "#F1F3F4", color: baccNodeType === t.id ? "#fff" : "#3C4043", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    <span>{t.icon}</span>{t.label}
+                  </button>
+                ))}
+              </div>
+              {baccNodes.filter((n) => n.floor === baccFloor).length ? baccNodes.filter((n) => n.floor === baccFloor).map((n) => {
+                const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+                return <div key={n.id}>#{n.id} [{t.label}]: {n.lat.toFixed(7)}, {n.lon.toFixed(7)}</div>;
+              }) : <i>ยังไม่มีหมุดในชั้นนี้</i>}
+              {baccNodes.length ? (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => {
+                      const txt = baccNodes.map((n) => `#${n.id} [${n.type}] ชั้น${n.floor}: ${n.lat.toFixed(7)}, ${n.lon.toFixed(7)}`).join("\n");
+                      navigator.clipboard?.writeText(txt).catch(() => {});
+                    }}
+                    style={{ background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>คัดลอกพิกัดทั้งหมด (ทุกชั้น)</button>
+                  <button onClick={() => setBaccNodes((prev) => prev.filter((n) => n.floor !== baccFloor))} style={{ background: "#F1F3F4", color: "#D93025", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างหมุดชั้นนี้</button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {baccCalibrate && baccCalReadout ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 260, lineHeight: 1.6 }}>
+              ลากจุด <span style={{ color: "#4ade80" }}>เขียว</span> (มุมบนซ้าย NW) และ <span style={{ color: "#f87171" }}>แดง</span> (มุมล่างขวา SE) ของภาพให้ตรงกับขอบตึกจริงบนแผนที่<br /><br />
+              <b>NW:</b> {baccCalReadout.nw}<br />
+              <b>SE:</b> {baccCalReadout.se}<br /><br />
+              พอตรงแล้ว ก็อปข้อความนี้ทั้งหมดส่งกลับมาให้ผมได้เลย
+            </div>
+          ) : null}
+          {!BACC_FLOORS.find((x) => x.id === baccFloor)?.svg ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "8px 12px", color: "var(--bdi-text-dim)", fontSize: 12, maxWidth: 220 }}>
+              ยังไม่มีไฟล์ผังของชั้นนี้
+            </div>
+          ) : null}
+          <div style={{ position: "absolute", right: 56, top: "30%", zIndex: 1250, display: "flex", flexDirection: "column", gap: 8 }}>
+            {BACC_FLOORS.map((f) => (
+              <button key={f.id} onClick={() => setBaccFloor(f.id)}
+                style={{ width: 38, height: 38, borderRadius: 12, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14, boxShadow: "0 3px 10px rgba(0,0,0,.45)", background: baccFloor === f.id ? "#1A73E8" : "#FFFFFF", color: baccFloor === f.id ? "#fff" : "#3C4043", border: "1px solid #DADCE0", opacity: f.svg ? 1 : 0.55 }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* 🏢 แผงผังตึก Siam Center — เปิดตอนกดตัวอาคาร/ซูมเข้าใกล้ มีแถบเลือกชั้นด้านข้าง (เหมือน SD/BACC) */}
+      {cenOpen && !nav?.active ? (
+        <>
+          <div style={{ position: "absolute", top: 150, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+            Siam Center · ชั้น {cenFloor}
+            <button onClick={() => setCenNodeMode((v) => !v)} style={{ background: cenNodeMode ? "#F9AB00" : "#F1F3F4", border: "none", color: cenNodeMode ? "#fff" : "#F9AB00", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer" }}>📍 ปักหมุด{cenNodes.filter((n) => n.floor === cenFloor).length ? ` (${cenNodes.filter((n) => n.floor === cenFloor).length})` : ""}</button>
+            <button onClick={() => setCenOpen(false)} style={{ background: "none", border: "none", color: "#5F6368", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+          {!CEN_FLOORS.find((x) => x.id === cenFloor)?.svg ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "8px 12px", color: "var(--bdi-text-dim)", fontSize: 12, maxWidth: 220 }}>
+              ยังไม่มีไฟล์ผังของชั้นนี้
+            </div>
+          ) : null}
+          <div style={{ position: "absolute", right: 102, top: "30%", zIndex: 1250, display: "flex", flexDirection: "column", gap: 8 }}>
+            {CEN_FLOORS.map((f) => (
+              <button key={f.id} onClick={() => setCenFloor(f.id)}
+                style={{ width: 38, height: 38, borderRadius: 12, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14, boxShadow: "0 3px 10px rgba(0,0,0,.45)", background: cenFloor === f.id ? "#1A73E8" : "#FFFFFF", color: cenFloor === f.id ? "#fff" : "#3C4043", border: "1px solid #DADCE0", opacity: f.svg ? 1 : 0.55 }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {Object.keys(cenFloorNodes).length ? (
+            <div style={{ position: "absolute", top: 196, right: 148, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, width: 200 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>🧭 ทดสอบหาเส้นทางในตึก</div>
+              <select value={cenRouteFrom} onChange={(e) => setCenRouteFrom(e.target.value)} style={{ width: "100%", marginBottom: 6, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดเริ่ม --</option>
+                {Object.keys(cenFloorNodes).map((id) => <option key={id} value={id}>{id}{cenFloorNodes[id].label ? ` (${cenFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <select value={cenRouteTo} onChange={(e) => setCenRouteTo(e.target.value)} style={{ width: "100%", marginBottom: 8, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดปลาย --</option>
+                {Object.keys(cenFloorNodes).map((id) => <option key={id} value={id}>{id}{cenFloorNodes[id].label ? ` (${cenFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <button onClick={() => { if (cenRouteFrom && cenRouteTo) setCenRouteResult(sdFloorRoute(cenRouteFrom, cenRouteTo, cenFloorNodes, cenFloorEdges)); }}
+                style={{ width: "100%", background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>หาเส้นทาง</button>
+              {cenRouteResult ? (
+                <div style={{ marginTop: 8 }}>
+                  {cenRouteResult.path ? <><b>ระยะทาง:</b> {cenRouteResult.distance.toFixed(1)} ม.<br /><b>เส้นทาง:</b> {cenRouteResult.path.join(" → ")}</> : <span style={{ color: "#D93025" }}>หาเส้นทางไม่ได้ (ไม่มี edge เชื่อมถึงกัน)</span>}
+                </div>
+              ) : null}
+              {cenRouteResult ? <button onClick={() => setCenRouteResult(null)} style={{ width: "100%", marginTop: 6, background: "#F1F3F4", color: "#5F6368", border: "none", borderRadius: 6, padding: "5px 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างเส้นทางทดสอบ</button> : null}
+            </div>
+          ) : null}
+          {cenNodeMode ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 270, lineHeight: 1.6, maxHeight: 300, overflowY: "auto" }}>
+              เลือกประเภท แล้วแตะบนแผนที่เพื่อปักหมุด — ลากปรับตำแหน่งได้ / คลิกขวาที่หมุดเพื่อลบ
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0" }}>
+                {SD_NODE_TYPES.map((t) => (
+                  <button key={t.id} onClick={() => setCenNodeType(t.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 4, background: cenNodeType === t.id ? t.color : "#F1F3F4", color: cenNodeType === t.id ? "#fff" : "#3C4043", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    <span>{t.icon}</span>{t.label}
+                  </button>
+                ))}
+              </div>
+              {cenNodes.filter((n) => n.floor === cenFloor).length ? cenNodes.filter((n) => n.floor === cenFloor).map((n) => {
+                const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+                return <div key={n.id}>#{n.id} [{t.label}]: {n.lat.toFixed(7)}, {n.lon.toFixed(7)}</div>;
+              }) : <i>ยังไม่มีหมุดในชั้นนี้</i>}
+              {cenNodes.length ? (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => {
+                      const txt = cenNodes.map((n) => `#${n.id} [${n.type}] ชั้น${n.floor}: ${n.lat.toFixed(7)}, ${n.lon.toFixed(7)}`).join("\n");
+                      navigator.clipboard?.writeText(txt).catch(() => {});
+                    }}
+                    style={{ background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>คัดลอกพิกัดทั้งหมด (ทุกชั้น)</button>
+                  <button onClick={() => setCenNodes((prev) => prev.filter((n) => n.floor !== cenFloor))} style={{ background: "#F1F3F4", color: "#D93025", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างหมุดชั้นนี้</button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* 🏢 แผงผังตึก Lido Connect — เปิดตอนกดตัวอาคาร/ซูมเข้าใกล้ มีแถบเลือกชั้นด้านข้าง (เหมือน SD/BACC) */}
+      {ldOpen && !nav?.active ? (
+        <>
+          <div style={{ position: "absolute", top: 150, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+            Lido Connect · ชั้น {ldFloor}
+            <button onClick={() => setLdNodeMode((v) => !v)} style={{ background: ldNodeMode ? "#F9AB00" : "#F1F3F4", border: "none", color: ldNodeMode ? "#fff" : "#F9AB00", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer" }}>📍 ปักหมุด{ldNodes.filter((n) => n.floor === ldFloor).length ? ` (${ldNodes.filter((n) => n.floor === ldFloor).length})` : ""}</button>
+            <button onClick={() => setLdOpen(false)} style={{ background: "none", border: "none", color: "#5F6368", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+          {!LD_FLOORS.find((x) => x.id === ldFloor)?.svg ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "8px 12px", color: "var(--bdi-text-dim)", fontSize: 12, maxWidth: 220 }}>
+              ยังไม่มีไฟล์ผังของชั้นนี้
+            </div>
+          ) : null}
+          <div style={{ position: "absolute", right: 148, top: "30%", zIndex: 1250, display: "flex", flexDirection: "column", gap: 8 }}>
+            {LD_FLOORS.map((f) => (
+              <button key={f.id} onClick={() => setLdFloor(f.id)}
+                style={{ width: 38, height: 38, borderRadius: 12, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14, boxShadow: "0 3px 10px rgba(0,0,0,.45)", background: ldFloor === f.id ? "#1A73E8" : "#FFFFFF", color: ldFloor === f.id ? "#fff" : "#3C4043", border: "1px solid #DADCE0", opacity: f.svg ? 1 : 0.55 }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {Object.keys(ldFloorNodes).length ? (
+            <div style={{ position: "absolute", top: 196, right: 194, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, width: 200 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>🧭 ทดสอบหาเส้นทางในตึก</div>
+              <select value={ldRouteFrom} onChange={(e) => setLdRouteFrom(e.target.value)} style={{ width: "100%", marginBottom: 6, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดเริ่ม --</option>
+                {Object.keys(ldFloorNodes).map((id) => <option key={id} value={id}>{id}{ldFloorNodes[id].label ? ` (${ldFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <select value={ldRouteTo} onChange={(e) => setLdRouteTo(e.target.value)} style={{ width: "100%", marginBottom: 8, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดปลาย --</option>
+                {Object.keys(ldFloorNodes).map((id) => <option key={id} value={id}>{id}{ldFloorNodes[id].label ? ` (${ldFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <button onClick={() => { if (ldRouteFrom && ldRouteTo) setLdRouteResult(sdFloorRoute(ldRouteFrom, ldRouteTo, ldFloorNodes, ldFloorEdges)); }}
+                style={{ width: "100%", background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>หาเส้นทาง</button>
+              {ldRouteResult ? (
+                <div style={{ marginTop: 8 }}>
+                  {ldRouteResult.path ? <><b>ระยะทาง:</b> {ldRouteResult.distance.toFixed(1)} ม.<br /><b>เส้นทาง:</b> {ldRouteResult.path.join(" → ")}</> : <span style={{ color: "#D93025" }}>หาเส้นทางไม่ได้ (ไม่มี edge เชื่อมถึงกัน)</span>}
+                </div>
+              ) : null}
+              {ldRouteResult ? <button onClick={() => setLdRouteResult(null)} style={{ width: "100%", marginTop: 6, background: "#F1F3F4", color: "#5F6368", border: "none", borderRadius: 6, padding: "5px 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างเส้นทางทดสอบ</button> : null}
+            </div>
+          ) : null}
+          {ldNodeMode ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 270, lineHeight: 1.6, maxHeight: 300, overflowY: "auto" }}>
+              เลือกประเภท แล้วแตะบนแผนที่เพื่อปักหมุด — ลากปรับตำแหน่งได้ / คลิกขวาที่หมุดเพื่อลบ
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0" }}>
+                {SD_NODE_TYPES.map((t) => (
+                  <button key={t.id} onClick={() => setLdNodeType(t.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 4, background: ldNodeType === t.id ? t.color : "#F1F3F4", color: ldNodeType === t.id ? "#fff" : "#3C4043", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    <span>{t.icon}</span>{t.label}
+                  </button>
+                ))}
+              </div>
+              {ldNodes.filter((n) => n.floor === ldFloor).length ? ldNodes.filter((n) => n.floor === ldFloor).map((n) => {
+                const t = SD_NODE_TYPES.find((x) => x.id === n.type) || SD_NODE_TYPES[0];
+                return <div key={n.id}>#{n.id} [{t.label}]: {n.lat.toFixed(7)}, {n.lon.toFixed(7)}</div>;
+              }) : <i>ยังไม่มีหมุดในชั้นนี้</i>}
+              {ldNodes.length ? (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => {
+                      const txt = ldNodes.map((n) => `#${n.id} [${n.type}] ชั้น${n.floor}: ${n.lat.toFixed(7)}, ${n.lon.toFixed(7)}`).join("\n");
+                      navigator.clipboard?.writeText(txt).catch(() => {});
+                    }}
+                    style={{ background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>คัดลอกพิกัดทั้งหมด (ทุกชั้น)</button>
+                  <button onClick={() => setLdNodes((prev) => prev.filter((n) => n.floor !== ldFloor))} style={{ background: "#F1F3F4", color: "#D93025", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างหมุดชั้นนี้</button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* ปุ่มลอยถาวร — เปิดแผงผัง Skywalk Platum ได้เสมอ ไม่ต้องพึ่งกด/ซูมโดนตัวสะพานพอดี */}
+      {!nav?.active ? (
+        <button onClick={() => setSkyOpen((v) => !v)}
+          style={{ position: "absolute", right: 12, bottom: routeData ? (routeSheetOpen ? "calc(58% + 108px)" : 272) : 168, zIndex: 1200, padding: "8px 12px", borderRadius: 999, border: "1px solid #DADCE0", background: "#FFFFFF", color: "#1A73E8", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 10px rgba(60,64,67,.28)" }}>
+          {skyOpen ? "🌉 ซ่อนผัง Skywalk" : "🌉 ผัง Skywalk Platum"}
+        </button>
+      ) : null}
+
+      {/* ปุ่มลอยถาวร — เปิดแผงผัง BACC ได้เสมอ ไม่ต้องพึ่งกด/ซูมโดนตัวอาคารพอดี */}
+      {!nav?.active && !baccOpen ? (
+        <button onClick={() => ctx.current.baccFlash ? ctx.current.baccFlash() : setBaccOpen(true)}
+          style={{ position: "absolute", right: 12, bottom: routeData ? (routeSheetOpen ? "calc(58% + 156px)" : 320) : 216, zIndex: 1200, padding: "8px 12px", borderRadius: 999, border: "1px solid #DADCE0", background: "#FFFFFF", color: "#1A73E8", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 10px rgba(60,64,67,.28)" }}>
+          🏛️ ผัง BACC
+        </button>
+      ) : null}
+
+      {/* ปุ่มลอยถาวร — เปิดแผงผังตึก Siam Discovery ได้เสมอ ไม่ต้องพึ่งกด/ซูมโดนตัวอาคารพอดี */}
+      {!nav?.active && !sdOpen ? (
+        <button onClick={() => ctx.current.sdFlash ? ctx.current.sdFlash() : setSdOpen(true)}
+          style={{ position: "absolute", right: 12, bottom: routeData ? (routeSheetOpen ? "calc(58% + 60px)" : 176) : 72, zIndex: 1200, padding: "8px 12px", borderRadius: 999, border: "1px solid #DADCE0", background: "#FFFFFF", color: "#1A73E8", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 10px rgba(60,64,67,.28)" }}>
+          🏢 ผัง Siam Discovery
+        </button>
+      ) : null}
+
+      {/* ปุ่ม relocate — กลับไปที่ตำแหน่งจริงของผู้ใช้ (ขอพิกัดสดทุกครั้งที่กด กันตำแหน่งเก่าค้าง) */}
+      {!nav?.active ? (
+        <button onClick={() => {
+            const c = ctx.current, L = c.L, m = mapRef.current; if (!m) return;
+            const goTo = (lon, lat) => {
+              if (L) {
+                if (!c.myLocMarker) {
+                  c.myLocMarker = L.marker([lat, lon], { icon: L.divIcon({ className: "", html: '<div style="width:16px;height:16px;border-radius:50%;background:#1A73E8;border:3px solid #fff;box-shadow:0 1px 8px rgba(26,115,232,.65)"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }), zIndexOffset: 900 }).bindPopup("ตำแหน่งของฉัน").addTo(m);
+                } else { c.myLocMarker.setLatLng([lat, lon]); }
+              }
+              m.setView([lat, lon], Math.max(m.getZoom(), 17), { animate: true });
+            };
+            if (!navigator.geolocation) {
+              // ไม่รองรับ GPS เลย → ทำพฤติกรรมเดิม (fit เส้นทาง/กลับกลางย่าน)
+              const r = c.scored?.[navTarget];
+              if (r && L) m.fitBounds(L.polyline(r.coordinates.map(([lo, la]) => [la, lo])).getBounds().pad(0.2));
+              else m.setView(CENTER, ZOOM);
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(
+              (pos) => { c.myLocation = [pos.coords.longitude, pos.coords.latitude]; goTo(pos.coords.longitude, pos.coords.latitude); },
+              () => {
+                // ขอพิกัดสดไม่สำเร็จ (ปฏิเสธ permission/หา GPS ไม่เจอ) → ใช้พิกัดล่าสุดที่เคยมี ถ้าไม่มีเลยค่อย fallback แบบเดิม
+                if (c.myLocation) { goTo(c.myLocation[0], c.myLocation[1]); return; }
+                const r = c.scored?.[navTarget];
+                if (r && L) m.fitBounds(L.polyline(r.coordinates.map(([lo, la]) => [la, lo])).getBounds().pad(0.2));
+                else m.setView(CENTER, ZOOM);
+              },
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+            );
+          }}
+          className="gm-fab" style={{ bottom: routeData ? (routeSheetOpen ? "58%" : 224) : 120 }}>◎</button>
+      ) : null}
+
+      {nav3d ? <Nav3D route={nav3d.route} problems={nav3d.problems} toilets={nav3d.toilets} cameras={nav3d.cameras} destName={nav3d.destName} onClose={() => setNav3D(null)} /> : null}
+    </div>
+  );
+}
