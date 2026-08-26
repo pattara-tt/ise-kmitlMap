@@ -192,7 +192,7 @@ export const SC8_FLOORS = [
   {
     id: "8",
     label: "8",
-    svg: "/data/floorplans/Sc8/floor8.svg",
+    svg: null, // ⚠️ ยังไม่มีไฟล์ floor8.svg ใน public/data/floorplans/Sc8/ — ใส่กลับเมื่อได้ไฟล์มา
     detail: null,
   },
   {

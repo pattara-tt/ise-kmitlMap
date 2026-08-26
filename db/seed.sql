@@ -43,6 +43,7 @@ INSERT INTO feedback (id, user_id, user_name, topic, detail, status, reply, crea
 =======
 INSERT INTO requests (id, user_id, subject, detail, room_id, node_id, before, after, status, note, created_at) VALUES
 (
+<<<<<<< HEAD
     'RQ-1001', 'U007', 'ขอแก้ไขข้อมูลห้อง 106', 'ขอเปลี่ยนประเภทห้อง 106 จากห้องเรียนเป็นห้องปฏิบัติการ', 'RM-01', 'Sc8StudyRoom1F1',
 <<<<<<< HEAD
     '{"name": "ห้อง 106", "type": "ห้องเรียน", "capacity": 45, "teacher": "อ.ดร. ปรีชา วงศ์ทอง"}',
@@ -53,9 +54,16 @@ INSERT INTO requests (id, user_id, subject, detail, room_id, node_id, before, af
     '{"name":"ห้อง 106","type":"ห้องปฏิบัติการ","capacity":45,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
     'pending', '','2026-08-24'
 >>>>>>> 0b0a067bca13a247840c2570d416c09804d7d52a
+=======
+    'RQ-1001', 'U007', 'ขอแก้ไขข้อมูลห้อง 106', 'ขอเปลี่ยนประเภทห้อง 106 จากห้องเรียนเป็นห้องปฏิบัติการ', 'RM-01', 'Sc8StudyRoom3F1',
+    '{"name":"ห้อง 106","type":"ห้องเรียน","capacity":45,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
+    '{"name":"ห้อง 106","type":"ห้องปฏิบัติการ","capacity":45,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
+    'pending', '','2026-08-24'
+>>>>>>> 367000c240910899528c04041f2c17ac38cfcbf9
 ),
 (
     'RQ-1002', 'U007', 'แจ้งข้อมูลอาจารย์ประจำห้อง 107 ไม่ถูกต้อง', 'ชื่ออาจารย์ประจำห้อง 107 ไม่ตรงกับข้อมูลที่แสดงในระบบ', 'RM-02', 'Sc8StudyRoom2F1',
+<<<<<<< HEAD
 <<<<<<< HEAD
     '{"name": "ห้อง 107", "type": "ห้องปฏิบัติการ", "capacity": 40, "teacher": "อ.ดร. สุนิสา ภูผา"}',
     '{"name": "ห้อง 107", "type": "ห้องปฏิบัติการ", "capacity": 40, "teacher": "อ.ดร. วิชัย ใจดี"}',
@@ -65,8 +73,14 @@ INSERT INTO requests (id, user_id, subject, detail, room_id, node_id, before, af
     '{"name":"ห้อง 107","type":"ห้องปฏิบัติการ","capacity":40,"teacher":"อ.ดร. วิชัย ใจดี"}',
     'pending', '','2026-08-24'
 >>>>>>> 0b0a067bca13a247840c2570d416c09804d7d52a
+=======
+    '{"name":"ห้อง 107","type":"ห้องปฏิบัติการ","capacity":40,"teacher":"อ.ดร. สุนิสา ภูผา"}',
+    '{"name":"ห้อง 107","type":"ห้องปฏิบัติการ","capacity":40,"teacher":"อ.ดร. วิชัย ใจดี"}',
+    'pending', '','2026-08-24'
+>>>>>>> 367000c240910899528c04041f2c17ac38cfcbf9
 ),
 (
+<<<<<<< HEAD
     'RQ-1003', 'U008', 'แจ้งข้อมูลความจุ Coworking Space KDAI', 'ขอให้ตรวจสอบจำนวนที่นั่งของ Coworking Space KDAI', 'RM-03', 'Sc8StudyRoom3F1',
 <<<<<<< HEAD
     '{"name": "Coworking Space KDAI", "type": "พื้นที่ทำงานร่วม", "capacity": 60, "teacher": "-"}',
@@ -77,6 +91,12 @@ INSERT INTO requests (id, user_id, subject, detail, room_id, node_id, before, af
     '{"name":"Coworking Space KDAI","type":"พื้นที่ทำงานร่วม","capacity":70,"teacher":"-"}',
     'pending', '','2026-08-24'
 >>>>>>> 0b0a067bca13a247840c2570d416c09804d7d52a
+=======
+    'RQ-1003', 'U008', 'แจ้งข้อมูลความจุ Coworking Space KDAI', 'ขอให้ตรวจสอบจำนวนที่นั่งของ Coworking Space KDAI', 'RM-03', 'Sc8CoWork1F1',
+    '{"name":"Coworking Space KDAI","type":"พื้นที่ทำงานร่วม","capacity":60,"teacher":"-"}',
+    '{"name":"Coworking Space KDAI","type":"พื้นที่ทำงานร่วม","capacity":70,"teacher":"-"}',
+    'pending', '','2026-08-24'
+>>>>>>> 367000c240910899528c04041f2c17ac38cfcbf9
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -156,9 +176,10 @@ INSERT INTO floors (id, building, floor, name, svg, note, status) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO rooms (id, building, floor, code, name, type, capacity, teacher, node_id, category_id) VALUES
-  ('RM-01','Sc8','1','106','ห้อง 106','ห้องเรียน',45,'อ.ดร. ปรีชา วงศ์ทอง','Sc8StudyRoom1F1','CAT-03'),
+  ('RM-01','Sc8','1','106','ห้อง 106','ห้องเรียน',45,'อ.ดร. ปรีชา วงศ์ทอง','Sc8StudyRoom3F1','CAT-03'),
   ('RM-02','Sc8','1','107','ห้อง 107','ห้องปฏิบัติการ',40,'อ.ดร. สุนิสา ภูผา','Sc8StudyRoom2F1','CAT-03'),
-  ('RM-03','Sc8','1','KDAI','Coworking Space KDAI','พื้นที่ทำงานร่วม',60,'-','Sc8StudyRoom3F1','CAT-03')
+  ('RM-03','Sc8','1','KDAI','Coworking Space KDAI','พื้นที่ทำงานร่วม',60,'-','Sc8CoWork1F1','CAT-03'),
+  ('RM-04','Sc8','1','108','ห้อง 108','ห้องเรียน',45,'อ.ดร. มานพ ศรีสุข','Sc8StudyRoom1F1','CAT-03')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO map_boundaries (id, name, type, points, status, updated_at) VALUES

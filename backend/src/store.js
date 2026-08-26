@@ -43,7 +43,7 @@ function seed() {
         createdAt: "2026-08-24",
         note: "",
         roomId: "RM-01",
-        nodeId: "Sc8StudyRoom1F1",
+        nodeId: "Sc8StudyRoom3F1",
 
         before: {
           name: "ห้อง 106",
@@ -95,7 +95,7 @@ function seed() {
         createdAt: "2026-08-24",
         note: "",
         roomId: "RM-03",
-        nodeId: "Sc8StudyRoom3F1",
+        nodeId: "Sc8CoWork1F1",
 
         before: {
           name: "Coworking Space KDAI",
@@ -218,9 +218,10 @@ function seed() {
       { id: "FL-02", building: "Sc8", floor: "2", name: "ชั้น 2", svg: "/data/floorplans/Sc8/floor2.svg", note: "ห้องเรียนรวม", status: "active" },
     ],
     rooms: [
-      { id: "RM-01", building: "Sc8", floor: "1", code: "106", name: "ห้อง 106", type: "ห้องเรียน", capacity: 45, teacher: "อ.ดร. ปรีชา วงศ์ทอง", nodeId: "Sc8StudyRoom1F1", categoryId: "CAT-03" },
+      { id: "RM-01", building: "Sc8", floor: "1", code: "106", name: "ห้อง 106", type: "ห้องเรียน", capacity: 45, teacher: "อ.ดร. ปรีชา วงศ์ทอง", nodeId: "Sc8StudyRoom3F1", categoryId: "CAT-03" },
       { id: "RM-02", building: "Sc8", floor: "1", code: "107", name: "ห้อง 107", type: "ห้องปฏิบัติการ", capacity: 40, teacher: "อ.ดร. สุนิสา ภูผา", nodeId: "Sc8StudyRoom2F1", categoryId: "CAT-03" },
-      { id: "RM-03", building: "Sc8", floor: "1", code: "KDAI", name: "Coworking Space KDAI", type: "พื้นที่ทำงานร่วม", capacity: 60, teacher: "-", nodeId: "Sc8StudyRoom3F1", categoryId: "CAT-03" },
+      { id: "RM-03", building: "Sc8", floor: "1", code: "KDAI", name: "Coworking Space KDAI", type: "พื้นที่ทำงานร่วม", capacity: 60, teacher: "-", nodeId: "Sc8CoWork1F1", categoryId: "CAT-03" },
+      { id: "RM-04", building: "Sc8", floor: "1", code: "108", name: "ห้อง 108", type: "ห้องเรียน", capacity: 45, teacher: "อ.ดร. มานพ ศรีสุข", nodeId: "Sc8StudyRoom1F1", categoryId: "CAT-03" },
     ],
 
     // ── สถิติภาพรวมระบบ (UC1) ─────────────────────────────────
