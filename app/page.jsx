@@ -109,6 +109,7 @@ export default function Page() {
   }
 
   const isUser = user.role === "user";
+  const isRegistrar = user.role === "registrar";
   const ucList = USE_CASES[user.role] || [];
   const current = ucList.find((x) => x.key === uc) || ucList[0];
   const Panel = PANELS[user.role];

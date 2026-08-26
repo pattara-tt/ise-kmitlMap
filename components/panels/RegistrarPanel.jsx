@@ -104,7 +104,7 @@ export default function RegistrarPanel({ uc, user }) {
           {/* เนื้อหาฟอร์มจัดการ */}
           <div style={{ padding: 20, overflowY: "auto", flex: 1, minHeight: 0 }}>
             {activeTab === "rooms" ? (
-              <RoomsManager building={selected.building} floor={selected.floor} user={user} focusRoom={focusRoom} />
+              <RoomsManager building={selected.building} floor={selected.floor} user={user} focusRoom={focusRoom} setFocusRoom={setFocusRoom} />
             ) : (
               <FloorsManager building={selected.building} floor={selected.floor} user={user} />
             )}
@@ -116,7 +116,7 @@ export default function RegistrarPanel({ uc, user }) {
 }
 
 // Sub-Component: จัดการห้องพักในชั้นที่เลือก
-function RoomsManager({ building, floor, user, focusRoom }) {
+function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
   const { items, create, patch, destroy } = useCollection("rooms");
   const [q, setQ] = useState("");
   const [form, setForm] = useState({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacher: "", nodeId: "" });
@@ -296,7 +296,10 @@ function RoomsManager({ building, floor, user, focusRoom }) {
               key: "act", label: "",
               render: (r) => (
                 <div style={{ display: "flex", gap: 6 }}>
-                  <Btn kind="ghost" onClick={() => { const t = prompt("แก้ไขอาจารย์ประจำห้อง", r.teacher); if (t !== null) patch(r.id, { teacher: t }, user); }}>แก้ไข</Btn>
+                  <Btn kind="ghost" onClick={() => { 
+                    setManualOverride(false); // ยกเลิก override เพื่อเปิดโหมดโฟกัส
+                    setFocusRoom(r);
+                    }}>แก้ไข</Btn>
                   <Btn kind="danger" onClick={() => confirm(`ลบ ${r.name}?`) && destroy(r.id, user)}>ลบ</Btn>
                 </div>
               ),

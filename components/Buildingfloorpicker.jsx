@@ -448,14 +448,16 @@ export default function BuildingFloorPicker({
 
   useEffect(() => {
     const map = ctx.current.map;
-    if (!map) return;
+    if (!map || !layersReady) return;
 
-    const layer = openKey ? ctx.current.buildingLayers[openKey] : null;
-
-    if (layer?.poly) {
+    try {
+        if (openKey && layer?.poly) {
         map.setMaxBounds(layer.poly.getBounds().pad(0.18));
-    } else {
-      map.setMaxBounds(KMITL_BOUNDS);
+        } else if (map._loaded) {
+        map.setMaxBounds(KMITL_BOUNDS);
+        }
+    } catch (e) {
+        
     }
   }, [openKey, layersReady]);
 
