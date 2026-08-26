@@ -112,6 +112,9 @@ export default function Page() {
   }
 
   // ── เนื้อหาเมนู ใช้ร่วมกันทั้ง drawer (มือถือ) และแถบซ้าย (คอม) ──
+  // ฝ่ายทะเบียน (registrar) ไม่ต้องมีรายการเมนู UC21/UC22 ตรงนี้ เพราะ RegistrarPanel
+  // มีปุ่มสลับ "จัดการห้อง (UC21)" / "จัดการผังชั้น (UC22)" อยู่ในตัวเองอยู่แล้ว
+  const isRegistrar = user.role === "registrar";
   const MenuBody = () => (
     <>
       <div style={{ padding: "6px 16px 12px", borderBottom: "1px solid #E8EAED" }}>
@@ -119,21 +122,25 @@ export default function Page() {
         <div style={{ fontSize: 12, color: "#5F6368", wordBreak: "break-all" }}>{user.email}</div>
         <div style={{ marginTop: 6, display: "inline-block", fontSize: 11, fontWeight: 800, color: "#1A73E8", background: "#E8F0FE", padding: "3px 9px", borderRadius: 999 }}>{ROLE_LABEL[user.role]}</div>
       </div>
-      <div style={{ padding: "10px 16px 4px", fontSize: 11, fontWeight: 800, color: "#5F6368", letterSpacing: 1 }}>เมนูตามสิทธิ์การใช้งาน</div>
-      {menuItems.map((item) => {
-        const on = item.key === activeKey;
-        return (
-          <button key={item.code + item.key} onClick={() => pickMenu(item)}
-            style={{ display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", border: "none", cursor: "pointer",
-              background: on ? "#E8F0FE" : "transparent", padding: "11px 16px", color: on ? "#1A73E8" : "#202124" }}>
-            <MenuIcon icon={item.icon} size={19} color={on ? "#1A73E8" : "#5F6368"} />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              {item.code ? <span style={{ fontSize: 10.5, fontWeight: 800, color: on ? "#1A73E8" : "#5F6368", display: "block" }}>{item.code}</span> : null}
-              <span style={{ fontSize: 13, fontWeight: on ? 800 : 500, lineHeight: 1.35, display: "block" }}>{item.title}</span>
-            </span>
-          </button>
-        );
-      })}
+      {!isRegistrar && (
+        <>
+          <div style={{ padding: "10px 16px 4px", fontSize: 11, fontWeight: 800, color: "#5F6368", letterSpacing: 1 }}>เมนูตามสิทธิ์การใช้งาน</div>
+          {menuItems.map((item) => {
+            const on = item.key === activeKey;
+            return (
+              <button key={item.code + item.key} onClick={() => pickMenu(item)}
+                style={{ display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", border: "none", cursor: "pointer",
+                  background: on ? "#E8F0FE" : "transparent", padding: "11px 16px", color: on ? "#1A73E8" : "#202124" }}>
+                <MenuIcon icon={item.icon} size={19} color={on ? "#1A73E8" : "#5F6368"} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  {item.code ? <span style={{ fontSize: 10.5, fontWeight: 800, color: on ? "#1A73E8" : "#5F6368", display: "block" }}>{item.code}</span> : null}
+                  <span style={{ fontSize: 13, fontWeight: on ? 800 : 500, lineHeight: 1.35, display: "block" }}>{item.title}</span>
+                </span>
+              </button>
+            );
+          })}
+        </>
+      )}
       <div style={{ padding: "14px 16px 16px", borderTop: "1px solid #E8EAED", marginTop: 10 }}>
         <button onClick={logout} style={{ width: "100%", padding: "11px 0", border: "1px solid #F5C2C0", borderRadius: 12, background: "#fff", color: "#D93025", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>ออกจากระบบ</button>
       </div>

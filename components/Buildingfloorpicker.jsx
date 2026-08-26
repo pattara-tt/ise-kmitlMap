@@ -259,11 +259,20 @@ export default function BuildingFloorPicker({
     const center = poly.getBounds().getCenter();
     const targetZoom = 20.2;
 
+    // อย่าตั้ง minZoom === maxZoom แบบเป๊ะๆ เด็ดขาด เพราะถ้า zoom ถูกล็อคตายตัว
+    // แล้ว container กับ maxBounds ไม่พอดีกันพอดี Leaflet จะพยายาม pan เข้า
+    // bounds ซ้ำไปเรื่อยๆ โดยขยับ zoom ไม่ได้เลย จนเกิด stack overflow
+    // (_onPanTransitionEnd / _adjustPan วนไม่รู้จบ) ให้เผื่อช่วงเล็กน้อยแทน
+    const ZOOM_LOCK_MARGIN = 0.4;
+
+    // ให้แน่ใจว่าขนาด container ถูกต้องก่อน ค่อยคำนวณ view/bounds
+    map.invalidateSize();
     map.setView(center, targetZoom, { animate: true });
+
     setTimeout(() => {
         if (!map) return;
-        map.setMinZoom(targetZoom); // ซูมออกได้มากสุดแค่เห็นตึกครบพอดี
-        map.setMaxZoom(targetZoom); // ซูมเข้าใกล้สุดๆ เพื่อดูห้อง/node รายละเอียด
+        map.setMinZoom(targetZoom - ZOOM_LOCK_MARGIN); // ซูมออกได้มากสุดแค่เห็นตึกครบพอดี (มีระยะเผื่อ)
+        map.setMaxZoom(targetZoom + ZOOM_LOCK_MARGIN); // ซูมเข้าใกล้สุดๆ เพื่อดูห้อง/node รายละเอียด (มีระยะเผื่อ)
     }, 250);
   };
 
@@ -286,7 +295,7 @@ export default function BuildingFloorPicker({
           zoomControl: true,
           attributionControl: true,
           maxBounds:KMITL_BOUNDS,
-          maxBoundsViscosity:1.0,
+          maxBoundsViscosity:0.8,
           minZoom: 18,
           maxZoom: 21,
         }
