@@ -26,12 +26,6 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE TABLE IF NOT EXISTS requests (
   id           TEXT PRIMARY KEY,
   user_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
-<<<<<<< HEAD
-  user_name    TEXT,
-  type         TEXT NOT NULL,
-  detail       TEXT,
-  status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-=======
   subject      TEXT NOT NULL,                 -- หัวข้อคำร้อง
   detail       TEXT,
   room_id      TEXT,                          -- ห้องที่อ้างถึง (ถ้ามีอยู่ในตาราง rooms)
@@ -39,7 +33,6 @@ CREATE TABLE IF NOT EXISTS requests (
   before       JSONB,                         -- ข้อมูลเดิมในระบบ
   after        JSONB,                         -- ข้อมูลที่ผู้ใช้ขอให้แก้เป็น
   status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
->>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
   note         TEXT DEFAULT '',
   reviewed_by  TEXT,
   reviewed_at  DATE,
@@ -58,8 +51,6 @@ CREATE TABLE IF NOT EXISTS request_quota (
   created_at          DATE NOT NULL DEFAULT CURRENT_DATE
 );
 
-<<<<<<< HEAD
-=======
 -- แจ้งเตือนรายบุคคล (เช่น ผลการพิจารณาคำร้อง)
 CREATE TABLE IF NOT EXISTS notifications (
   id          TEXT PRIMARY KEY,
@@ -72,7 +63,6 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
 
->>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
 -- ─────────── ข้อเสนอแนะจากผู้ใช้ ───────────
 CREATE TABLE IF NOT EXISTS feedback (
   id          TEXT PRIMARY KEY,
@@ -128,11 +118,7 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   title       TEXT NOT NULL,
   body        TEXT,
   audience    TEXT DEFAULT 'ทุกมหาวิทยาลัย',
-<<<<<<< HEAD
-  sent_at     TEXT,
-=======
   send_at     TIMESTAMP,          -- วัน-เวลาที่กำหนดให้ส่ง (อนาคต = ยังรอส่ง)
->>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
   sent_by     TEXT,
   created_at  DATE NOT NULL DEFAULT CURRENT_DATE
 );
