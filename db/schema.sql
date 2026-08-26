@@ -26,7 +26,6 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE TABLE IF NOT EXISTS requests (
   id           TEXT PRIMARY KEY,
   user_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
-  user_name    TEXT,
   subject      TEXT NOT NULL,                 -- หัวข้อคำร้อง
   detail       TEXT,
   room_id      TEXT,                          -- ห้องที่อ้างถึง (ถ้ามีอยู่ในตาราง rooms)

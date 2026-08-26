@@ -20,23 +20,54 @@ INSERT INTO request_quota (id, per_user_per_day, per_user_per_month, updated_by)
   ('RQ-CONF', 3, 20, 'U004')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO requests (id, user_id, user_name, subject, detail, room_id, node_id, before, after, status, note, created_at) VALUES
-  ('RQ-1001','U007','อินฟินิตี้ ไอ','ขอแก้ไขข้อมูลห้อง 106','ห้อง 106 เปลี่ยนเป็นห้องปฏิบัติการคอมพิวเตอร์','RM-01','Sc8StudyRoom1F1',
-   '{"name":"ห้อง 106","type":"ห้องเรียน","capacity":45,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
-   '{"name":"ห้อง 106","type":"ห้องปฏิบัติการ","capacity":40,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
-   'pending','','2026-08-18'),
-  ('RQ-1002','U007','อินฟินิตี้ ไอ','ขอเพิ่มสถานที่จอดจักรยาน','ต้องการเพิ่มจุดจอดจักรยานบริเวณหน้าตึกพระจอมเกล้าฯ',NULL,'KMITLMainBuilding',
-   '{"name":"หน้าตึกพระจอมเกล้าฯ"}',
-   '{"name":"จุดจอดจักรยานหน้าตึกพระจอมเกล้าฯ"}',
-   'pending','','2026-08-20'),
-  ('RQ-1003','U008','สมชาย ตั้งมั่น','ขอแก้ไขข้อมูลห้อง 304','ต้องการแก้ไขจำนวนที่นั่งของห้องให้ตรงกับข้อมูลปัจจุบัน','RM-12','Sc8StudyRoom3F1',
-   '{"name":"ห้อง 304","type":"ห้องเรียน","capacity":50,"teacher":"-"}',
-   '{"name":"ห้อง 304","type":"ห้องเรียน","capacity":60,"teacher":"-"}',
-   'approved','ตรวจสอบกับข้อมูลจากฝ่ายอาคารแล้ว','2026-08-21'),
-  ('RQ-1004','U007','อินฟินิตี้ ไอ','แจ้งข้อมูลอาจารย์ประจำห้องไม่ถูกต้อง','ชื่ออาจารย์ประจำห้อง 107 ไม่ตรงกับข้อมูลความเป็นจริง','RM-02','Sc8StudyRoom1F2',
-   '{"name":"ห้อง 107","type":"ห้องเรียน","capacity":45,"teacher":"อ.ดร. สมชาย ใจดี"}',
-   '{"name":"ห้อง 107","type":"ห้องเรียน","capacity":45,"teacher":"อ.ดร. วิชัย ใจดี"}',
-   'rejected','ไม่พบข้อมูลยืนยันการเปลี่ยนแปลงอาจารย์ประจำห้อง','2026-08-22')
+INSERT INTO requests (id, user_id, subject, detail, room_id, node_id, before, after, status, note, created_at) VALUES
+(
+    'RQ-1001', 'U007', 'ขอแก้ไขข้อมูลห้อง 106', 'ขอเปลี่ยนประเภทห้อง 106 จากห้องเรียนเป็นห้องปฏิบัติการ', 'RM-01', 'Sc8StudyRoom1F1',
+
+    'ห้อง 106',
+    'ห้องเรียน',
+    45,
+    'อ.ดร. ปรีชา วงศ์ทอง',
+
+    'ห้อง 106',
+    'ห้องปฏิบัติการ',
+    45,
+    'อ.ดร. ปรีชา วงศ์ทอง',
+
+    'pending', '2026-08-24', '',
+),
+
+(
+    'RQ-1002', 'U007', 'แจ้งข้อมูลอาจารย์ประจำห้อง 107 ไม่ถูกต้อง', 'ชื่ออาจารย์ประจำห้อง 107 ไม่ตรงกับข้อมูลที่แสดงในระบบ', 'RM-02', 'Sc8StudyRoom2F1',
+
+    'ห้อง 107',
+    'ห้องปฏิบัติการ',
+    40,
+    'อ.ดร. สุนิสา ภูผา',
+
+    'ห้อง 107',
+    'ห้องปฏิบัติการ',
+    40,
+    'อ.ดร. วิชัย ใจดี',
+
+    'pending', '2026-08-24', '',
+),
+
+(
+    'RQ-1003', 'U008', 'แจ้งข้อมูลความจุ Coworking Space KDAI', 'ขอให้ตรวจสอบจำนวนที่นั่งของ Coworking Space KDAI', 'RM-03', 'Sc8StudyRoom3F1',
+
+    'Coworking Space KDAI',
+    'พื้นที่ทำงานร่วม',
+    60,
+    '-',
+
+    'Coworking Space KDAI',
+    'พื้นที่ทำงานร่วม',
+    70,
+    '-',
+
+    'pending', '2026-08-24', '',
+);
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO feedback (id, user_id, user_name, topic, detail, status, reply, created_at) VALUES
@@ -118,5 +149,9 @@ INSERT INTO usage (month, active_users, searches, routes) VALUES
   ('2026-03',1820,9120,4310), ('2026-04',2110,10480,5020), ('2026-05',2450,12240,6110),
   ('2026-06',1980,8830,3990), ('2026-07',2680,13910,6840), ('2026-08',3120,16240,7930)
 ON CONFLICT (month) DO NOTHING;
+
+INSERT INTO notifications (id, user_id, title, message, read, created_at) VALUES
+('NT-001', 'U007', 'ยินดีต้อนรับ', 'คุณสามารถใช้งานระบบ SciMap ได้แล้ว', false, '2026-08-01');
+ON CONFLICT (id) DO NOTHING;
 
 COMMIT;

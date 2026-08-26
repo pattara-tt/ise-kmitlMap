@@ -23,6 +23,7 @@ export default function UserApp({ user, tab, viewMode = "auto" }) {
       </div>
       {tab === "events" ? <EventsPage user={user} /> : null}
       {tab === "notifications" ? <NotificationsPage user={user} /> : null}
+      {tab === "feedback" ? <FeedbackPage user={user} /> : null}
       {tab === "requests" ? <MyRequests user={user} /> : null}
     </>
   );
@@ -198,6 +199,72 @@ function NotificationsPage({ user }) {
           </Card>
         );
       })}
+      </div>
+    </div>
+  );
+}
+
+// ── รายการคำร้องที่ส่งไป ───────────
+function MyRequests({ user }) {
+  const { items: requests } = useCollection("requests");
+
+  const mine = requests.filter((r) => r.userId === user.id);
+
+  return (
+    <div className="bdi-page">
+      <div className="bdi-page-inner">
+        <UCHead
+          code="UC11"
+          title="คำร้องของฉัน"
+          desc="ตรวจสอบสถานะและรายละเอียดคำร้องที่คุณส่ง"
+        />
+
+        {mine.length === 0 ? (
+          <div style={{ fontSize: 13, color: "#5F6368" }}>
+            ยังไม่มีคำร้อง
+          </div>
+        ) : (
+          mine.map((r) => (
+            <Card key={r.id}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
+              >
+                <b style={{ fontSize: 14 }}>{r.subject || r.type}</b>
+                <Status value={r.status} />
+              </div>
+
+              <div style={{ fontSize: 13, marginTop: 6 }}>
+                {r.detail}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 11.5,
+                  color: "#5F6368",
+                  marginTop: 7,
+                }}
+              >
+                {r.createdAt} · {r.id}
+              </div>
+
+              {r.note ? (
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    color: "#3C4043",
+                    marginTop: 8,
+                  }}
+                >
+                  เหตุผลจากผู้พิจารณา: {r.note}
+                </div>
+              ) : null}
+            </Card>
+          ))
+        )}
       </div>
     </div>
   );
