@@ -35,40 +35,81 @@ function seed() {
     // before/after เก็บข้อมูลก่อน-หลัง เพื่อให้ฝ่ายดูแลระบบเทียบแล้วกดอนุมัติได้ทันที
     requests: [
       {
-        id: "RQ-1001", userId: "U007", userName: "อินฟินิตี้ ไอ",
+        id: "RQ-1001",
+        userId: "U007",
         subject: "ขอแก้ไขข้อมูลห้อง 106",
-        detail: "ห้อง 106 เปลี่ยนเป็นห้องปฏิบัติการคอมพิวเตอร์",
-        status: "pending", createdAt: "2026-08-18", note: "",
-        roomId: "RM-01", nodeId: "Sc8StudyRoom1F1",
-        before: { name: "ห้อง 106", type: "ห้องเรียน", capacity: 45, teacher: "อ.ดร. ปรีชา วงศ์ทอง" },
-        after: { name: "ห้อง 106", type: "ห้องปฏิบัติการ", capacity: 40, teacher: "อ.ดร. ปรีชา วงศ์ทอง" },
+        detail: "ขอเปลี่ยนประเภทห้อง 106 จากห้องเรียนเป็นห้องปฏิบัติการ",
+        status: "pending",
+        createdAt: "2026-08-24",
+        note: "",
+        roomId: "RM-01",
+        nodeId: "Sc8StudyRoom1F1",
+
+        before: {
+          name: "ห้อง 106",
+          type: "ห้องเรียน",
+          capacity: 45,
+          teacher: "อ.ดร. ปรีชา วงศ์ทอง",
+        },
+
+        after: {
+          name: "ห้อง 106",
+          type: "ห้องปฏิบัติการ",
+          capacity: 45,
+          teacher: "อ.ดร. ปรีชา วงศ์ทอง",
+        },
       },
+
       {
-        id: "RQ-1002", userId: "U007", userName: "อินฟินิตี้ ไอ",
-        subject: "ขอเพิ่มสถานที่จอดจักรยาน",
-        detail: "ต้องการเพิ่มจุดจอดจักรยานบริเวณหน้าตึกพระจอมเกล้าฯ",
-        status: "pending", createdAt: "2026-08-20", note: "",
-        roomId: null, nodeId: "KMITLMainBuilding",
-        before: { name: "หน้าตึกพระจอมเกล้าฯ" },
-        after: { name: "จุดจอดจักรยานหน้าตึกพระจอมเกล้าฯ" },
+        id: "RQ-1002",
+        userId: "U007",
+        subject: "แจ้งข้อมูลอาจารย์ประจำห้อง 107 ไม่ถูกต้อง",
+        detail: "ชื่ออาจารย์ประจำห้อง 107 ไม่ตรงกับข้อมูลที่แสดงในระบบ",
+        status: "pending",
+        createdAt: "2026-08-24",
+        note: "",
+        roomId: "RM-02",
+        nodeId: "Sc8StudyRoom2F1",
+
+        before: {
+          name: "ห้อง 107",
+          type: "ห้องปฏิบัติการ",
+          capacity: 40,
+          teacher: "อ.ดร. สุนิสา ภูผา",
+        },
+
+        after: {
+          name: "ห้อง 107",
+          type: "ห้องปฏิบัติการ",
+          capacity: 40,
+          teacher: "อ.ดร. วิชัย ใจดี",
+        },
       },
+
       {
-        id: "RQ-1003", userId: "U008", userName: "สมชาย ตั้งมั่น",
-        subject: "ขอแก้ไขข้อมูลห้อง 304",
-        detail: "ต้องการแก้ไขจำนวนที่นั่งของห้องให้ตรงกับข้อมูลปัจจุบัน",
-        status: "approved", createdAt: "2026-08-21", note: "ตรวจสอบกับข้อมูลจากฝ่ายอาคารแล้ว",
-        roomId: "RM-12", nodeId: "Sc8StudyRoom3F1",
-        before: { name: "ห้อง 304", type: "ห้องเรียน", capacity: 50, teacher: "-" },
-        after: { name: "ห้อง 304", type: "ห้องเรียน", capacity: 60, teacher: "-" },
-      },
-      {
-        id: "RQ-1004", userId: "U007", userName: "อินฟินิตี้ ไอ",
-        subject: "แจ้งข้อมูลอาจารย์ประจำห้องไม่ถูกต้อง",
-        detail: "ชื่ออาจารย์ประจำห้อง 107 ไม่ตรงกับข้อมูลความเป็นจริง",
-        status: "rejected", createdAt: "2026-08-22", note: "ไม่พบข้อมูลยืนยันการเปลี่ยนแปลงอาจารย์ประจำห้อง",
-        roomId: "RM-02", nodeId: "Sc8StudyRoom1F2",
-        before: { name: "ห้อง 107", type: "ห้องเรียน", capacity: 45, teacher: "อ.ดร. สมชาย ใจดี" },
-        after: { name: "ห้อง 107", type: "ห้องเรียน", capacity: 45, teacher: "อ.ดร. วิชัย ใจดี" },
+        id: "RQ-1003",
+        userId: "U008",
+        subject: "แจ้งข้อมูลความจุ Coworking Space KDAI",
+        detail: "ขอให้ตรวจสอบจำนวนที่นั่งของ Coworking Space KDAI",
+        status: "pending",
+        createdAt: "2026-08-24",
+        note: "",
+        roomId: "RM-03",
+        nodeId: "Sc8StudyRoom3F1",
+
+        before: {
+          name: "Coworking Space KDAI",
+          type: "พื้นที่ทำงานร่วม",
+          capacity: 60,
+          teacher: "-",
+        },
+
+        after: {
+          name: "Coworking Space KDAI",
+          type: "พื้นที่ทำงานร่วม",
+          capacity: 70,
+          teacher: "-",
+        },
       },
     ],
     requestQuota: { perUserPerDay: 3, perUserPerMonth: 20, updatedAt: today(), updatedBy: "U004" },
@@ -223,6 +264,39 @@ export async function insert(name, item) {
   return row;
 }
 
+export function getRequestQuota(userId) {
+  const quota = db.requestQuota;
+  const requests = db.requests || [];
+
+  const todayStr = today();
+  const monthStr = todayStr.slice(0, 7);
+
+  const dailyCount = requests.filter(
+    (r) =>
+      r.userId === userId &&
+      r.createdAt === todayStr &&
+      r.status !== "cancelled"
+  ).length;
+
+  const monthlyCount = requests.filter(
+    (r) =>
+      r.userId === userId &&
+      r.createdAt?.startsWith(monthStr) &&
+      r.status !== "cancelled"
+  ).length;
+
+  return {
+    dailyCount,
+    monthlyCount,
+    dailyLimit: quota.perUserPerDay,
+    monthlyLimit: quota.perUserPerMonth,
+    canSubmit:
+      dailyCount < quota.perUserPerDay &&
+      monthlyCount < quota.perUserPerMonth,
+  };
+}
+
+
 export async function update(name, id, patch) {
   if (USE_PG) return (await pg()).update(name, id, patch);
   const arr = db[name] || [];
@@ -249,3 +323,22 @@ export async function logMapEdit({ actorName, actorId, action, target, before = 
 }
 
 export { uid, today };
+
+
+// ล้างคิวคำร้องคนที่ถูกระงับ
+export function cancelPendingRequestsByUser(userId, { actorName = "ระบบ" } = {}) {
+  const arr = db.requests || [];
+  const cancelled = [];
+  for (const r of arr) {
+    if (r.userId === userId && r.status === "pending") {
+      r.status = "cancelled";
+      r.note = "ยกเลิก: บัญชีผู้ยื่นถูกระงับ";
+      cancelled.push(r.id);
+    }
+  }
+  return cancelled;
+}
+
+export function notifyUser(userId, title, message) {
+  return insert("notifications", { userId, title, message, read: false });
+}
