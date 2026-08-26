@@ -1,27 +1,71 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PlaceInput from "./PlaceInput";
 import { Btn, Field, Input, Textarea, useCollection } from "./ui";
 import { speak, speakNow, unlockSpeech, loadVoices, hasThaiVoice } from "./speech";
 import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
 import {
-  CENTER, ZOOM, DEMO_BBOX,
-  KMITL_BOUNDS, KMITL_OUTLINE, KMITL_FLOORS, NODE_TYPES,
-  KMITL_FLOOR1_NODES, KMITL_FLOOR1_EDGES,
-  KMITL_ALL_NODES, KMITL_NODE_FLOOR, KMITL_EXTERIOR_LINKS,
-  CAT, MAN, ROAD_EN, catColor, thaiInstr, roadEN,
-  OVERPASS_MIRRORS, BUILDINGS,
+  CENTER,
+  ZOOM,
+  DEMO_BBOX,
+  KMITL_BOUNDS,
+  KMITL_OUTLINE,
+  KMITL_FLOORS as KMITL_FLOORS_STATIC,
+  NODE_TYPES,
+  CHIP_NODE_TYPES,
+  WALKWAY_NODE_TYPES,
+  getNodeType,
+  KMITL_FLOOR1_NODES,
+  KMITL_FLOOR1_EDGES,
+  KMITL_ALL_NODES,
+  KMITL_NODE_FLOOR,
+  KMITL_EXTERIOR_LINKS,
+  CAT,
+  MAN,
+  ROAD_EN,
+  catColor,
+  thaiInstr,
+  roadEN,
+  OVERPASS_MIRRORS,
+  BUILDINGS,
 } from "./mapConstants";
 import {
   indoorFloorRoute,
-  loadLeaflet, haversine, bearing, turnTH, walkFrom, turnAt, turnSide,
-  sampleLine, ratioNear, countNear,
-  pointToSegM, nearPolyline, nearestOnRoute, buildingIndex, inBuilding,
-  fetchOSM, scoreRoutes, popupHtml, fetchWalkNet, buildGraph, mergeIndoorGraph, routeSegments, SEGMENT_COLORS,
-  graphRoute, pickRoutes,
-  resolveLandmark, resolvePlace, geocodeNominatim, pointAtDistance,
-  queuedGeocode, reverseGeocode, queuedReverse, suggestPlaces, LANDMARKS,
+  loadLeaflet,
+  haversine,
+  bearing,
+  turnTH,
+  walkFrom,
+  turnAt,
+  turnSide,
+  sampleLine,
+  ratioNear,
+  countNear,
+  pointToSegM,
+  nearPolyline,
+  nearestOnRoute,
+  buildingIndex,
+  inBuilding,
+  fetchOSM,
+  scoreRoutes,
+  popupHtml,
+  fetchWalkNet,
+  buildGraph,
+  mergeIndoorGraph,
+  routeSegments,
+  SEGMENT_COLORS,
+  graphRoute,
+  pickRoutes,
+  resolveLandmark,
+  resolvePlace,
+  geocodeNominatim,
+  pointAtDistance,
+  queuedGeocode,
+  reverseGeocode,
+  queuedReverse,
+  suggestPlaces,
+  LANDMARKS,
 } from "./mapGeo";
 
 
@@ -53,30 +97,40 @@ const SC8_SEARCH_NODES = [
   {
     id: "Sc8StudyRoom1F1",
     markerId: "Sc8StudyRoom1CenterF1", // 📍 หมุดแสดงกลางห้อง — เส้นทางยังคำนวณไปหน้าประตู (id ด้านบน) เหมือนเดิม
-    name: "ห้อง 106 ตึกพระจอมฯ",
-    aliases: ["ห้อง106", "106", "ห้อง 106", "study room 106"],
-    extract: "ห้อง 106 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
+    name: "ห้อง 108 ตึกพระจอมฯ",
+    aliases: ["ห้อง108", "108", "ห้อง 108", "study room 108"],
+    extract: "ห้อง 108 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
     icon: "🚪",
   },
   {
     id: "Sc8StudyRoom2F1",
     markerId: "Sc8StudyRoom2CenterF1",
-    name: "ห้อง 107 ตึกพระจอมฯ",
+    name: "ห้อง 107 ตึกพระจอมฯ", // ⚠️ แก้แล้ว: node นี้ label จริงใน mapConstants.js คือห้อง 107 (เดิมพิมพ์ผิดเป็น 106 ไปชนกับ Sc8StudyRoom3F1)
     aliases: ["ห้อง107", "107", "ห้อง 107", "study room 107"],
     extract: "ห้อง 107 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
     icon: "🚪",
   },
   {
     id: "Sc8StudyRoom3F1",
-    markerId: "Sc8StudyRoom3CenterF1",
+    markerId: "Sc8StudyRoom3CenterF1", // ⚠️ เพิ่มกลับเข้ามา: entry นี้หายไปจากไฟล์ ทำให้ค้นหา "ห้อง 106" ไม่เจอเลย
+    name: "ห้อง 106 ตึกพระจอมฯ",
+    aliases: ["ห้อง106", "106", "ห้อง 106", "study room 106"],
+    extract: "ห้อง 106 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
+    icon: "🚪",
+  },
+  {
+    id: "Sc8CoWork1F1",
+    markerId: "Sc8CoWork1F1Center", // ⚠️ เพิ่ม markerId ที่ขาดไป — ไม่งั้นหมุดจะไปใช้พิกัดหน้าประตู (id เดียวกับ route) แทนจุดกลางห้องจริง
     name: "Coworking Space KDAI",
     aliases: ["coworking", "coworking space", "kdai", "co working", "โคเวิร์กกิ้ง"],
     extract: "Coworking Space KDAI ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
-    icon: "💻",
+    icon: "💻", // ⚠️ แก้ไอคอนจาก 🚪 เป็น 💻 ให้สื่อความหมายตรงกับ coworking space
   },
 ];
 
-// node ประเภททางเดิน — ใช้เฉพาะเป็นจุดต่อของกราฟตอนคำนวณเส้นนำทาง ไม่แสดงเป็นหมุดบนผัง
+const normalizeSearch = (text) =>
+  String(text || "").trim().toLowerCase().replace(/\s+/g, "");
+
 // กิจกรรมที่ยังไม่สิ้นสุด ถึงจะขึ้นบนแผนที่
 const isEventVisible = (e) => {
   if (!e?.endAt) return true;
@@ -93,7 +147,6 @@ const fmtEventTime = (v) => {
 };
 
 // ไอคอนในหมุดกิจกรรม — เรนเดอร์เป็นสีขาวผ่าน CSS mask ให้ตัดกับพื้นหมุด
-// TODO: เปลี่ยนเป็น /data/icon/ui/event_fill.svg เมื่อได้ไฟล์มา
 const EVENT_PIN_ICON = "/data/icon/ui/bullhorn.svg";
 
 // ไอคอนเข็มทิศจากไฟล์ SVG — ย้อมสีตามบริบทที่ใช้
@@ -111,12 +164,7 @@ function CompassIcon({ size = 16, color = "currentColor", style }) {
   );
 }
 
-const WALKWAY_NODE_TYPES = ["path", "walkway", "corridor", "way", "node", "junction"];
-
-const normalizeSearch = (text) =>
-  String(text || "").trim().toLowerCase().replace(/\s+/g, "");
-
-function SearchPlaceInput({ value, onChange, onPick, placeholder, events = [] }) {
+function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const timerRef = useRef(null);
@@ -339,6 +387,19 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   const [kmitlFloor, setKmitlFloor] = useState("1");
   const kmitlFloorRef = useRef(kmitlFloor);
   useEffect(() => { kmitlFloorRef.current = kmitlFloor; ctx.current.drawFloorOverlay?.(); }, [kmitlFloor]);
+
+  // 📋 ดึง "รายละเอียดชั้น" ที่ฝ่ายทะเบียนกรอกไว้ (collection "floors") มาผสานกับข้อมูลชั้นแบบ static (svg, id, label)
+  // — ใช้ id ชั้น + ชื่ออาคาร (BUILDINGS.kmitl.name = "Sc8") จับคู่ ถ้าไม่มีข้อมูลในระบบ จะ fallback เป็นค่า detail เดิมใน mapConstants (ปกติเป็น null)
+  const { items: floorRecords } = useCollection("floors");
+  const KMITL_FLOORS = useMemo(
+    () =>
+      KMITL_FLOORS_STATIC.map((f) => {
+        const rec = floorRecords.find((r) => r.building === BUILDINGS.kmitl.name && String(r.floor) === String(f.id));
+        return rec?.note ? { ...f, detail: rec.note } : f;
+      }),
+    [floorRecords]
+  );
+
   // 🧭 กราฟ node/edge ของชั้นที่กำลังดูอยู่ — เพิ่มชั้นใหม่ในอนาคตแค่ต่อ ternary นี้
   const kmitlFloorNodes = kmitlFloor === "1" ? KMITL_FLOOR1_NODES : {};
   const kmitlFloorEdges = kmitlFloor === "1" ? KMITL_FLOOR1_EDGES : [];
@@ -465,7 +526,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
           let label;
           if (snapNode) {
             // 🏢 สแนปติด node ในตึก — ใช้ label ของ node เอง (ไม่ reverse-geocode กันได้ชื่อซ้ำกันทั้งต้นทาง/ปลายทาง)
-            const t = NODE_TYPES.find((x) => x.id === snapNode.type);
+            const t = getNodeType(snapNode.type);
             label = snapNode.label || `${t ? t.label : snapNode.type} · ${snapNode.id}`;
           } else {
             label = `หมุด ${snapLat.toFixed(5)},${snapLng.toFixed(5)}`;
@@ -638,14 +699,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
           iconSize: [20, 20], iconAnchor: [10, 10],
         }),
         zIndexOffset: 700,
-      })
-        .bindTooltip(entry.name, { direction: "top", offset: [0, -10] })
-        .on("click", () => openPlaceCard(entry.name, [center.lon, center.lat], {
-          nodeId: entry.id, markerNodeId: entry.markerId,
-          floor: KMITL_NODE_FLOOR[entry.id] || "1",
-          icon: entry.icon, extract: entry.extract,
-        }))
-        .addTo(layer);
+      }).bindTooltip(entry.name, { direction: "top", offset: [0, -10] }).addTo(layer);
     }
     return () => m.removeLayer(layer);
   }, [mapReady]);
@@ -712,7 +766,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     c.kmitlNodeMarkers = [];
     if (!kmitlOpen) return;
     kmitlNodes.filter((n) => n.floor === kmitlFloor).forEach((n) => {
-      const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
+      const t = getNodeType(n.type);
       const mk = L.marker([n.lat, n.lon], {
         draggable: true,
         icon: L.divIcon({ className: "", html: `<div style="width:22px;height:22px;border-radius:50%;background:${t.color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:grid;place-items:center;font-size:11px;color:#fff">${t.icon}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
@@ -733,6 +787,11 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     c.kmitlGraphLayer = [];
     if (!kmitlOpen || !Object.keys(kmitlFloorNodes).length) { setKmitlRouteResult(null); return; }
     // 🔗 วาดเส้น edge ทั้งหมด (เส้นประจาง) ให้เห็นว่า node ไหนเชื่อมถึงกันจริงบ้าง — ช่วยดีบั๊ก "มี node แต่ไม่มี edge เชื่อม" ซึ่งเป็นสาเหตุอันดับ 1 ที่หาเส้นทางไม่เจอ
+    for (const [a, b] of kmitlFloorEdges) {
+      const na = kmitlFloorNodes[a], nb = kmitlFloorNodes[b];
+      if (!na || !nb) continue; // edge อ้าง node ที่ไม่มีจริง (พิมพ์ผิด/ลืมเพิ่ม) — ข้ามอย่างปลอดภัย ไม่ให้พัง
+      c.kmitlGraphLayer.push(L.polyline([[na.lat, na.lon], [nb.lat, nb.lon]], { color: "#9AA0A6", weight: 2, opacity: 0.6, dashArray: "4 4", pane: "bdiFloorPane" }).addTo(m));
+    }
     // 📍 วาด node ทุกจุดของชั้นที่กำลังดูอยู่ ให้เห็นบน SVG จริง — กรองตามชิปที่เปิดอยู่ (ห้องเรียน/ห้องน้ำ/ลิฟต์/บันได) ส่วน type อื่น (ทางเดิน/ทางเข้า/ทางหนีไฟ) ยังโชว์เสมอไม่เกี่ยวกับชิป
     for (const id of Object.keys(kmitlFloorNodes)) {
       const n = kmitlFloorNodes[id];
@@ -1904,11 +1963,57 @@ async function submitReport() {
       {/* 🏢 แผงผังตึก Sc8 — เปิดเมื่อกดบริเวณ SVG ของอาคาร มีแถบเลือกชั้นด้านข้าง */}
       {kmitlOpen && !nav?.active ? (
         <>
-          <div style={{ position: "absolute", top: 200, right: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-            Sc8
+          <div style={{ position: "absolute", top: 200, right: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10, maxWidth: 320 }}>
+            <span style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+              <span>Sc8 · ชั้น {kmitlFloor}</span>
+              {KMITL_FLOORS.find((x) => x.id === kmitlFloor)?.detail ? (
+                <span style={{ fontWeight: 500, fontSize: 11.5, color: "#5F6368", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  · {KMITL_FLOORS.find((x) => x.id === kmitlFloor).detail}
+                </span>
+              ) : null}
+            </span>
             <button onClick={() => setKmitlOpen(false)} style={{ background: "none", border: "none", color: "#5F6368", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>✕</button>
           </div>
 
+          <div style={{ position: "absolute", top: 240, right: 14, zIndex: 1900, display: "flex", gap: 6 }}>
+            <button onClick={() => setKmitlCalibrate((v) => !v)} style={{ background: kmitlCalibrate ? "#1A73E8" : "#FFFFFF", color: kmitlCalibrate ? "#fff" : "#3C4043", border: "1px solid #DADCE0", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔧 ปรับตำแหน่ง</button>
+            <button onClick={() => setKmitlNodeMode((v) => !v)} style={{ background: kmitlNodeMode ? "#1A73E8" : "#FFFFFF", color: kmitlNodeMode ? "#fff" : "#3C4043", border: "1px solid #DADCE0", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📍 ปักหมุด</button>
+          </div>
+
+          {kmitlNodeMode ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 270, lineHeight: 1.6, maxHeight: 300, overflowY: "auto" }}>
+              เลือกประเภท แล้วแตะบนแผนที่เพื่อปักหมุด — ลากปรับตำแหน่งได้ / คลิกขวาที่หมุดเพื่อลบ
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0" }}>
+                {NODE_TYPES.map((t) => (
+                  <button key={t.id} onClick={() => setKmitlNodeType(t.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 4, background: kmitlNodeType === t.id ? t.color : "#F1F3F4", color: kmitlNodeType === t.id ? "#fff" : "#3C4043", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    <span>{t.icon}</span>{t.label}
+                  </button>
+                ))}
+              </div>
+              {kmitlNodes.filter((n) => n.floor === kmitlFloor).length ? kmitlNodes.filter((n) => n.floor === kmitlFloor).map((n) => {
+                const t = getNodeType(n.type);
+                return <div key={n.id}>#{n.id} [{t.label}]: {n.lat.toFixed(7)}, {n.lon.toFixed(7)}</div>;
+              }) : <i>ยังไม่มีหมุดในชั้นนี้</i>}
+              {kmitlNodes.length ? (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => {
+                      const txt = kmitlNodes.map((n) => `#${n.id} [${n.type}] ชั้น${n.floor}: ${n.lat.toFixed(7)}, ${n.lon.toFixed(7)}`).join("\n");
+                      navigator.clipboard?.writeText(txt).catch(() => {});
+                    }}
+                    style={{ background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>คัดลอกพิกัดทั้งหมด (ทุกชั้น)</button>
+                  <button onClick={() => setKmitlNodes((prev) => prev.filter((n) => n.floor !== kmitlFloor))} style={{ background: "#F1F3F4", color: "#D93025", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างหมุดชั้นนี้</button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {kmitlCalibrate && kmitlCalReadout ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, maxWidth: 260, lineHeight: 1.6 }}>
+              ลากจุด <span style={{ color: "#4ade80" }}>เขียว</span> (มุมบนซ้าย NW) และ <span style={{ color: "#f87171" }}>แดง</span> (มุมล่างขวา SE) ของภาพให้ตรงกับขอบตึกจริงบนแผนที่<br /><br />
+              <b>NW:</b> {kmitlCalReadout.nw}<br />
+              <b>SE:</b> {kmitlCalReadout.se}<br /><br />
+            </div>
+          ) : null}
           {!KMITL_FLOORS.find((x) => x.id === kmitlFloor)?.svg ? (
             <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "8px 12px", color: "var(--bdi-text-dim)", fontSize: 12, maxWidth: 220 }}>
               ยังไม่มีไฟล์ผังของชั้นนี้
@@ -1923,6 +2028,28 @@ async function submitReport() {
             ))}
           </div>
 
+          {/* 🧭 ทดสอบหาเส้นทางในตึกชั้นที่กำลังดู */}
+          {Object.keys(kmitlFloorNodes).length ? (
+            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, width: 200 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>🧭 ทดสอบหาเส้นทางในตึก</div>
+              <select value={kmitlRouteFrom} onChange={(e) => setKmitlRouteFrom(e.target.value)} style={{ width: "100%", marginBottom: 6, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดเริ่ม --</option>
+                {Object.keys(kmitlFloorNodes).map((id) => <option key={id} value={id}>{id}{kmitlFloorNodes[id].label ? ` (${kmitlFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <select value={kmitlRouteTo} onChange={(e) => setKmitlRouteTo(e.target.value)} style={{ width: "100%", marginBottom: 8, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
+                <option value="">-- จุดปลาย --</option>
+                {Object.keys(kmitlFloorNodes).map((id) => <option key={id} value={id}>{id}{kmitlFloorNodes[id].label ? ` (${kmitlFloorNodes[id].label})` : ""}</option>)}
+              </select>
+              <button onClick={() => { if (kmitlRouteFrom && kmitlRouteTo) setKmitlRouteResult(indoorFloorRoute(kmitlRouteFrom, kmitlRouteTo, kmitlFloorNodes, kmitlFloorEdges)); }}
+                style={{ width: "100%", background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>หาเส้นทาง</button>
+              {kmitlRouteResult ? (
+                <div style={{ marginTop: 8 }}>
+                  {kmitlRouteResult.path ? <><b>ระยะทาง:</b> {kmitlRouteResult.distance.toFixed(1)} ม.<br /><b>เส้นทาง:</b> {kmitlRouteResult.path.join(" → ")}</> : <span style={{ color: "#D93025" }}>หาเส้นทางไม่ได้ (ไม่มี edge เชื่อมถึงกัน)</span>}
+                </div>
+              ) : null}
+              {kmitlRouteResult ? <button onClick={() => setKmitlRouteResult(null)} style={{ width: "100%", marginTop: 6, background: "#F1F3F4", color: "#5F6368", border: "none", borderRadius: 6, padding: "5px 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างเส้นทางทดสอบ</button> : null}
+            </div>
+          ) : null}
         </>
       ) : null}
 

@@ -7,6 +7,7 @@
 // 🗺️ ศูนย์กลางแผนที่ + กรอบพื้นที่หลัก
 // ============================================================
 
+export const WALKWAY_NODE_TYPES = ["walkway", "path", "corridor", "junction", "node", "hallway", "way"];
 export const CENTER = [13.7292, 100.7789];
 export const ZOOM = 15;
 
@@ -22,6 +23,20 @@ export const DEMO_BBOX = [
 // 🧭 ประเภท Node สำหรับปักบนผังอาคาร
 // ============================================================
 
+// ⚠️ NODE_TYPES คือ "แหล่งความจริงเดียว" (single source of truth) ของการแม็ป
+// type -> ไอคอน/สี/ป้ายกำกับ ของทุก node บนแผนที่/ผังอาคาร
+//
+// id ของแต่ละรายการต้อง "สะกดตรงตัว" กับค่า type ที่ใช้จริงใน
+// SC8_FLOOR1_NODES ด้านล่าง (case-sensitive) — ก่อนหน้านี้ตารางนี้เคยเขียน
+// id ผิด (เช่น "toilet"/"stairs" ตัวเล็กล้วน) ทำให้จุดห้องน้ำ/บันได/ห้อง
+// ต่าง ๆ หาไม่เจอใน NODE_TYPES แล้ว fallback ไปใช้ไอคอนของ "path" หมด
+// จึงมีการไปสร้างตาราง CHIP_NODE_TYPES/NODE_ICON แยกไว้อีกหลายชุดในหลายไฟล์
+// เพื่อชดเชยปัญหานี้ — ตอนนี้แก้ที่ต้นตอแล้ว ให้ทุกไฟล์ import NODE_TYPES
+// (หรือ getNodeType()) จากที่นี่ที่เดียว ไม่ต้องมีตาราง type->ไอคอนซ้ำอีก
+//
+// field "chip" (ไม่บังคับ) ใช้จัดกลุ่มสำหรับปุ่ม filter แบบ chip บน MapView/
+// Buildingfloorpicker (room/toilet/lift/stairs) — CHIP_NODE_TYPES ด้านล่าง
+// ถูกสร้างจาก field นี้อัตโนมัติ ไม่ต้องคัดลอกรายชื่อ id เองอีกต่อไป
 export const NODE_TYPES = [
   {
     id: "path",
@@ -30,10 +45,11 @@ export const NODE_TYPES = [
     color: "#B3AFB8",
   },
   {
-    id: "stairs",
+    id: "Stair",
     label: "บันได",
     icon: "🪜",
     color: "#5F6368",
+    chip: "stairs",
   },
   {
     id: "escalator",
@@ -46,12 +62,14 @@ export const NODE_TYPES = [
     label: "ลิฟต์",
     icon: "🛗",
     color: "#8E24AA",
+    chip: "lift",
   },
   {
-    id: "toilet",
+    id: "Toilet",
     label: "ห้องน้ำ",
     icon: "🚻",
     color: "#1A73E8",
+    chip: "toilet",
   },
   {
     id: "atm",
@@ -59,7 +77,49 @@ export const NODE_TYPES = [
     icon: "🏧",
     color: "#D93025",
   },
+  {
+    id: "Entrance",
+    label: "ทางเข้า-ออก",
+    icon: "🚪",
+    color: "#188038",
+  },
+  {
+    id: "Fire_Exit",
+    label: "ทางหนีไฟ",
+    icon: "🚪",
+    color: "#D93025",
+  },
+  {
+    id: "Co_Work",
+    label: "Co-working Space",
+    icon: "💻",
+    color: "#8E24AA",
+    chip: "room",
+  },
+  {
+    id: "Study_Room",
+    label: "ห้องเรียน/ห้องศึกษา",
+    icon: "📚",
+    color: "#1A73E8",
+    chip: "room",
+  },
 ];
+
+// หา entry ของ NODE_TYPES จาก type string — fallback ไปที่ NODE_TYPES[0] ("path")
+// ถ้าไม่พบ (เช่น type สะกดผิด หรือเป็นชนิดใหม่ที่ยังไม่ได้เพิ่มไว้ในตารางนี้)
+export function getNodeType(type) {
+  return NODE_TYPES.find((t) => t.id === type) || NODE_TYPES[0];
+}
+
+// สร้างจาก field "chip" ของ NODE_TYPES โดยอัตโนมัติ:
+// { room: ["Study_Room","Co_Work"], toilet: ["Toilet"], lift: ["lift"], stairs: ["Stair"] }
+// ไม่ต้องพิมพ์รายชื่อ id ซ้ำมือในแต่ละไฟล์ที่ใช้ปุ่ม filter อีกต่อไป
+export const CHIP_NODE_TYPES = NODE_TYPES.reduce((acc, t) => {
+  if (!t.chip) return acc;
+  if (!acc[t.chip]) acc[t.chip] = [];
+  acc[t.chip].push(t.id);
+  return acc;
+}, {});
 
 // ============================================================
 // 🏢 Sc8 — อาคาร 8 ชั้น
@@ -89,25 +149,22 @@ export const SC8_BOUNDS = [
 ];
 
 // พื้นที่ Outline สำหรับกดเลือกอาคารบนแผนที่
-// ตอนนี้ใช้รูปสี่เหลี่ยมตาม SC8_BOUNDS
-
+// ⚠️ อัปเดต: เดิมเป็นแค่สี่เหลี่ยมตาม SC8_BOUNDS ตรงๆ (bounding box) ทำให้ครอบคลุมพื้นที่
+// เกิน/ขาดจากรูปทรงตึกจริง (มีปีกตึกที่เว้าเข้าไปทางฝั่งตะวันตก)
+//
+// ตอนนี้ปรับเป็นรูปหลายเหลี่ยม (polygon) ที่ประมาณรูปทรงจริงของตึกตามที่ทาบเส้นไว้บนแผนที่
+// (มีรอยเว้า 2 จุดทางฝั่งตะวันตกของตัวตึก) — ค่านี้ยังเป็นการ "ประมาณ" จากสัดส่วนภายใน SC8_BOUNDS
+// ไม่ใช่พิกัดที่วัดจริงจากพื้นที่ ถ้าต้องการให้แม่นยำ 100% ควรใช้โหมด "🔧 ปรับตำแหน่ง/คาลิเบรต"
+// ใน MapView เพื่อลากปรับจุดแต่ละมุมให้ตรงกับตึกจริง แล้วนำพิกัดที่ได้มาแทนค่าด้านล่างนี้
 export const SC8_OUTLINE = [
-  [
-    SC8_BOUNDS[0][0],
-    SC8_BOUNDS[0][1],
-  ],
-  [
-    SC8_BOUNDS[1][0],
-    SC8_BOUNDS[0][1],
-  ],
-  [
-    SC8_BOUNDS[1][0],
-    SC8_BOUNDS[1][1],
-  ],
-  [
-    SC8_BOUNDS[0][0],
-    SC8_BOUNDS[1][1],
-  ],
+  [13.729617, 100.779691], // มุมบนซ้าย (เยื้องเข้ามาจากขอบ bounds เล็กน้อย)
+  [13.729617, 100.780308], // มุมบนขวา
+  [13.728375, 100.780315], // มุมล่างขวา
+  [13.728375, 100.780029], // ขอบล่าง เดินเข้ามาก่อนถึงมุมซ้ายสุด
+  [13.728858, 100.780029], // เว้าขึ้น (รอยหยักที่ 1 — บริเวณกลางตึก)
+  [13.728858, 100.779797], // เว้าซ้าย
+  [13.729272, 100.779797], // เว้าขึ้น (รอยหยักที่ 2 — ปีกตึกฝั่งบนซ้าย)
+  [13.729272, 100.779691], // เว้าซ้ายสุด กลับไปทางขอบตะวันตก
 ];
 
 // ============================================================
@@ -123,7 +180,11 @@ export const SC8_OUTLINE = [
 //   id: "2",
 //   label: "2",
 //   svg: "/data/floorplans/Sc8/floor2.svg",
+//   detail: "รายละเอียดของชั้นนี้ (ไม่บังคับ)",
 // }
+//
+// field "detail" ใช้เก็บคำอธิบายเพิ่มเติมของชั้น (ไม่บังคับใส่ ปล่อย null ได้ถ้ายังไม่มี)
+// จะแสดงต่อจากป้าย "Sc8" บนแผนที่ (MapView) และในทูลทิปปุ่มเลือกชั้น (MapPicker) เมื่อมีข้อมูล
 //
 // ============================================================
 
@@ -131,42 +192,50 @@ export const SC8_FLOORS = [
   {
     id: "8",
     label: "8",
-    svg: null,
+    svg: null, // ⚠️ ยังไม่มีไฟล์ floor8.svg ใน public/data/floorplans/Sc8/ — ใส่กลับเมื่อได้ไฟล์มา
+    detail: null,
   },
   {
     id: "7",
     label: "7",
     svg: null,
+    detail: null,
   },
   {
     id: "6",
     label: "6",
-    svg: null,
+    svg: "/data/floorplans/Sc8/floor6.svg",
+    detail: null,
   },
   {
     id: "5",
     label: "5",
-    svg: null,
+    svg: "/data/floorplans/Sc8/floor5.svg",
+    detail: null,
   },
   {
     id: "4",
     label: "4",
-    svg: null,
+    svg: "/data/floorplans/Sc8/floor4.svg",
+    detail: null,
   },
   {
     id: "3",
     label: "3",
-    svg: null,
+    svg: "/data/floorplans/Sc8/floor3.svg",
+    detail: null,
   },
   {
     id: "2",
     label: "2",
     svg: "/data/floorplans/Sc8/floor2.svg",
+    detail: null,
   },
   {
     id: "1",
     label: "1",
     svg: "/data/floorplans/Sc8/floor1.svg",
+    detail: null,
   },
 ];
 

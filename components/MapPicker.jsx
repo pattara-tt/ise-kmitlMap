@@ -4,30 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { loadLeaflet, suggestPlaces, resolvePlace, geocodeNominatim, queuedReverse } from "./mapGeo";
 import {
   CENTER, KMITL_ALL_NODES, KMITL_BOUNDS, KMITL_FLOORS, KMITL_NODE_FLOOR,
-  KMITL_OUTLINE,
+  KMITL_OUTLINE, WALKWAY_NODE_TYPES, getNodeType,
 } from "./mapConstants";
 import { Btn, Input, Pill } from "./ui";
 
 // กล่องแผนที่สำหรับเลือกสถานที่จัดกิจกรรม
 // ใช้ชั้นข้อมูลชุดเดียวกับแผนที่ของผู้ใช้งานทั่วไป — ขอบเขตอาคาร ผังชั้น (SVG)
 // และหมุดห้อง/สิ่งอำนวยความสะดวกภายในอาคาร กดที่ห้องเพื่อเลือกเป็นสถานที่จัดงานได้เลย
-// ไอคอนของจุดภายในอาคาร (ครอบคลุมชื่อประเภทที่ใช้จริงใน mapConstants)
-const NODE_ICON = {
-  lift: "🛗", elevator: "🛗",
-  toilet: "🚻", wc: "🚻",
-  stair: "🪜", stairs: "🪜",
-  escalator: "⬆️",
-  fire_exit: "🚪", exit: "🚪",
-  entrance: "🚩",
-  co_work: "💻", coworking: "💻",
-  study_room: "📚", classroom: "📚", room: "📚",
-  atm: "🏧",
-  canteen: "🍽️", food: "🍽️",
-  parking: "🅿️",
-};
-const nodeIcon = (type) => NODE_ICON[String(type || "").toLowerCase()] || "📍";
+// ไอคอน/ป้ายกำกับของจุดภายในอาคาร — ใช้ NODE_TYPES ใน mapConstants เป็นแหล่งเดียว
+// (เดิมมีตาราง NODE_ICON ซ้ำไว้ที่นี่ ทำให้ต้องแก้สองที่ทุกครั้งที่เพิ่มประเภทใหม่)
+const nodeIcon = (type) => getNodeType(type).icon || "📍";
 // จุดประเภททางเดิน/เส้นทาง ไม่ต้องแสดงบนแผนที่เลือกสถานที่
-const isWalkway = (type) => ["path", "walkway", "corridor", "way", "node"].includes(String(type || "").toLowerCase());
+const isWalkway = (type) => WALKWAY_NODE_TYPES.includes(String(type || "").toLowerCase());
 
 export default function MapPicker({ value, onChange, height = 300 }) {
   const { placeName = "", lat = "", lon = "" } = value || {};
@@ -257,7 +245,7 @@ export default function MapPicker({ value, onChange, height = 300 }) {
               {KMITL_FLOORS.map((f) => {
                 const on = f.id === floor;
                 return (
-                  <button key={f.id} onClick={() => setFloor(f.id)} title={f.svg ? `ชั้น ${f.label}` : `ชั้น ${f.label} (ยังไม่มีไฟล์ผัง)`}
+                  <button key={f.id} onClick={() => setFloor(f.id)} title={[`ชั้น ${f.label}`, f.detail, f.svg ? null : "(ยังไม่มีไฟล์ผัง)"].filter(Boolean).join(" · ")}
                     style={{ border: "none", borderBottom: "1px solid #F1F3F4", cursor: "pointer", width: 34, padding: "6px 0", fontSize: 12, fontWeight: 800,
                       background: on ? "#1A73E8" : "#fff", color: on ? "#fff" : f.svg ? "#3C4043" : "#BDC1C6" }}>
                     {f.label}
