@@ -27,7 +27,7 @@ export const TABLES = {
   floors: "floors",
   rooms: "rooms",
   usage: "usage",
-  notifiations: "notifications",
+  notifications: "notifications",
 };
 
 // ตารางที่ไม่มีคอลัมน์ id (ใช้คีย์อื่นเป็น primary key)
