@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PlaceInput from "./PlaceInput";
 import { Btn, Field, Input, Textarea, useCollection } from "./ui";
 import { speak, speakNow, unlockSpeech, loadVoices, hasThaiVoice } from "./speech";
@@ -15,6 +15,7 @@ import {
   KMITL_FLOORS,
   NODE_TYPES,
   CHIP_NODE_TYPES,
+  WALKWAY_NODE_TYPES,
   getNodeType,
   KMITL_FLOOR1_NODES,
   KMITL_FLOOR1_EDGES,
@@ -105,6 +106,14 @@ const SC8_SEARCH_NODES = [
   {
     id: "Sc8StudyRoom2F1",
     markerId: "Sc8StudyRoom2CenterF1",
+    name: "ห้อง 107 ตึกพระจอมฯ", // ⚠️ แก้แล้ว: node นี้ label จริงใน mapConstants.js คือห้อง 107 (เดิมพิมพ์ผิดเป็น 106 ไปชนกับ Sc8StudyRoom3F1)
+    aliases: ["ห้อง107", "107", "ห้อง 107", "study room 107"],
+    extract: "ห้อง 107 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
+    icon: "🚪",
+  },
+  {
+    id: "Sc8StudyRoom3F1",
+    markerId: "Sc8StudyRoom3CenterF1", // ⚠️ เพิ่มกลับเข้ามา: entry นี้หายไปจากไฟล์ ทำให้ค้นหา "ห้อง 106" ไม่เจอเลย
     name: "ห้อง 106 ตึกพระจอมฯ",
     aliases: ["ห้อง106", "106", "ห้อง 106", "study room 106"],
     extract: "ห้อง 106 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
@@ -112,10 +121,11 @@ const SC8_SEARCH_NODES = [
   },
   {
     id: "Sc8CoWork1F1",
+    markerId: "Sc8CoWork1F1Center", // ⚠️ เพิ่ม markerId ที่ขาดไป — ไม่งั้นหมุดจะไปใช้พิกัดหน้าประตู (id เดียวกับ route) แทนจุดกลางห้องจริง
     name: "Coworking Space KDAI",
     aliases: ["coworking", "coworking space", "kdai", "co working", "โคเวิร์กกิ้ง"],
     extract: "Coworking Space KDAI ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
-    icon: "🚪",
+    icon: "💻", // ⚠️ แก้ไอคอนจาก 🚪 เป็น 💻 ให้สื่อความหมายตรงกับ coworking space
   },
 ];
 

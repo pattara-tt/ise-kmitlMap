@@ -7,6 +7,7 @@
 // 🗺️ ศูนย์กลางแผนที่ + กรอบพื้นที่หลัก
 // ============================================================
 
+export const WALKWAY_NODE_TYPES = ["walkway", "path", "corridor", "junction", "node", "hallway", "way"];
 export const CENTER = [13.7292, 100.7789];
 export const ZOOM = 15;
 
