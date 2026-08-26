@@ -340,5 +340,11 @@ export function cancelPendingRequestsByUser(userId, { actorName = "ระบบ"
 }
 
 export function notifyUser(userId, title, message) {
-  return insert("notifications", { userId, title, message, read: false });
+  return insert("notifications", {
+    userId,
+    title,
+    body: message,
+    read: false,
+    kind: "system",
+  });
 }

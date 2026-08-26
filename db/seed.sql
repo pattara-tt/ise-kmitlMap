@@ -150,5 +150,8 @@ INSERT INTO usage (month, active_users, searches, routes) VALUES
   ('2026-06',1980,8830,3990), ('2026-07',2680,13910,6840), ('2026-08',3120,16240,7930)
 ON CONFLICT (month) DO NOTHING;
 
+INSERT INTO notifications (id, user_id, kind, title, body, read, created_at) VALUES
+  ('NT-001', 'U008','account','บัญชีถูกระงับ','บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ', FALSE,'2026-08-26');
+ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
