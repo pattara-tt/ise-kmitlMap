@@ -1,31 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadLeaflet, suggestPlaces, resolvePlace, geocodeNominatim, queuedReverse } from "./mapGeo";
 import {
-  CENTER, KMITL_ALL_NODES, KMITL_BOUNDS, KMITL_FLOORS, KMITL_NODE_FLOOR,
-  KMITL_OUTLINE,
+  CENTER, KMITL_ALL_NODES, KMITL_BOUNDS, KMITL_FLOORS as KMITL_FLOORS_STATIC, KMITL_NODE_FLOOR,
+  KMITL_OUTLINE, BUILDINGS, getNodeType,
 } from "./mapConstants";
-import { Btn, Input, Pill } from "./ui";
+import { Btn, Input, Pill, useCollection } from "./ui";
 
 // กล่องแผนที่สำหรับเลือกสถานที่จัดกิจกรรม
 // ใช้ชั้นข้อมูลชุดเดียวกับแผนที่ของผู้ใช้งานทั่วไป — ขอบเขตอาคาร ผังชั้น (SVG)
 // และหมุดห้อง/สิ่งอำนวยความสะดวกภายในอาคาร กดที่ห้องเพื่อเลือกเป็นสถานที่จัดงานได้เลย
-// ไอคอนของจุดภายในอาคาร (ครอบคลุมชื่อประเภทที่ใช้จริงใน mapConstants)
-const NODE_ICON = {
-  lift: "🛗", elevator: "🛗",
-  toilet: "🚻", wc: "🚻",
-  stair: "🪜", stairs: "🪜",
-  escalator: "⬆️",
-  fire_exit: "🚪", exit: "🚪",
-  entrance: "🚩",
-  co_work: "💻", coworking: "💻",
-  study_room: "📚", classroom: "📚", room: "📚",
-  atm: "🏧",
-  canteen: "🍽️", food: "🍽️",
-  parking: "🅿️",
+// ไอคอนของจุดภายในอาคาร: ใช้ NODE_TYPES/getNodeType จาก mapConstants.js (แหล่งความจริงเดียว)
+// แทนตาราง NODE_ICON แยกที่เคยมีอยู่ที่นี่ — ถ้า type ไหนไม่มีใน NODE_TYPES จะ fallback เป็น "📍"
+const nodeIcon = (type) => {
+  const t = getNodeType(type);
+  return (t && t.id === type && t.icon) || "📍";
 };
-const nodeIcon = (type) => NODE_ICON[String(type || "").toLowerCase()] || "📍";
 // จุดประเภททางเดิน/เส้นทาง ไม่ต้องแสดงบนแผนที่เลือกสถานที่
 const isWalkway = (type) => ["path", "walkway", "corridor", "way", "node"].includes(String(type || "").toLowerCase());
 
@@ -41,6 +32,17 @@ export default function MapPicker({ value, onChange, height = 300 }) {
   const [indoor, setIndoor] = useState(true);          // เปิด/ปิดผังภายในอาคาร
   const [floor, setFloor] = useState("1");             // ชั้นที่กำลังแสดง
   const timer = useRef(null);
+
+  // 📋 ผสานรายละเอียดชั้นที่ฝ่ายทะเบียนกรอกไว้ (collection "floors") เข้ากับข้อมูลชั้นแบบ static (svg, id, label)
+  const { items: floorRecords } = useCollection("floors");
+  const KMITL_FLOORS = useMemo(
+    () =>
+      KMITL_FLOORS_STATIC.map((f) => {
+        const rec = floorRecords.find((r) => r.building === BUILDINGS.kmitl.name && String(r.floor) === String(f.id));
+        return rec?.detail ? { ...f, detail: rec.detail } : f;
+      }),
+    [floorRecords]
+  );
 
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
@@ -256,8 +258,12 @@ export default function MapPicker({ value, onChange, height = 300 }) {
             <div style={{ display: "flex", flexDirection: "column", background: "#fff", border: "1px solid #DADCE0", borderRadius: 8, overflow: "hidden", boxShadow: "0 1px 4px rgba(60,64,67,.28)" }}>
               {KMITL_FLOORS.map((f) => {
                 const on = f.id === floor;
+                const tooltip = [
+                  f.svg ? `ชั้น ${f.label}` : `ชั้น ${f.label} (ยังไม่มีไฟล์ผัง)`,
+                  f.detail || null,
+                ].filter(Boolean).join(" · ");
                 return (
-                  <button key={f.id} onClick={() => setFloor(f.id)} title={f.svg ? `ชั้น ${f.label}` : `ชั้น ${f.label} (ยังไม่มีไฟล์ผัง)`}
+                  <button key={f.id} onClick={() => setFloor(f.id)} title={tooltip}
                     style={{ border: "none", borderBottom: "1px solid #F1F3F4", cursor: "pointer", width: 34, padding: "6px 0", fontSize: 12, fontWeight: 800,
                       background: on ? "#1A73E8" : "#fff", color: on ? "#fff" : f.svg ? "#3C4043" : "#BDC1C6" }}>
                     {f.label}

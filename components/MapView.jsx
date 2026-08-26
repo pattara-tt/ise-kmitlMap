@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PlaceInput from "./PlaceInput";
 import { speak, speakNow, unlockSpeech, loadVoices, hasThaiVoice } from "./speech";
 import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
 import {
   CENTER, ZOOM, DEMO_BBOX,
-  KMITL_BOUNDS, KMITL_OUTLINE, KMITL_FLOORS, NODE_TYPES,
+  KMITL_BOUNDS, KMITL_OUTLINE, KMITL_FLOORS as KMITL_FLOORS_STATIC, NODE_TYPES,
+  CHIP_NODE_TYPES, getNodeType,
   KMITL_FLOOR1_NODES, KMITL_FLOOR1_EDGES,
   KMITL_ALL_NODES, KMITL_NODE_FLOOR, KMITL_EXTERIOR_LINKS,
   CAT, MAN, ROAD_EN, catColor, thaiInstr, roadEN,
   OVERPASS_MIRRORS, BUILDINGS,
 } from "./mapConstants";
+import { useCollection } from "./ui";
 import {
   indoorFloorRoute,
   loadLeaflet, haversine, bearing, turnTH, walkFrom, turnAt, turnSide,
@@ -52,26 +54,25 @@ const SC8_SEARCH_NODES = [
   {
     id: "Sc8StudyRoom1F1",
     markerId: "Sc8StudyRoom1CenterF1", // 📍 หมุดแสดงกลางห้อง — เส้นทางยังคำนวณไปหน้าประตู (id ด้านบน) เหมือนเดิม
+    name: "ห้อง 108 ตึกพระจอมฯ",
+    aliases: ["ห้อง108", "108", "ห้อง 108", "study room 108"],
+    extract: "ห้อง 108 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
+    icon: "🚪",
+  },
+  {
+    id: "Sc8StudyRoom2F1",
+    markerId: "Sc8StudyRoom2CenterF1",
     name: "ห้อง 106 ตึกพระจอมฯ",
     aliases: ["ห้อง106", "106", "ห้อง 106", "study room 106"],
     extract: "ห้อง 106 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
     icon: "🚪",
   },
   {
-    id: "Sc8StudyRoom2F1",
-    markerId: "Sc8StudyRoom2CenterF1",
-    name: "ห้อง 107 ตึกพระจอมฯ",
-    aliases: ["ห้อง107", "107", "ห้อง 107", "study room 107"],
-    extract: "ห้อง 107 ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
-    icon: "🚪",
-  },
-  {
-    id: "Sc8StudyRoom3F1",
-    markerId: "Sc8StudyRoom3CenterF1",
+    id: "Sc8CoWork1F1",
     name: "Coworking Space KDAI",
     aliases: ["coworking", "coworking space", "kdai", "co working", "โคเวิร์กกิ้ง"],
     extract: "Coworking Space KDAI ชั้น 1 ตึกพระจอมเกล้าฯ (Sc8)",
-    icon: "💻",
+    icon: "🚪",
   },
 ];
 
@@ -260,6 +261,19 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
   const [kmitlFloor, setKmitlFloor] = useState("1");
   const kmitlFloorRef = useRef(kmitlFloor);
   useEffect(() => { kmitlFloorRef.current = kmitlFloor; ctx.current.drawFloorOverlay?.(); }, [kmitlFloor]);
+
+  // 📋 ดึง "รายละเอียดชั้น" ที่ฝ่ายทะเบียนกรอกไว้ (collection "floors") มาผสานกับข้อมูลชั้นแบบ static (svg, id, label)
+  // — ใช้ id ชั้น + ชื่ออาคาร (BUILDINGS.kmitl.name = "Sc8") จับคู่ ถ้าไม่มีข้อมูลในระบบ จะ fallback เป็นค่า detail เดิมใน mapConstants (ปกติเป็น null)
+  const { items: floorRecords } = useCollection("floors");
+  const KMITL_FLOORS = useMemo(
+    () =>
+      KMITL_FLOORS_STATIC.map((f) => {
+        const rec = floorRecords.find((r) => r.building === BUILDINGS.kmitl.name && String(r.floor) === String(f.id));
+        return rec?.note ? { ...f, detail: rec.note } : f;
+      }),
+    [floorRecords]
+  );
+
   // 🧭 กราฟ node/edge ของชั้นที่กำลังดูอยู่ — เพิ่มชั้นใหม่ในอนาคตแค่ต่อ ternary นี้
   const kmitlFloorNodes = kmitlFloor === "1" ? KMITL_FLOOR1_NODES : {};
   const kmitlFloorEdges = kmitlFloor === "1" ? KMITL_FLOOR1_EDGES : [];
@@ -386,7 +400,7 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
           let label;
           if (snapNode) {
             // 🏢 สแนปติด node ในตึก — ใช้ label ของ node เอง (ไม่ reverse-geocode กันได้ชื่อซ้ำกันทั้งต้นทาง/ปลายทาง)
-            const t = NODE_TYPES.find((x) => x.id === snapNode.type);
+            const t = getNodeType(snapNode.type);
             label = snapNode.label || `${t ? t.label : snapNode.type} · ${snapNode.id}`;
           } else {
             label = `หมุด ${snapLat.toFixed(5)},${snapLng.toFixed(5)}`;
@@ -626,7 +640,7 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
     c.kmitlNodeMarkers = [];
     if (!kmitlOpen) return;
     kmitlNodes.filter((n) => n.floor === kmitlFloor).forEach((n) => {
-      const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
+      const t = getNodeType(n.type);
       const mk = L.marker([n.lat, n.lon], {
         draggable: true,
         icon: L.divIcon({ className: "", html: `<div style="width:22px;height:22px;border-radius:50%;background:${t.color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:grid;place-items:center;font-size:11px;color:#fff">${t.icon}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
@@ -658,9 +672,9 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
       if (!Number.isFinite(n?.lat) || !Number.isFinite(n?.lon)) continue;
       const chipKey = Object.keys(CHIP_NODE_TYPES).find((k) => CHIP_NODE_TYPES[k].includes(n.type));
       if (chipKey && !chips[chipKey]) continue; // ชิปหมวดนี้ปิดอยู่ — ข้าม node ประเภทนี้ไป
-      const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
+      const t = getNodeType(n.type);
       const marker = L.circleMarker([n.lat, n.lon], { radius: 5, color: "#FFFFFF", weight: 1.5, fillColor: t.color, fillOpacity: 0.95, pane: "bdiFloorPane" }).addTo(m);
-      if (n.type === "escalator" || n.type === "lift") marker.bindPopup(`${t.icon} ${t.label} #${id}${n.label ? "<br>" + n.label : ""}`);
+      if (n.type === "escalator" || n.type === "lift" || n.type === "Entrance" || n.type === "Fire_Exit") marker.bindPopup(`${t.icon} ${t.label} #${id}${n.label ? "<br>" + n.label : ""}`);
       else marker.bindTooltip(`${id}${n.label ? " · " + n.label : ""}`, { permanent: false });
       c.kmitlGraphLayer.push(marker);
     }
@@ -1159,13 +1173,8 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
     { k: "lift", icon: () => <span>🛗</span>, label: "ลิฟต์" },
     { k: "stairs", icon: () => <span>🪜</span>, label: "บันได" },
   ];
-  // 🗂️ หมวด chip -> node type จริงที่ปักไว้ใน mapConstants.js — ใช้กรองว่าจะโชว์ node ประเภทไหนบนแผนที่บ้าง
-  const CHIP_NODE_TYPES = {
-    room: ["Study_Room", "Co_Work"],
-    toilet: ["Toilet"],
-    lift: ["lift"],
-    stairs: ["Stair"],
-  };
+  // 🗂️ หมวด chip -> node type จริง — ดึงมาจาก mapConstants.js (แหล่งความจริงเดียว)
+  // ไม่ต้องพิมพ์รายชื่อ type ซ้ำที่นี่อีกต่อไป ดู NODE_TYPES/CHIP_NODE_TYPES ใน mapConstants.js
 
   const navTarget = active ?? (routeData && !routeData.error && !routeData.loading ? routeData.best : null);
 
@@ -1410,8 +1419,15 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
       {/* 🏢 แผงผังตึก Sc8 — เปิดเมื่อกดบริเวณ SVG ของอาคาร มีแถบเลือกชั้นด้านข้าง */}
       {kmitlOpen && !nav?.active ? (
         <>
-          <div style={{ position: "absolute", top: 200, right: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-            Sc8
+          <div style={{ position: "absolute", top: 200, right: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "6px 12px", color: "#202124", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 10, maxWidth: 320 }}>
+            <span style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+              <span>Sc8 · ชั้น {kmitlFloor}</span>
+              {KMITL_FLOORS.find((x) => x.id === kmitlFloor)?.detail ? (
+                <span style={{ fontWeight: 500, fontSize: 11.5, color: "#5F6368", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  · {KMITL_FLOORS.find((x) => x.id === kmitlFloor).detail}
+                </span>
+              ) : null}
+            </span>
             <button onClick={() => setKmitlOpen(false)} style={{ background: "none", border: "none", color: "#5F6368", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>✕</button>
           </div>
 
@@ -1432,7 +1448,7 @@ export default function MapView({ apiRef, viewMode = "auto" }) {
                 ))}
               </div>
               {kmitlNodes.filter((n) => n.floor === kmitlFloor).length ? kmitlNodes.filter((n) => n.floor === kmitlFloor).map((n) => {
-                const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
+                const t = getNodeType(n.type);
                 return <div key={n.id}>#{n.id} [{t.label}]: {n.lat.toFixed(7)}, {n.lon.toFixed(7)}</div>;
               }) : <i>ยังไม่มีหมุดในชั้นนี้</i>}
               {kmitlNodes.length ? (
