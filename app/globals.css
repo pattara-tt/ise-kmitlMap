@@ -151,3 +151,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity:
 .bdi-page::-webkit-scrollbar-track { background: transparent; }
 .bdi-page::-webkit-scrollbar-thumb { background: #DADCE0; border-radius: 999px; }
 .bdi-page::-webkit-scrollbar-thumb:hover { background: #BDC1C6; }
+
+/* ==== แผงที่ต้องกินพื้นที่เต็มหน้า (เช่น ฝ่ายทะเบียน: แผนที่ + แผงจัดการ) ====
+   .bdi-page เป็น absolute inset:0 จึงมีความสูงแน่นอน — ส่งความสูงต่อลงมาให้ลูกได้
+   ใช้แทนการอิง 100vh ซึ่งจะคำนวณผิดในโหมดจำลองมือถือ (กรอบโทรศัพท์กลางจอ) */
+.bdi-page:has(> .bdi-page-inner > .bdi-fullpanel) { padding-top: calc(var(--bdi-topbar-h) + env(safe-area-inset-top)); padding-bottom: 0; overflow: hidden; }
+.bdi-page > .bdi-page-inner:has(> .bdi-fullpanel) { height: 100%; }
+.bdi-fullpanel { height: 100%; }
