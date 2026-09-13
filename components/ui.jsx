@@ -231,9 +231,32 @@ export function useCollection(name) {
       return j.item;
     }, [name, reload]);
 
+<<<<<<< HEAD
   const patch = useCallback(async (id, p, actor) => {
     await fetch("/api/data/" + name, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p, _actor: actor }) });
     await reload();
+=======
+  // const patch = useCallback(async (id, p, actor) => {
+  //   await fetch("/api/data/" + name, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p, _actor: actor }) });
+  //   await reload();
+  // }, [name, reload]);
+
+  const patch = useCallback(async (id, p, actor) => {
+    const r = await fetch("/api/data/" + name, { 
+      method: "PATCH", 
+      headers: { "Content-Type": "application/json" }, 
+      body: JSON.stringify({ id, ...p, _actor: actor }) 
+    });
+
+    const j = await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+      throw new Error(j.error || `อัปเดตข้อมูลไม่สำเร็จ (${r.status})`);
+    }
+
+    await reload();
+    return j.item;
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   }, [name, reload]);
 
   const destroy = useCallback(async (id, actor) => {

@@ -139,6 +139,11 @@ export default function BuildingFloorPicker({
     if (!b) return [];
     const overrides = {};
     for (const rec of floorRecords || []) {
+<<<<<<< HEAD
+=======
+      // schema ของตาราง floors กำหนด status เป็น 'active' | 'draft' เท่านั้น
+      // (เดิมเทียบกับ "inactive" ซึ่งไม่มีทางเป็นจริง ทำให้ชั้นที่ถูกซ่อนยังโผล่อยู่)
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       if (rec.building === b.name && rec.status !== "draft" && rec.svg) {
         overrides[rec.floor] = rec.svg;
       }

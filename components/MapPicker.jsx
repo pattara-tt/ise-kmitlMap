@@ -1,12 +1,20 @@
 "use client";
 
+<<<<<<< HEAD
 import { useEffect, useMemo, useRef, useState } from "react";
+=======
+import { useEffect, useRef, useState } from "react";
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 import { loadLeaflet, suggestPlaces, resolvePlace, geocodeNominatim, queuedReverse } from "./mapGeo";
 import {
   CENTER, KMITL_ALL_NODES, KMITL_BOUNDS, KMITL_FLOORS, KMITL_NODE_FLOOR,
   KMITL_OUTLINE, WALKWAY_NODE_TYPES, getNodeType,
 } from "./mapConstants";
+<<<<<<< HEAD
 import { Btn, Input, Pill, useCollection } from "./ui";
+=======
+import { Btn, Input, Pill } from "./ui";
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 
 // กล่องแผนที่สำหรับเลือกสถานที่จัดกิจกรรม
 // ใช้ชั้นข้อมูลชุดเดียวกับแผนที่ของผู้ใช้งานทั่วไป — ขอบเขตอาคาร ผังชั้น (SVG)
@@ -30,6 +38,7 @@ export default function MapPicker({ value, onChange, height = 300 }) {
   const [floor, setFloor] = useState("1");             // ชั้นที่กำลังแสดง
   const timer = useRef(null);
 
+<<<<<<< HEAD
   // 📋 ผสานรายละเอียดชั้นที่ฝ่ายทะเบียนกรอกไว้ (collection "floors") เข้ากับข้อมูลชั้นแบบ static (svg, id, label)
   const { items: floorRecords } = useCollection("floors");
   const KMITL_FLOORS = useMemo(
@@ -41,6 +50,8 @@ export default function MapPicker({ value, onChange, height = 300 }) {
     [floorRecords]
   );
 
+=======
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   useEffect(() => { valueRef.current = value; onChangeRef.current = onChange; });
@@ -255,10 +266,13 @@ export default function MapPicker({ value, onChange, height = 300 }) {
             <div style={{ display: "flex", flexDirection: "column", background: "#fff", border: "1px solid #DADCE0", borderRadius: 8, overflow: "hidden", boxShadow: "0 1px 4px rgba(60,64,67,.28)" }}>
               {KMITL_FLOORS.map((f) => {
                 const on = f.id === floor;
+<<<<<<< HEAD
                 const tooltip = [
                   f.svg ? `ชั้น ${f.label}` : `ชั้น ${f.label} (ยังไม่มีไฟล์ผัง)`,
                   f.detail || null,
                 ].filter(Boolean).join(" · ");
+=======
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
                 return (
                   <button key={f.id} onClick={() => setFloor(f.id)} title={[`ชั้น ${f.label}`, f.detail, f.svg ? null : "(ยังไม่มีไฟล์ผัง)"].filter(Boolean).join(" · ")}
                     style={{ border: "none", borderBottom: "1px solid #F1F3F4", cursor: "pointer", width: 34, padding: "6px 0", fontSize: 12, fontWeight: 800,
@@ -274,7 +288,15 @@ export default function MapPicker({ value, onChange, height = 300 }) {
 
       <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 5, lineHeight: 1.6 }}>
         เปิดผังภายในอาคารเพื่อเลือกชั้นและกดที่ห้องได้โดยตรง หรือคลิก/ลากหมุดบนแผนที่เพื่อปรับตำแหน่ง — ชื่อสถานที่และค่า Lat/Lon จะเติมให้อัตโนมัติ และพิมพ์แก้เองได้
+<<<<<<< HEAD
       </div>
     </div>
   );
 }
+=======
+
+      </div>
+    </div>
+  );
+}
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704

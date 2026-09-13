@@ -194,48 +194,104 @@ export const SC8_FLOORS = [
     label: "8",
     svg: null, // ⚠️ ยังไม่มีไฟล์ floor8.svg ใน public/data/floorplans/Sc8/ — ใส่กลับเมื่อได้ไฟล์มา
     detail: null,
+<<<<<<< HEAD
+=======
+    bounds: [
+      [13.728375, 100.779664], // SE (South, West)
+      [13.729658, 100.780322]  // NW (North, East)
+    ],
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   },
   {
     id: "7",
     label: "7",
     svg: null,
     detail: null,
+<<<<<<< HEAD
+=======
+    bounds: [
+      [13.728375, 100.779664], // SE (South, West)
+      [13.729658, 100.780322]  // NW (North, East)
+    ],
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   },
   {
     id: "6",
     label: "6",
     svg: "/data/floorplans/Sc8/floor6.svg",
     detail: null,
+<<<<<<< HEAD
+=======
+    bounds: [
+      [13.728375, 100.779664], // SE (South, West)
+      [13.729658, 100.780322]  // NW (North, East)
+    ],
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   },
   {
     id: "5",
     label: "5",
     svg: "/data/floorplans/Sc8/floor5.svg",
     detail: null,
+<<<<<<< HEAD
+=======
+    bounds: [
+      [13.728375, 100.779664], // SE (South, West)
+      [13.729658, 100.780322]  // NW (North, East)
+    ],
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   },
   {
     id: "4",
     label: "4",
     svg: "/data/floorplans/Sc8/floor4.svg",
     detail: null,
+<<<<<<< HEAD
+=======
+    bounds: [
+      [13.728375, 100.779664], // SE (South, West)
+      [13.729658, 100.780322]  // NW (North, East)
+    ],
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   },
   {
     id: "3",
     label: "3",
     svg: "/data/floorplans/Sc8/floor3.svg",
     detail: null,
+<<<<<<< HEAD
+=======
+    bounds: [
+      [13.728375, 100.779664], // SE (South, West)
+      [13.729658, 100.780322]  // NW (North, East)
+    ],
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   },
   {
     id: "2",
     label: "2",
     svg: "/data/floorplans/Sc8/floor2.svg",
     detail: null,
+<<<<<<< HEAD
+=======
+    bounds: [
+      [13.728306, 100.779664],
+      [13.729686, 100.780328],
+    ],
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   },
   {
     id: "1",
     label: "1",
     svg: "/data/floorplans/Sc8/floor1.svg",
     detail: null,
+<<<<<<< HEAD
+=======
+    bounds: [
+      [13.728306, 100.779664],
+      [13.729686, 100.780328],
+    ],
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   },
 ];
 

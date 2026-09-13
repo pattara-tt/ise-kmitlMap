@@ -2,12 +2,20 @@
 
 import { useEffect, useState } from "react"; // useEffect ใช้ซิงก์ activeTab ตาม uc prop (ดูด้านล่าง)
 import dynamic from "next/dynamic";
+<<<<<<< HEAD
 import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, useCollection } from "../ui";
+=======
+import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, useCollection } from "../ui";
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 
 const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
   ssr: false,
   loading: () => (
+<<<<<<< HEAD
     <div style={{ height: "calc(100vh - 80px)", display: "grid", placeItems: "center", color: "#5F6368", fontSize: 14 }}>
+=======
+    <div style={{ height: "100%", minHeight: 300, display: "grid", placeItems: "center", color: "#5F6368", fontSize: 14 }}>
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       กำลังโหลดแผนที่…
     </div>
   ),
@@ -33,7 +41,11 @@ export default function RegistrarPanel({ uc, user }) {
   const panelOpen = !!selected.building;
 
   return (
+<<<<<<< HEAD
     <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "calc(100vh - 70px)", overflow: "hidden" }}>
+=======
+    <div className="bdi-fullpanel" style={{ display: "flex", flexDirection: "column", width: "100%", minHeight: 420, overflow: "hidden" }}>
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       {/* 1. แผนที่ — อยู่ด้านบนเสมอ ย่อพื้นที่ลงเมื่อแผงจัดการเปิด แทนที่จะให้แผงลอยทับแผนที่ */}
       <div style={{ position: "relative", flex: panelOpen ? "0 0 60%" : "1 1 auto", minHeight: 0 }}>
         <BuildingFloorPicker
@@ -265,7 +277,17 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
               <Btn
                 onClick={async () => {
                   if (!form.code.trim() || !form.name.trim()) return alert("กรุณาระบุรหัสห้องและชื่อห้อง");
+<<<<<<< HEAD
                   await create({ ...form, building, floor, capacity: Number(form.capacity) }, user);
+=======
+                  // ตาราง rooms มี UNIQUE (building, floor, code) — ถ้ารหัสห้องซ้ำในชั้นเดียวกัน
+                  // create() จะ throw ต้องดักไว้ ไม่งั้นปุ่มจะเงียบไปเฉยๆ โดยผู้ใช้ไม่รู้สาเหตุ
+                  try {
+                    await create({ ...form, building, floor, capacity: Number(form.capacity) }, user);
+                  } catch (e) {
+                    return alert("บันทึกไม่สำเร็จ — อาจมีรหัสห้องนี้อยู่แล้วในชั้นนี้\n" + (e?.message || e));
+                  }
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
                   setForm({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacher: "", nodeId: "" });
                   setShowAddForm(false);
                 }}
@@ -313,6 +335,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
   );
 }
 
+<<<<<<< HEAD
 // Sub-Component: จัดการรายละเอียดชั้น
 function FloorsManager({ building, floor, user }) {
   const { items, create, patch } = useCollection("floors");
@@ -362,6 +385,84 @@ function FloorsManager({ building, floor, user }) {
         >
           บันทึกรายละเอียดชั้น
         </Btn>
+=======
+// Sub-Component: จัดการรายละเอียดชั้น (UC22)
+// รองรับทั้งรายละเอียดชั้น พาธไฟล์ผังชั้น (SVG) และสถานะเปิด/ซ่อนชั้น
+// — ความสามารถ 2 อย่างหลังเคยมีในแผงเดิม ถ้าตัดออกฝ่ายทะเบียนจะผูกไฟล์ผังชั้นใหม่ไม่ได้เลย
+function FloorsManager({ building, floor, user }) {
+  const { items, create, patch } = useCollection("floors");
+  const { items: rooms } = useCollection("rooms");
+  const floorData = items.find((f) => f.building === building && f.floor === floor);
+
+  const [form, setForm] = useState({ note: "", svg: "" });
+  const [saving, setSaving] = useState(false);
+
+  // ให้ค่าฟอร์มอัปเดตตามข้อมูลผังชั้นจริงทุกครั้งที่สลับอาคาร/ชั้น (เอาข้อมูลเดิมมาเติมให้อัตโนมัติ)
+  useEffect(() => {
+    setForm({ note: floorData?.note || "", svg: floorData?.svg || "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [building, floor, floorData?.id]);
+
+  const roomCount = rooms.filter((r) => r.building === building && r.floor === floor).length;
+  const status = floorData?.status || "active";
+
+  const save = async (extra = {}) => {
+    setSaving(true);
+    try {
+      if (floorData) {
+        await patch(floorData.id, { ...form, ...extra }, user);
+      } else {
+        await create({ building, floor, name: `ชั้น ${floor}`, status: "active", ...form, ...extra }, user);
+      }
+    } catch (e) {
+      alert("บันทึกไม่สำเร็จ: " + (e?.message || e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <b style={{ fontSize: 13.5, color: "#202124" }}>ผังชั้นของ {building} — ชั้น {floor}</b>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <Pill color="#1A73E8" bg="#E8F0FE">{roomCount} ห้องในชั้นนี้</Pill>
+          <Status value={status} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 8 }}>
+        {/* กล่องรายละเอียดชั้น: ฝ่ายทะเบียนใส่ข้อมูลเพิ่มเติมเกี่ยวกับชั้นนี้ได้
+            ค่านี้จะไปแสดงต่อท้ายป้าย "Sc8 · ชั้น N" บนแผนที่ของผู้ใช้ทั่วไปด้วย */}
+        <Field label="รายละเอียดชั้น">
+          <Textarea
+            value={form.note}
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+            placeholder="เช่น ชั้นนี้เป็นโซนห้องเรียนวิชาเอก มีลิฟต์ 2 ตัว..."
+            rows={3}
+          />
+        </Field>
+
+        <Field label="ไฟล์ผังชั้น (SVG)">
+          <Input
+            value={form.svg}
+            onChange={(e) => setForm((f) => ({ ...f, svg: e.target.value }))}
+            placeholder={`/data/floorplans/${building}/floor${floor}.svg`}
+          />
+        </Field>
+        <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: -4, marginBottom: 8 }}>
+          {form.svg ? "ไฟล์นี้จะถูกซ้อนทับบนแผนที่เมื่อผู้ใช้ซูมเข้าอาคาร" : "ยังไม่ผูกไฟล์ผังชั้น — ชั้นนี้จะไม่มีภาพผังซ้อนบนแผนที่"}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <Btn disabled={saving} onClick={async () => { await save(); alert("บันทึกข้อมูลชั้นเรียบร้อยแล้ว"); }}>
+            {saving ? "กำลังบันทึก…" : "บันทึกข้อมูลชั้น"}
+          </Btn>
+          {status === "active"
+            ? <Btn kind="ghost" disabled={saving} onClick={() => save({ status: "draft" })}>ซ่อนชั้นนี้</Btn>
+            : <Btn kind="ok" disabled={saving} onClick={() => save({ status: "active" })}>เปิดใช้งานชั้นนี้</Btn>}
+        </div>
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       </div>
     </Card>
   );

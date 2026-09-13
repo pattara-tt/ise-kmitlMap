@@ -654,4 +654,8 @@ function CategoryEditModal({ item, onClose, onSave }) {
       <Field label="สีประจำหมวดหมู่"><Input type="color" value={form.color} onChange={set("color")} style={{ height: 42, padding: 4 }} /></Field>
     </Modal>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704

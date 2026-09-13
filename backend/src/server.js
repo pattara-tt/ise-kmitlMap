@@ -10,7 +10,8 @@ import { osmHandler, walknetHandler } from "./overpass.js";
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Express 4 ไม่จับ rejection ของ async handler เอง — ถ้าไม่ห่อไว้ error ตัวเดียว
 // จะกลายเป็น unhandled rejection แล้ว Node 22 จะ kill process ทั้งคอนเทนเนอร์

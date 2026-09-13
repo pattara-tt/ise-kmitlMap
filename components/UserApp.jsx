@@ -317,4 +317,8 @@ function FeedbackPage({ user }) {
     </div>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704

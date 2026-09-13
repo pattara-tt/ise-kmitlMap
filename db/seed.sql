@@ -13,7 +13,11 @@ INSERT INTO users (id, email, password, name, username, role, institution, statu
   ('U005','pr@kmitl.ac.th','1234','อาสะ คิม','pr','pr','KMITL','active','2026-02-02'),
   ('U006','registrar@kmitl.ac.th','1234','ฮง ไลเคน','registrar','registrar','KMITL','active','2026-02-02'),
   ('U007','student@kmitl.ac.th','1234','อินฟินิตี้ ไอ','student','user','KMITL','active','2026-03-01'),
+<<<<<<< HEAD
   ('U008','somchai@kmitl.ac.th','1234','สมชาย ตั้งมั่น','somchai','user','KMITL','suspended','2026-03-04')
+=======
+  ('U008','somchai@kmitl.ac.th','1234','สมชาย ตั้งมั่น','somchai','user','KMITL','active','2026-03-04')
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO request_quota (id, per_user_per_day, per_user_per_month, updated_by) VALUES
@@ -22,6 +26,7 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO requests (id, user_id, subject, detail, room_id, node_id, before, after, status, note, created_at) VALUES
 (
+<<<<<<< HEAD
     'RQ-1001', 'U007', 'ขอแก้ไขข้อมูลห้อง 106', 'ขอเปลี่ยนประเภทห้อง 106 จากห้องเรียนเป็นห้องปฏิบัติการ', 'RM-01', 'Sc8StudyRoom1F1',
     '{"name": "ห้อง 106", "type": "ห้องเรียน", "capacity": 45, "teacher": "อ.ดร. ปรีชา วงศ์ทอง"}',
     '{"name": "ห้อง 106", "type": "ห้องปฏิบัติการ", "capacity": 45, "teacher": "อ.ดร. ปรีชา วงศ์ทอง"}',
@@ -38,6 +43,26 @@ INSERT INTO requests (id, user_id, subject, detail, room_id, node_id, before, af
     '{"name": "Coworking Space KDAI", "type": "พื้นที่ทำงานร่วม", "capacity": 60, "teacher": "-"}',
     '{"name": "Coworking Space KDAI", "type": "พื้นที่ทำงานร่วม", "capacity": 70, "teacher": "-"}',
     'pending', '', '2026-08-24'
+=======
+    'RQ-1001', 'U007', 'ขอแก้ไขข้อมูลห้อง 106', 'ขอเปลี่ยนประเภทห้อง 106 จากห้องเรียนเป็นห้องปฏิบัติการ', 'RM-01', 'Sc8StudyRoom3F1',
+    '{"name":"ห้อง 106","type":"ห้องเรียน","capacity":45,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
+    '{"name":"ห้อง 106","type":"ห้องปฏิบัติการ","capacity":45,"teacher":"อ.ดร. ปรีชา วงศ์ทอง"}',
+    'pending', '','2026-08-24'
+),
+
+(
+    'RQ-1002', 'U007', 'แจ้งข้อมูลอาจารย์ประจำห้อง 107 ไม่ถูกต้อง', 'ชื่ออาจารย์ประจำห้อง 107 ไม่ตรงกับข้อมูลที่แสดงในระบบ', 'RM-02', 'Sc8StudyRoom2F1',
+    '{"name":"ห้อง 107","type":"ห้องปฏิบัติการ","capacity":40,"teacher":"อ.ดร. สุนิสา ภูผา"}',
+    '{"name":"ห้อง 107","type":"ห้องปฏิบัติการ","capacity":40,"teacher":"อ.ดร. วิชัย ใจดี"}',
+    'pending', '','2026-08-24'
+),
+
+(
+    'RQ-1003', 'U008', 'แจ้งข้อมูลความจุ Coworking Space KDAI', 'ขอให้ตรวจสอบจำนวนที่นั่งของ Coworking Space KDAI', 'RM-03', 'Sc8CoWork1F1',
+    '{"name":"Coworking Space KDAI","type":"พื้นที่ทำงานร่วม","capacity":60,"teacher":"-"}',
+    '{"name":"Coworking Space KDAI","type":"พื้นที่ทำงานร่วม","capacity":70,"teacher":"-"}',
+    'pending', '','2026-08-24'
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -100,9 +125,16 @@ INSERT INTO floors (id, building, floor, name, svg, note, status) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO rooms (id, building, floor, code, name, type, capacity, teacher, node_id, category_id) VALUES
+<<<<<<< HEAD
   ('RM-01','Sc8','1','106','ห้อง 106','ห้องเรียน',45,'อ.ดร. ปรีชา วงศ์ทอง','Sc8StudyRoom1F1','CAT-03'),
   ('RM-02','Sc8','1','107','ห้อง 107','ห้องปฏิบัติการ',40,'อ.ดร. สุนิสา ภูผา','Sc8StudyRoom2F1','CAT-03'),
   ('RM-03','Sc8','1','KDAI','Coworking Space KDAI','พื้นที่ทำงานร่วม',60,'-','Sc8StudyRoom3F1','CAT-03')
+=======
+  ('RM-01','Sc8','1','106','ห้อง 106','ห้องเรียน',45,'อ.ดร. ปรีชา วงศ์ทอง','Sc8StudyRoom3F1','CAT-03'),
+  ('RM-02','Sc8','1','107','ห้อง 107','ห้องปฏิบัติการ',40,'อ.ดร. สุนิสา ภูผา','Sc8StudyRoom2F1','CAT-03'),
+  ('RM-03','Sc8','1','KDAI','Coworking Space KDAI','พื้นที่ทำงานร่วม',60,'-','Sc8CoWork1F1','CAT-03'),
+  ('RM-04','Sc8','1','108','ห้อง 108','ห้องเรียน',45,'อ.ดร. มานพ ศรีสุข','Sc8StudyRoom1F1','CAT-03')
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO map_boundaries (id, name, type, points, status, updated_at) VALUES
@@ -110,10 +142,27 @@ INSERT INTO map_boundaries (id, name, type, points, status, updated_at) VALUES
   ('MB-02','ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)','building',8,'published','2026-08-20')
 ON CONFLICT (id) DO NOTHING;
 
+<<<<<<< HEAD
 INSERT INTO map_assets (id, name, kind, file, updated_at) VALUES
   ('MA-01','ผังชั้น 1 อาคาร Sc8','floorplan','/data/floorplans/Sc8/floor1.svg','2026-08-06'),
   ('MA-02','ผังชั้น 2 อาคาร Sc8','floorplan','/data/floorplans/Sc8/floor2.svg','2026-08-06'),
   ('MA-03','ภาพอาคาร Sc8','image','/data/places/sc8.png','2026-07-28')
+=======
+INSERT INTO map_assets (id, name, kind, file,status,building, floor, updated_at) VALUES
+  ('MA-01','ผังชั้น 1 อาคาร Sc8','floorplan','/data/floorplans/Sc8/floor1.svg','published','Sc8','1','2026-08-06'),
+  ('MA-02','ผังชั้น 2 อาคาร Sc8','floorplan','/data/floorplans/Sc8/floor2.svg','published','Sc8','2','2026-08-06'),
+  ('MA-03','ภาพอาคาร Sc8','image','/data/places/sc8.png','published','Sc8',null,'2026-07-28')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO map_drafts (id, name, note, saved_at, saved_by, status) VALUES
+  ('MD-01','ปรับพิกัดทางเข้าอาคาร Sc8','ย้ายจุดทางเข้าฝั่งเหนือ 3 เมตร','2026-08-22 11:15','ธานอส ซัง','draft')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO map_edits (id, at, actor_id, actor_name, action, target, before, after) VALUES
+  ('ML-3001','2026-08-20 14:02','U003','ธานอส ซัง','แก้ไขขอบเขตแผนผัง','ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)','polygon v2','polygon v3'),
+  ('ML-3002','2026-08-19 09:41','U006','ฮง ไลเคน','แก้ไขข้อมูลห้อง','ห้อง 107 ชั้น 1','ห้องเรียนรวม','ห้องปฏิบัติการ'),
+  ('ML-3003','2026-08-17 16:20','U005','อาสะ คิม','เพิ่มตำแหน่งกิจกรรม','ISE Open House 2026','-','ลานหน้าอาคาร Sc8')
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO usage (month, active_users, searches, routes) VALUES
@@ -122,7 +171,11 @@ INSERT INTO usage (month, active_users, searches, routes) VALUES
 ON CONFLICT (month) DO NOTHING;
 
 INSERT INTO notifications (id, user_id, kind, title, body, read, created_at) VALUES
+<<<<<<< HEAD
   ('NT-001', 'U008','account','บัญชีถูกระงับ','บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ', FALSE,'2026-08-26');
+=======
+  ('NT-001', 'U008','account','บัญชีถูกระงับ','บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ', FALSE,'2026-08-26')
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
