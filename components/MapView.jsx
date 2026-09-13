@@ -163,11 +163,7 @@ function CompassIcon({ size = 16, color = "currentColor", style }) {
   );
 }
 
-<<<<<<< HEAD
-function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
-=======
 function SearchPlaceInput({ value, onChange, onPick, placeholder, rooms = [] }) {
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const timerRef = useRef(null);
@@ -177,9 +173,6 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder, rooms = [] }) 
 
     if (q.length < 1) return [];
 
-<<<<<<< HEAD
-    return SC8_SEARCH_NODES.flatMap((entry) => {
-=======
     const roomByNodeId = new Map(
       rooms.map((room) => [room.nodeId, room])
     );
@@ -187,7 +180,6 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder, rooms = [] }) 
     return SC8_SEARCH_NODES.flatMap((entry) => {
       const room = roomByNodeId.get(entry.id);
       const displayName = room?.name || entry.name;
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       // node ที่ใช้คำนวณเส้นทาง เช่น จุดหน้าประตู
       const routeNode = KMITL_ALL_NODES[entry.id];
 
@@ -207,10 +199,7 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder, rooms = [] }) 
       }
 
       const words = [
-<<<<<<< HEAD
-=======
         displayName,
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
         entry.name,
         entry.id,
         routeNode.label,
@@ -231,11 +220,7 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder, rooms = [] }) 
 
       return [
         {
-<<<<<<< HEAD
-          name: entry.name,
-=======
           name: displayName,
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 
           // ใช้พิกัดกลางห้องสำหรับแสดงหมุด
           coord: [
@@ -328,13 +313,6 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder, rooms = [] }) 
 }
 
 export default function MapView({ apiRef, viewMode = "auto", user = null }) {
-<<<<<<< HEAD
-  // 🔐 เช็คสิทธิ์ "ผู้ดูแลแผนที่" — ใช้คุมการแสดง panel ทดสอบ/แก้ไขข้อมูลตึกที่ user ทั่วไปไม่ควรเห็น
-  // อนุญาต 2 role: gis (ผู้ดูแลข้อมูลสถานที่และอาคาร) และ registrar (ฝ่ายทะเบียน — จัดการข้อมูลห้อง/ชั้นบนแผนที่ ตาม usecases.js)
-  const MAP_ADMIN_ROLES = ["gis", "registrar"];
-  const isMapAdmin = MAP_ADMIN_ROLES.includes(user?.role);
-=======
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   // 🎪 กิจกรรมจากฝ่ายประชาสัมพันธ์ — แสดงเป็นหมุดบนแผนที่ ค้นหาได้ และกดสนใจได้จากการ์ด
   const [events, setEvents] = useState([]);
   const [interests, setInterests] = useState([]);
@@ -372,8 +350,6 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   const [routeSheetOpen, setRouteSheetOpen] = useState(false);
 
 
-<<<<<<< HEAD
-=======
   // 🗂️ ผังชั้นที่แอดมิน (GIS Panel → UC8) อัปโหลด+กด "เผยแพร่" ไว้ — โหลดจาก /api/data/mapAssets
   // เอามาสมทบกับรายชื่อชั้นตั้งต้นใน mapConstants.js (KMITL_FLOORS): ถ้ามีไฟล์ที่เผยแพร่แล้วตรงกับชั้นนั้น ใช้ไฟล์นั้นแทน
   const { items: mapAssetItems } = useCollection("mapAssets");
@@ -387,7 +363,6 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   }, [mapAssetItems]);
 
 
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   const reloadEvents = useCallback(async () => {
     try {
       const [a, b] = await Promise.all([
@@ -513,15 +488,11 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
         if (map.getZoom() < 16) { ctx.current.openOnly(null); return; }
         const center = map.getCenter();
         const lat = center.lat, lng = center.lng;
-<<<<<<< HEAD
-        const kmitlBoundsL = L.latLngBounds(KMITL_BOUNDS).pad(0.12);
-=======
 
         const currentFloorObj = KMITL_FLOORS.find(f => f.id === (kmitlFloorRef.current || "1")) || KMITL_FLOORS[0];
         const activeBounds = currentFloorObj.bounds || KMITL_BOUNDS;
         const kmitlBoundsL = L.latLngBounds(activeBounds).pad(0.12);
 
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
         if (pipTH(lat, lng, KMITL_OUTLINE) || kmitlBoundsL.contains(center)) return ctx.current.openOnly("kmitl");
         ctx.current.openOnly(null);
       };
