@@ -84,11 +84,7 @@ function Users() {
 
 // ── UC11 ค้นหาและเรียกดูข้อมูลคำร้อง ──────────────────────
 function Requests({ user, onReport, onQuota }) {
-<<<<<<< HEAD
-  const { items, reload } = useCollection("requests");
-=======
   const { items, reload, destroy: destroyRequest } = useCollection("requests");
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   const { items: users } = useCollection("users");
   const { items: rooms } = useCollection("rooms");
   const [q, setQ] = useState("");
@@ -115,17 +111,6 @@ function Requests({ user, onReport, onQuota }) {
     })
     .sort((a, b) => {
       if (sortBy === "newest") {
-<<<<<<< HEAD
-        return String(b.createdAt || "").localeCompare(
-          String(a.createdAt || "")
-        );
-      }
-
-      if (sortBy === "oldest") {
-        return String(a.createdAt || "").localeCompare(
-          String(b.createdAt || "")
-        );
-=======
         const dateCompare = String(b.createdAt || "").localeCompare(
           String(a.createdAt || "")
         );
@@ -151,7 +136,6 @@ function Requests({ user, onReport, onQuota }) {
         return String(a.id || "").localeCompare(
           String(b.id || "")
         );
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       }
 
       if (sortBy === "id-asc") {
@@ -167,11 +151,7 @@ function Requests({ user, onReport, onQuota }) {
       }
 
       return 0;
-<<<<<<< HEAD
-    });
-=======
   });
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 
   if (selectedRequest) {
     return (
@@ -302,11 +282,7 @@ function Requests({ user, onReport, onQuota }) {
 
 // Selected Request page
 function RequestDetail({ request, onBack, user }) {
-<<<<<<< HEAD
-  const { patch: patchRequest } = useCollection("requests");
-=======
   const { patch: patchRequest, destroy: destroyRequest } = useCollection("requests");
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   const { items: users } = useCollection("users");
   const { patch: patchRoom } = useCollection("rooms");
 
@@ -570,11 +546,7 @@ const FIELD_LABEL = {
 
 // ── UC14 จัดทำสรุปคำร้อง ───────────────────────
 function RequestReport({ onBack }) {
-<<<<<<< HEAD
-  const { items: requests } = useCollection("requests");
-=======
   const { items: requests, destroy: destroyRequest } = useCollection("requests");
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   const { items: users } = useCollection("users");
   const { items: rooms } = useCollection("rooms");
 
@@ -1376,10 +1348,7 @@ function Quota({ user, onBack }) {
 // ── UC16 จัดการสถานะบัญชีของผู้ใช้งาน ────────────────────
 function AccountStatus({ user }) {
   const { items, patch } = useCollection("users");
-<<<<<<< HEAD
-=======
   const {items: requests, destroy: destroyRequest} = useCollection("requests");
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   const [q, setQ] = useState("");
   const [suspending, setSuspending] = useState(null); // user object ที่กำลังจะระงับ
   const [reason, setReason] = useState("");
@@ -1390,9 +1359,6 @@ function AccountStatus({ user }) {
 
   async function confirmSuspend() {
     if (!reason.trim()) return alert("กรุณาระบุเหตุผลการระงับบัญชี");
-<<<<<<< HEAD
-    
-=======
 
     if (suspending.role === "user") {
       const userRequests = requests.filter(
@@ -1404,7 +1370,6 @@ function AccountStatus({ user }) {
       }
     }
 
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
     await patch(
       suspending.id,
       {
@@ -1425,21 +1390,6 @@ function AccountStatus({ user }) {
       return alert("กรุณาระบุเหตุผลการคืนสิทธิ์");
     }
 
-<<<<<<< HEAD
-    await patch(
-      restoring.id,
-      {
-        status: "active",
-        restoreReason: restoreReason,
-        restoredAt: new Date().toISOString().slice(0, 10),
-        restoredBy: user.id
-      },
-      user
-    );
-
-    setRestoring(null);
-    setRestoreReason("");
-=======
     try {
       const result = await patch(
         restoring.id,
@@ -1460,7 +1410,6 @@ function AccountStatus({ user }) {
       console.error("RESTORE ERROR:", error);
       alert(`คืนสิทธิ์ไม่สำเร็จ: ${error.message}`);
     }
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   }
 
   return (
