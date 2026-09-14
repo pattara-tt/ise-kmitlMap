@@ -2,20 +2,12 @@
 
 import { useEffect, useState } from "react"; // useEffect ใช้ซิงก์ activeTab ตาม uc prop (ดูด้านล่าง)
 import dynamic from "next/dynamic";
-<<<<<<< HEAD
-import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, useCollection } from "../ui";
-=======
 import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, useCollection } from "../ui";
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 
 const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
   ssr: false,
   loading: () => (
-<<<<<<< HEAD
-    <div style={{ height: "calc(100vh - 80px)", display: "grid", placeItems: "center", color: "#5F6368", fontSize: 14 }}>
-=======
     <div style={{ height: "100%", minHeight: 300, display: "grid", placeItems: "center", color: "#5F6368", fontSize: 14 }}>
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       กำลังโหลดแผนที่…
     </div>
   ),
@@ -41,11 +33,7 @@ export default function RegistrarPanel({ uc, user }) {
   const panelOpen = !!selected.building;
 
   return (
-<<<<<<< HEAD
-    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "calc(100vh - 70px)", overflow: "hidden" }}>
-=======
     <div className="bdi-fullpanel" style={{ display: "flex", flexDirection: "column", width: "100%", minHeight: 420, overflow: "hidden" }}>
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       {/* 1. แผนที่ — อยู่ด้านบนเสมอ ย่อพื้นที่ลงเมื่อแผงจัดการเปิด แทนที่จะให้แผงลอยทับแผนที่ */}
       <div style={{ position: "relative", flex: panelOpen ? "0 0 60%" : "1 1 auto", minHeight: 0 }}>
         <BuildingFloorPicker
@@ -277,9 +265,6 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
               <Btn
                 onClick={async () => {
                   if (!form.code.trim() || !form.name.trim()) return alert("กรุณาระบุรหัสห้องและชื่อห้อง");
-<<<<<<< HEAD
-                  await create({ ...form, building, floor, capacity: Number(form.capacity) }, user);
-=======
                   // ตาราง rooms มี UNIQUE (building, floor, code) — ถ้ารหัสห้องซ้ำในชั้นเดียวกัน
                   // create() จะ throw ต้องดักไว้ ไม่งั้นปุ่มจะเงียบไปเฉยๆ โดยผู้ใช้ไม่รู้สาเหตุ
                   try {
@@ -287,7 +272,6 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
                   } catch (e) {
                     return alert("บันทึกไม่สำเร็จ — อาจมีรหัสห้องนี้อยู่แล้วในชั้นนี้\n" + (e?.message || e));
                   }
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
                   setForm({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacher: "", nodeId: "" });
                   setShowAddForm(false);
                 }}
@@ -335,57 +319,6 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
   );
 }
 
-<<<<<<< HEAD
-// Sub-Component: จัดการรายละเอียดชั้น
-function FloorsManager({ building, floor, user }) {
-  const { items, create, patch } = useCollection("floors");
-  const floorData = items.find((f) => f.building === building && f.floor === floor);
-  const [note, setNote] = useState(floorData?.note || "");
-
-  // ให้ค่าฟอร์มอัปเดตตามข้อมูลผังชั้นจริงทุกครั้งที่สลับอาคาร/ชั้น (เอาข้อมูลเดิมมาเติมให้อัตโนมัติ)
-  useEffect(() => {
-    setNote(floorData?.note || "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [building, floor, floorData?.id]);
-
-  return (
-    <Card>
-      <b style={{ fontSize: 13.5, color: "#202124" }}>ผังชั้นของ {building} — ชั้น {floor}</b>
-
-      <div style={{ marginTop: 8 }}>
-        {/* กล่องรายละเอียดชั้น: ฝ่ายทะเบียนใส่ข้อมูลเพิ่มเติมเกี่ยวกับชั้นนี้ได้ */}
-        <Field label="รายละเอียดชั้น">
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="เช่น ชั้นนี้เป็นโซนห้องเรียนวิชาเอก มีลิฟต์ 2 ตัว..."
-            rows={3}
-            style={{
-              width: "100%",
-              padding: "9px 12px",
-              border: "1px solid #DADCE0",
-              borderRadius: 8,
-              fontSize: 13,
-              fontFamily: "inherit",
-              resize: "vertical",
-              boxSizing: "border-box",
-            }}
-          />
-        </Field>
-
-        <Btn
-          onClick={async () => {
-            if (floorData) {
-              await patch(floorData.id, { note }, user);
-            } else {
-              await create({ building, floor, name: `ชั้น ${floor}`, note, status: "active" }, user);
-            }
-            alert("บันทึกรายละเอียดชั้นเรียบร้อยแล้ว");
-          }}
-        >
-          บันทึกรายละเอียดชั้น
-        </Btn>
-=======
 // Sub-Component: จัดการรายละเอียดชั้น (UC22)
 // รองรับทั้งรายละเอียดชั้น พาธไฟล์ผังชั้น (SVG) และสถานะเปิด/ซ่อนชั้น
 // — ความสามารถ 2 อย่างหลังเคยมีในแผงเดิม ถ้าตัดออกฝ่ายทะเบียนจะผูกไฟล์ผังชั้นใหม่ไม่ได้เลย
@@ -462,7 +395,6 @@ function FloorsManager({ building, floor, user }) {
             ? <Btn kind="ghost" disabled={saving} onClick={() => save({ status: "draft" })}>ซ่อนชั้นนี้</Btn>
             : <Btn kind="ok" disabled={saving} onClick={() => save({ status: "active" })}>เปิดใช้งานชั้นนี้</Btn>}
         </div>
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       </div>
     </Card>
   );

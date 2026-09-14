@@ -231,11 +231,6 @@ export function useCollection(name) {
       return j.item;
     }, [name, reload]);
 
-<<<<<<< HEAD
-  const patch = useCallback(async (id, p, actor) => {
-    await fetch("/api/data/" + name, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p, _actor: actor }) });
-    await reload();
-=======
   // const patch = useCallback(async (id, p, actor) => {
   //   await fetch("/api/data/" + name, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p, _actor: actor }) });
   //   await reload();
@@ -256,7 +251,6 @@ export function useCollection(name) {
 
     await reload();
     return j.item;
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   }, [name, reload]);
 
   const destroy = useCallback(async (id, actor) => {

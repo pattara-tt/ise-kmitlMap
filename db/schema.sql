@@ -17,8 +17,6 @@ CREATE TABLE IF NOT EXISTS users (
                 CHECK (role IN ('exec','marketing','gis','admin','pr','registrar','user')),
   institution   TEXT DEFAULT 'KMITL',
   status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
-<<<<<<< HEAD
-=======
   suspend_reason TEXT,
   suspended_at DATE,
   suspended_by TEXT,
@@ -26,7 +24,6 @@ CREATE TABLE IF NOT EXISTS users (
   restore_reason TEXT,
   restored_at DATE,
   restored_by TEXT,
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   created_at    DATE NOT NULL DEFAULT CURRENT_DATE
 );
 CREATE INDEX IF NOT EXISTS idx_users_role   ON users(role);
@@ -150,12 +147,9 @@ CREATE TABLE IF NOT EXISTS map_assets (
   name        TEXT NOT NULL,
   kind        TEXT NOT NULL DEFAULT 'floorplan' CHECK (kind IN ('floorplan','image','icon')),
   file        TEXT NOT NULL,
-<<<<<<< HEAD
-=======
   status      TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
   building    TEXT,
   floor       TEXT,
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
   updated_at  DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at  DATE NOT NULL DEFAULT CURRENT_DATE
 );
