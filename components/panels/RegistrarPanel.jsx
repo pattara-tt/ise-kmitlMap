@@ -51,6 +51,7 @@ export default function RegistrarPanel({ uc, user }) {
             setActiveTab("rooms");
             setFocusRoom(room);
           }}
+          onCloseRoomPopup={() => setFocusRoom(null)} // กด ✕ บน popup ของแผนที่ -> แผงด้านล่างกลับไปแสดงห้องทั้งหมดทันที
         />
       </div>
 
@@ -140,6 +141,10 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
   const [editForm, setEditForm] = useState(null);
   const [isEditing, setIsEditing] = useState(false); // false = แสดงข้อมูลอย่างเดียวก่อนเสมอ, true = เข้าฟอร์มแก้ไขแล้ว
 
+  // popup แบบในแอป (แทน confirm()/alert() ของเบราว์เซอร์) — confirmTarget = ห้องที่รอยืนยันลบ, notice = ข้อความแจ้งเตือนหลังบันทึก/ผิดพลาด
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [notice, setNotice] = useState(null);
+
   // ผู้ใช้ตั้งใจกด "แก้ไข" มาเลยหรือเปล่า ใช้บอก effect ด้านล่างตอนเปลี่ยนห้องที่โฟกัส
   // (ทุกห้องที่เพิ่งถูกเลือกใหม่ ค่าเริ่มต้นคือโหมดดูข้อมูลอย่างเดียวเสมอ เว้นแต่ตั้ง flag นี้ไว้)
   const editIntentRef = useRef(false);
@@ -219,8 +224,13 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
     setFocusRoom(r);
   };
 
-  const doDelete = async (r) => {
-    if (!confirm(`ลบ ${r.name}?`)) return;
+  // กดปุ่ม/icon ลบ แค่เปิด popup ยืนยันขึ้นมาก่อน — การลบจริงเกิดตอนกดยืนยันใน confirmDeleteNow()
+  const doDelete = (r) => setConfirmTarget(r);
+
+  const confirmDeleteNow = async () => {
+    const r = confirmTarget;
+    if (!r) return;
+    setConfirmTarget(null);
     await destroy(r.id, user);
     backToList();
   };
@@ -237,6 +247,33 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
 
   const rows = currentRooms.filter((r) => (r.code + r.name + r.teacher + r.type).toLowerCase().includes(q.toLowerCase()));
 
+  // popup ยืนยันลบ / popup แจ้งผล — ใช้ร่วมกันทุกโหมดของ RoomsManager แทน confirm()/alert() ของเบราว์เซอร์
+  const popupEl = (
+    <>
+      {confirmTarget && (
+        <ModalPopup
+          icon="🗑️"
+          title="ลบห้อง"
+          message={`ลบ ${confirmTarget.name}?`}
+          confirmText="ลบ"
+          cancelText="ยกเลิก"
+          danger
+          onConfirm={confirmDeleteNow}
+          onCancel={() => setConfirmTarget(null)}
+        />
+      )}
+      {notice && (
+        <ModalPopup
+          icon={notice.icon}
+          title={notice.title}
+          message={notice.message}
+          confirmText="ตกลง"
+          onConfirm={() => setNotice(null)}
+        />
+      )}
+    </>
+  );
+
   // ---------- โหมด: ดูข้อมูลห้องที่มีอยู่แล้วอย่างเดียว (ค่าเริ่มต้นเมื่อกดจากแผนที่/ตาราง) ----------
   if (effectiveFocus && matchedRoom && editForm && !isEditing) {
     return (
@@ -247,7 +284,13 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
         </div>
 
         <Card>
-          <b style={{ fontSize: 13.5, color: "#202124" }}>ข้อมูลห้อง {matchedRoom.code}</b>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <b style={{ fontSize: 13.5, color: "#202124" }}>ข้อมูลห้อง {matchedRoom.code}</b>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <Btn kind="ghost" onClick={() => { editIntentRef.current = true; setIsEditing(true); }}>แก้ไขข้อมูล</Btn>
+              <Btn kind="danger" onClick={() => doDelete(matchedRoom)}>ลบห้อง</Btn>
+            </div>
+          </div>
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <div style={{ flex: 1 }}><InfoField label="รหัสห้อง" value={matchedRoom.code} /></div>
             <div style={{ flex: 2 }}><InfoField label="ชื่อห้อง" value={matchedRoom.name} /></div>
@@ -258,12 +301,8 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
           </div>
           <InfoField label="อาจารย์ประจำห้อง" value={matchedRoom.teacher} />
           <InfoField label="รหัส node บนผังชั้น" value={matchedRoom.nodeId} />
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-            <Btn kind="ghost" onClick={() => { editIntentRef.current = true; setIsEditing(true); }}>แก้ไขข้อมูล</Btn>
-            <Btn kind="danger" onClick={() => doDelete(matchedRoom)}>ลบห้อง</Btn>
-          </div>
         </Card>
+        {popupEl}
       </>
     );
   }
@@ -340,13 +379,14 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
               onClick={async () => {
                 await patch(matchedRoom.id, { ...editForm, capacity: Number(editForm.capacity) }, user);
                 setIsEditing(false);
-                alert("บันทึกการแก้ไขเรียบร้อยแล้ว");
+                setNotice({ icon: "✅", title: "สำเร็จ", message: "บันทึกการแก้ไขเรียบร้อยแล้ว" });
               }}
             >
               บันทึกการแก้ไข
             </Btn>
           </div>
         </Card>
+        {popupEl}
       </>
     );
   }
@@ -386,13 +426,15 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <Btn
                 onClick={async () => {
-                  if (!form.code.trim() || !form.name.trim()) return alert("กรุณาระบุรหัสห้องและชื่อห้อง");
+                  if (!form.code.trim() || !form.name.trim()) {
+                    return setNotice({ icon: "⚠️", title: "ข้อมูลไม่ครบ", message: "กรุณาระบุรหัสห้องและชื่อห้อง" });
+                  }
                   // ตาราง rooms มี UNIQUE (building, floor, code) — ถ้ารหัสห้องซ้ำในชั้นเดียวกัน
                   // create() จะ throw ต้องดักไว้ ไม่งั้นปุ่มจะเงียบไปเฉยๆ โดยผู้ใช้ไม่รู้สาเหตุ
                   try {
                     await create({ ...form, building, floor, capacity: Number(form.capacity) }, user);
                   } catch (e) {
-                    return alert("บันทึกไม่สำเร็จ — อาจมีรหัสห้องนี้อยู่แล้วในชั้นนี้\n" + (e?.message || e));
+                    return setNotice({ icon: "❌", title: "บันทึกไม่สำเร็จ", message: "อาจมีรหัสห้องนี้อยู่แล้วในชั้นนี้ — " + (e?.message || e) });
                   }
                   setForm({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacher: "", nodeId: "" });
                   setShowAddForm(false);
@@ -404,6 +446,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
             </div>
           </Card>
         )}
+        {popupEl}
       </>
     );
   }
@@ -445,6 +488,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
           empty="ยังไม่มีข้อมูลห้องในชั้นนี้"
         />
       </div>
+      {popupEl}
     </>
   );
 }
@@ -459,15 +503,31 @@ function FloorsManager({ building, floor, user }) {
 
   const [form, setForm] = useState({ note: "", svg: "" });
   const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // false = ดูข้อมูลอย่างเดียวก่อนเสมอ, true = กด "แก้ไข" แล้วค่อยแก้ฟอร์มได้
+  const [notice, setNotice] = useState(null); // popup แจ้งผลบันทึก/ผิดพลาด แทน alert()
 
-  // ให้ค่าฟอร์มอัปเดตตามข้อมูลผังชั้นจริงทุกครั้งที่สลับอาคาร/ชั้น (เอาข้อมูลเดิมมาเติมให้อัตโนมัติ)
+  const savedNote = floorData?.note || "";
+  const savedSvg = floorData?.svg || "";
+
+  // ให้ค่าฟอร์มอัปเดตตามข้อมูลผังชั้นจริงทุกครั้งที่สลับอาคาร/ชั้น (เอาข้อมูลเดิมมาเติมให้อัตโนมัติ) และกลับสู่โหมดดูข้อมูลก่อนเสมอ
   useEffect(() => {
-    setForm({ note: floorData?.note || "", svg: floorData?.svg || "" });
+    setForm({ note: savedNote, svg: savedSvg });
+    setIsEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [building, floor, floorData?.id]);
 
   const roomCount = rooms.filter((r) => r.building === building && r.floor === floor).length;
   const status = floorData?.status || "active";
+
+  // เทียบค่าฟอร์มที่กำลังแก้กับค่าที่บันทึกไว้จริง ใช้ไฮไลต์กรอบฟ้า + "* แก้ไข" เหมือนโหมดแก้ไขห้อง
+  const fieldChanged = (k) => String(form[k]) !== String(k === "note" ? savedNote : savedSvg);
+
+  const startEdit = () => setIsEditing(true);
+
+  const cancelEdit = () => {
+    setForm({ note: savedNote, svg: savedSvg });
+    setIsEditing(false);
+  };
 
   const save = async (extra = {}) => {
     setSaving(true);
@@ -478,16 +538,60 @@ function FloorsManager({ building, floor, user }) {
         await create({ building, floor, name: `ชั้น ${floor}`, status: "active", ...form, ...extra }, user);
       }
     } catch (e) {
-      alert("บันทึกไม่สำเร็จ: " + (e?.message || e));
+      setNotice({ icon: "❌", title: "บันทึกไม่สำเร็จ", message: e?.message || String(e) });
+      return false;
     } finally {
       setSaving(false);
     }
+    return true;
   };
 
+  const popupEl = notice && (
+    <ModalPopup
+      icon={notice.icon}
+      title={notice.title}
+      message={notice.message}
+      confirmText="ตกลง"
+      onConfirm={() => setNotice(null)}
+    />
+  );
+
+  // ---------- โหมด: ดูข้อมูลชั้นอย่างเดียว (ค่าเริ่มต้นเสมอ ต้องกด "แก้ไข" ก่อนถึงจะแก้ฟอร์มได้) ----------
+  if (!isEditing) {
+    return (
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <b style={{ fontSize: 13.5, color: "#202124" }}>ผังชั้นของ {building} — ชั้น {floor}</b>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <Pill color="#1A73E8" bg="#E8F0FE">{roomCount} ห้องในชั้นนี้</Pill>
+            <Status value={status} />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 8 }}>
+          <InfoField label="รายละเอียดชั้น" value={savedNote} />
+          <InfoField label="ไฟล์ผังชั้น (SVG)" value={savedSvg} />
+          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: -4, marginBottom: 8 }}>
+            {savedSvg ? "ไฟล์นี้จะถูกซ้อนทับบนแผนที่เมื่อผู้ใช้ซูมเข้าอาคาร" : "ยังไม่ผูกไฟล์ผังชั้น — ชั้นนี้จะไม่มีภาพผังซ้อนบนแผนที่"}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <Btn onClick={startEdit}>แก้ไขข้อมูลชั้น</Btn>
+            {status === "active"
+              ? <Btn kind="ghost" disabled={saving} onClick={() => save({ status: "draft" })}>ซ่อนชั้นนี้</Btn>
+              : <Btn kind="ok" disabled={saving} onClick={() => save({ status: "active" })}>เปิดใช้งานชั้นนี้</Btn>}
+          </div>
+        </div>
+        {popupEl}
+      </Card>
+    );
+  }
+
+  // ---------- โหมด: ฟอร์มแก้ไขข้อมูลชั้น (กดปุ่ม "แก้ไขข้อมูลชั้น" มาแล้ว) ----------
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <b style={{ fontSize: 13.5, color: "#202124" }}>ผังชั้นของ {building} — ชั้น {floor}</b>
+        <b style={{ fontSize: 13.5, color: "#202124" }}>แก้ไขผังชั้นของ {building} — ชั้น {floor}</b>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <Pill color="#1A73E8" bg="#E8F0FE">{roomCount} ห้องในชั้นนี้</Pill>
           <Status value={status} />
@@ -497,37 +601,91 @@ function FloorsManager({ building, floor, user }) {
       <div style={{ marginTop: 8 }}>
         {/* กล่องรายละเอียดชั้น: ฝ่ายทะเบียนใส่ข้อมูลเพิ่มเติมเกี่ยวกับชั้นนี้ได้
             ค่านี้จะไปแสดงต่อท้ายป้าย "Sc8 · ชั้น N" บนแผนที่ของผู้ใช้ทั่วไปด้วย */}
-        <Field label="รายละเอียดชั้น">
+        <EditField label="รายละเอียดชั้น" changed={fieldChanged("note")}>
           <Textarea
             value={form.note}
             onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
             placeholder="เช่น ชั้นนี้เป็นโซนห้องเรียนวิชาเอก มีลิฟต์ 2 ตัว..."
             rows={3}
+            style={diffInputStyle(fieldChanged("note"))}
           />
-        </Field>
+        </EditField>
 
-        <Field label="ไฟล์ผังชั้น (SVG)">
+        <EditField label="ไฟล์ผังชั้น (SVG)" changed={fieldChanged("svg")}>
           <Input
             value={form.svg}
             onChange={(e) => setForm((f) => ({ ...f, svg: e.target.value }))}
             placeholder={`/data/floorplans/${building}/floor${floor}.svg`}
+            style={diffInputStyle(fieldChanged("svg"))}
           />
-        </Field>
+        </EditField>
         <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: -4, marginBottom: 8 }}>
           {form.svg ? "ไฟล์นี้จะถูกซ้อนทับบนแผนที่เมื่อผู้ใช้ซูมเข้าอาคาร" : "ยังไม่ผูกไฟล์ผังชั้น — ชั้นนี้จะไม่มีภาพผังซ้อนบนแผนที่"}
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-          <Btn disabled={saving} onClick={async () => { await save(); alert("บันทึกข้อมูลชั้นเรียบร้อยแล้ว"); }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+          <Btn kind="ghost" disabled={saving} onClick={cancelEdit}>ยกเลิก</Btn>
+          <Btn
+            disabled={saving}
+            onClick={async () => {
+              const ok = await save();
+              if (ok) {
+                setIsEditing(false);
+                setNotice({ icon: "✅", title: "สำเร็จ", message: "บันทึกข้อมูลชั้นเรียบร้อยแล้ว" });
+              }
+            }}
+          >
             {saving ? "กำลังบันทึก…" : "บันทึกข้อมูลชั้น"}
           </Btn>
-          {status === "active"
-            ? <Btn kind="ghost" disabled={saving} onClick={() => save({ status: "draft" })}>ซ่อนชั้นนี้</Btn>
-            : <Btn kind="ok" disabled={saving} onClick={() => save({ status: "active" })}>เปิดใช้งานชั้นนี้</Btn>}
         </div>
       </div>
+      {popupEl}
     </Card>
   );
+}
+
+// ---------- Popup ยืนยัน / แจ้งผล ในสไตล์แอป (แทน confirm()/alert() ของเบราว์เซอร์) ----------
+// ใช้แทนกล่อง native ของเบราว์เซอร์ (เช่น "ลบ ห้อง 107?" หรือ "บันทึกการแก้ไขเรียบร้อยแล้ว")
+// ด้วยการ์ดลอยกึ่งกลางจอ ดีไซน์เดียวกับป้ายข้อมูลห้องบนแผนที่
+function ModalPopup({ icon = "ℹ️", title, message, confirmText = "ตกลง", cancelText, danger, onConfirm, onCancel }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 6000,
+        background: "rgba(32,33,36,.5)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 16,
+      }}
+      onClick={() => (cancelEnabledFor(cancelText) ? onCancel?.() : undefined)}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 14, padding: "18px 20px",
+          minWidth: 260, maxWidth: 340, width: "100%",
+          boxShadow: "0 8px 30px rgba(0,0,0,.28)",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 20 }}>{icon}</span>
+          <b style={{ fontSize: 14.5, color: "#202124" }}>{title}</b>
+        </div>
+        <div style={{ fontSize: 13, color: "#3C4043", marginBottom: 18, lineHeight: 1.5, whiteSpace: "pre-line" }}>
+          {message}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          {cancelText && (
+            <Btn kind="ghost" onClick={onCancel}>{cancelText}</Btn>
+          )}
+          <Btn kind={danger ? "danger" : undefined} onClick={onConfirm}>{confirmText}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+function cancelEnabledFor(cancelText) {
+  return !!cancelText; // คลิกฉากหลังปิด popup ได้เฉพาะตอนมีปุ่ม "ยกเลิก" (popup แจ้งผลเฉยๆ ต้องกด "ตกลง" เท่านั้น)
 }
 
 // ---------- Helper components สำหรับโหมดดู/แก้ไขห้อง ----------

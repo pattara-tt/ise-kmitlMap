@@ -98,6 +98,7 @@ export default function BuildingFloorPicker({
   floor,
   onChange,
   onSelectRoom,
+  onCloseRoomPopup, // ผู้ใช้กด ✕ บน popup ของ node บนแผนที่โดยตรง — ให้แผงด้านล่างสลับไปแสดง "ห้องทั้งหมด" ทันที
   height = "100%",
   focusedNodeId = null, // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — ใช้เปลี่ยน icon เป็นปากกาและซูมแผนที่ไปหา
 }) {
@@ -243,6 +244,9 @@ export default function BuildingFloorPicker({
   const onSelectRoomRef = useRef(onSelectRoom);
   useEffect(() => { onSelectRoomRef.current = onSelectRoom;}, [onSelectRoom]);
 
+  const onCloseRoomPopupRef = useRef(onCloseRoomPopup);
+  useEffect(() => { onCloseRoomPopupRef.current = onCloseRoomPopup; }, [onCloseRoomPopup]);
+
   /* Sync props */
 
   useEffect(() => {
@@ -262,11 +266,7 @@ export default function BuildingFloorPicker({
     if (!map || !poly) return;
     const center = poly.getBounds().getCenter();
     const targetZoom = 20.2;
-
-    // อย่าตั้ง minZoom === maxZoom แบบเป๊ะๆ เด็ดขาด เพราะถ้า zoom ถูกล็อคตายตัว
-    // แล้ว container กับ maxBounds ไม่พอดีกันพอดี Leaflet จะพยายาม pan เข้า
-    // bounds ซ้ำไปเรื่อยๆ โดยขยับ zoom ไม่ได้เลย จนเกิด stack overflow
-    // (_onPanTransitionEnd / _adjustPan วนไม่รู้จบ) ให้เผื่อช่วงเล็กน้อยแทน
+    
     const ZOOM_LOCK_MARGIN = 0.4;
 
     // ให้แน่ใจว่าขนาด container ถูกต้องก่อน ค่อยคำนวณ view/bounds
@@ -592,12 +592,9 @@ export default function BuildingFloorPicker({
       const size = icon.type === "room" ||
         icon.type === "toilet" ? 24 : 26;
 
-      // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — แสดงเป็นไอคอนปากกาแทนไอคอนปกติ
-      // พร้อมกรอบสีน้ำเงินเน้น ให้รู้ทันทีว่ากำลังดู/แก้ไขจุดไหนอยู่
+      // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — เน้นด้วยกรอบสีน้ำเงิน (ไม่เปลี่ยน icon)
       const isFocusedNode = focusedNodeId && id === focusedNodeId;
-      const iconInnerHtml = isFocusedNode
-        ? `<span style="font-size:${Math.round(size * 0.62)}px;line-height:1;">✏️</span>`
-        : icon.html;
+      const iconInnerHtml = icon.html;
 
       const marker = L.marker([node.lat, node.lon,], {
             icon: L.divIcon({
@@ -737,7 +734,21 @@ export default function BuildingFloorPicker({
          - ส่งไป RoomsManager
          =================================================== */
 
+        // จับตอนผู้ใช้กด ✕ บน popup โดยตรง (ต่างจากตอน popup ถูกปิดเพราะ marker ถูกสร้างใหม่ตอน re-render)
+        // เพื่อรู้ว่า popupclose รอบนี้เกิดจากผู้ใช้กดเองจริง ๆ ไม่ใช่ effect วาด marker ใหม่แล้วปิดไปโดยไม่ตั้งใจ
+        marker.on("popupopen", (e) => {
+          const closeBtn = e.popup.getElement()?.querySelector(".leaflet-popup-close-button");
+          closeBtn?.addEventListener(
+            "click",
+            () => { ctx.current.userClosedPopup = true; },
+            { once: true }
+          );
+        });
+
         marker.on("popupclose", () => {
+        const wasUserClose = ctx.current.userClosedPopup;
+        ctx.current.userClosedPopup = false;
+
         const currentMap = ctx.current.map;
         const currentLayer = openKey ? ctx.current.buildingLayers[openKey] : null;
 
@@ -750,7 +761,19 @@ export default function BuildingFloorPicker({
             duration: 0.5,
             });
         }
+
+        // กด ✕ บน popup เอง (ไม่ใช่ popup ถูกปิดเพราะ marker ถูกสร้างใหม่) — สั่งแผงด้านล่างกลับไปหน้าห้องทั้งหมดทันที
+        if (wasUserClose) {
+          onCloseRoomPopupRef.current?.();
+        }
         });
+
+        // ห้องนี้กำลังถูกโฟกัส/แสดงอยู่ในแผงด้านล่าง — เปิด popup ค้างไว้เสมอ
+        // แม้ effect นี้จะ re-run แล้วสร้าง marker ใหม่ทับของเดิม (เช่น ตอนเพิ่งกด icon แล้ว focusedNodeId เปลี่ยน)
+        // ก็ให้ popup เปิดค้างอยู่ต่อ ไม่ใช่หายไปเฉย ๆ
+        if (isFocusedNode) {
+          marker.openPopup();
+        }
 
         marker.on("click", () => {
             map.setView([node.lat, node.lon,], 20, { animate: true,});
