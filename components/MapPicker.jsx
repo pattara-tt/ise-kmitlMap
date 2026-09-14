@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadLeaflet, suggestPlaces, resolvePlace, geocodeNominatim, queuedReverse } from "./mapGeo";
+import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
 import {
   CENTER, KMITL_ALL_NODES, KMITL_BOUNDS, KMITL_FLOORS, KMITL_NODE_FLOOR,
   KMITL_OUTLINE, WALKWAY_NODE_TYPES, getNodeType,
@@ -43,7 +44,13 @@ export default function MapPicker({ value, onChange, height = 300 }) {
       const L = await loadLeaflet();
       if (dead || mapRef.current || !elRef.current) return;
       const map = L.map(elRef.current, { zoomControl: true, attributionControl: false }).setView(CENTER, 17);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { maxZoom: 21 }).addTo(map);
+      // วาดถนน/ตึก/พื้นที่สีเขียวเองจาก OSM (เหมือนหน้า User) แทนขอ raster tile จาก CARTO ตรงๆ
+      // ซึ่งตอนนี้ต้องมี API key ถึงจะไม่มี watermark "API KEY REQUIRED" ทับเต็มแผนที่
+      map.getContainer().style.background = "#FFFFFF";
+      drawGoogleLikeBaseMap(L, map, [
+        KMITL_BOUNDS[0][0], KMITL_BOUNDS[0][1],
+        KMITL_BOUNDS[1][0], KMITL_BOUNDS[1][1],
+      ]).catch(() => {});
 
       // pane สำหรับวางผังชั้นให้อยู่เหนือ tile แต่ใต้หมุด
       if (!map.getPane("pickFloorPane")) {

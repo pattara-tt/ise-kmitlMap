@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadLeaflet } from "./mapGeo";
+import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
 import {
   BUILDINGS,
   CENTER,
@@ -98,6 +99,7 @@ export default function BuildingFloorPicker({
   onChange,
   onSelectRoom,
   height = "100%",
+  focusedNodeId = null, // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — ใช้เปลี่ยน icon เป็นปากกาและซูมแผนที่ไปหา
 }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
@@ -307,14 +309,14 @@ export default function BuildingFloorPicker({
       ctx.current.L = L;
       ctx.current.map = map;
 
-      /* Base map */
-
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-        {
-          maxZoom: 21, attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        }
-      ).addTo(map);
+      /* Base map — วาดถนน/ตึก/พื้นที่สีเขียวเองจาก OSM (เหมือนหน้า User ใน MapView.jsx)
+         แทนการขอ raster tile เต็มจอจาก CARTO ตรงๆ ซึ่งตอนนี้ต้องมี API key ถึงจะไม่มี
+         watermark "API KEY REQUIRED" ทับเต็มแผนที่ (ดู mapBaseLayer.js) */
+      map.getContainer().style.background = "#FFFFFF";
+      drawGoogleLikeBaseMap(L, map, [
+        KMITL_BOUNDS[0][0], KMITL_BOUNDS[0][1],
+        KMITL_BOUNDS[1][0], KMITL_BOUNDS[1][1],
+      ]).catch(() => {});
 
       /* Pane สำหรับ floor plan */
 
@@ -590,6 +592,13 @@ export default function BuildingFloorPicker({
       const size = icon.type === "room" ||
         icon.type === "toilet" ? 24 : 26;
 
+      // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — แสดงเป็นไอคอนปากกาแทนไอคอนปกติ
+      // พร้อมกรอบสีน้ำเงินเน้น ให้รู้ทันทีว่ากำลังดู/แก้ไขจุดไหนอยู่
+      const isFocusedNode = focusedNodeId && id === focusedNodeId;
+      const iconInnerHtml = isFocusedNode
+        ? `<span style="font-size:${Math.round(size * 0.62)}px;line-height:1;">✏️</span>`
+        : icon.html;
+
       const marker = L.marker([node.lat, node.lon,], {
             icon: L.divIcon({
                 className: "",
@@ -604,6 +613,7 @@ export default function BuildingFloorPicker({
                       cursor:pointer;
                       background:
                         ${
+                          isFocusedNode ? "#E8F0FE" :
                           icon.type === "room" ? "rgba(255,255,255,.94)" : icon.type === "toilet"
                             ? "rgba(255,255,255,.94)"
                             : "transparent"
@@ -612,16 +622,19 @@ export default function BuildingFloorPicker({
                       border-radius:
                         ${
                           icon.type === "room" ||
-                          icon.type === "toilet" ? "5px" : "50%"
+                          icon.type === "toilet" ||
+                          isFocusedNode ? "5px" : "50%"
                         };
 
                       box-shadow:
                         ${
-                          icon.type === "room" ||
-                          icon.type === "toilet" ? "0 1px 4px rgba(0,0,0,.25)": "none"
+                          isFocusedNode
+                            ? "0 0 0 2px #1A73E8, 0 1px 5px rgba(0,0,0,.3)"
+                            : icon.type === "room" ||
+                              icon.type === "toilet" ? "0 1px 4px rgba(0,0,0,.25)": "none"
                         };
                     ">
-                    ${icon.html}
+                    ${iconInnerHtml}
                   </div>`,
 
                 iconSize: [size,size],
@@ -629,7 +642,7 @@ export default function BuildingFloorPicker({
               }),
 
             zIndexOffset:
-              icon.type === "room" || icon.type === "toilet" ? 900 : 750,
+              isFocusedNode ? 1000 : icon.type === "room" || icon.type === "toilet" ? 900 : 750,
 
             pane: "regGraphPane",
           }
@@ -776,7 +789,22 @@ export default function BuildingFloorPicker({
     floorNodes,
     roomByNode,
     b,
+    focusedNodeId,
   ]);
+
+  /* ===================================================
+     ซูมแผนที่ไปหา node ที่ถูกเลือกจากแผงจัดการด้านล่าง
+     (เช่น กดแถวห้องหรือปุ่มแก้ไขในตาราง "แสดงห้องทั้งหมด")
+     ไม่ใช่แค่ตอนคลิก icon บนแผนที่โดยตรงเท่านั้น
+     =================================================== */
+
+  useEffect(() => {
+    const { map } = ctx.current;
+    if (!map || !openKey || !focusedNodeId) return;
+    const node = floorNodes[focusedNodeId];
+    if (!node || !Number.isFinite(node.lat) || !Number.isFinite(node.lon)) return;
+    map.setView([node.lat, node.lon], 20, { animate: true });
+  }, [openKey, curFloor, focusedNodeId, floorNodes]);
 
   /* Search */
 

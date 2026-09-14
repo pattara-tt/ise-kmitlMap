@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react"; // useEffect ใช้ซิงก์ activeTab ตาม uc prop (ดูด้านล่าง)
+import { useEffect, useRef, useState } from "react"; // useEffect ใช้ซิงก์ activeTab ตาม uc prop (ดูด้านล่าง)
 import dynamic from "next/dynamic";
 import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, useCollection } from "../ui";
 
@@ -19,6 +19,7 @@ export default function RegistrarPanel({ uc, user }) {
   const [selected, setSelected] = useState({ building: null, floor: "1" });
   const [activeTab, setActiveTab] = useState(uc === "floors" ? "floors" : "rooms"); // 'rooms' หรือ 'floors'
   const [focusRoom, setFocusRoom] = useState(null); // ห้องที่ถูกกดจาก node บนแผนที่ ให้ RoomsManager โฟกัส/แสดงข้อมูลให้
+  const [panelFullscreen, setPanelFullscreen] = useState(false); // แผงจัดการด้านล่างขยายเต็มจอหรือไม่
 
   // ผู้ใช้อาจสลับเมนู UC21 <-> UC22 โดยที่ RegistrarPanel component เดิมไม่ remount (React reuse เดิม)
   // ต้องซิงก์ activeTab ตาม uc ทุกครั้งที่ prop เปลี่ยน ไม่ใช่แค่ตอน mount ครั้งแรก
@@ -40,6 +41,7 @@ export default function RegistrarPanel({ uc, user }) {
           building={selected.building}
           floor={selected.floor}
           height="100%"
+          focusedNodeId={focusRoom?.nodeId || null}
           onChange={({ building, floor }) => {
             setSelected({ building, floor });
             setFocusRoom(null);
@@ -56,8 +58,9 @@ export default function RegistrarPanel({ uc, user }) {
       {panelOpen && (
         <div
           style={{
-            flex: "1 1 40%",
-            minHeight: 0,
+            ...(panelFullscreen
+              ? { position: "fixed", inset: 0, zIndex: 5000 }
+              : { flex: "1 1 40%", minHeight: 0 }),
             background: "#ffffff",
             borderTop: "1px solid #DADCE0",
             boxShadow: "0 -4px 20px rgba(0,0,0,0.08)",
@@ -93,12 +96,21 @@ export default function RegistrarPanel({ uc, user }) {
               </div>
             </div>
 
-            <button
-              onClick={() => { setSelected({ building: null, floor: "1" }); setFocusRoom(null); setActiveTab("rooms"); }}
-              style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#5F6368" }}
-            >
-              ✕
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                onClick={() => setPanelFullscreen((v) => !v)}
+                title={panelFullscreen ? "ย่อกลับ" : "ขยายเต็มจอ"}
+                style={{ background: "none", border: "none", fontSize: 17, cursor: "pointer", color: "#5F6368", lineHeight: 1 }}
+              >
+                {panelFullscreen ? "⤡" : "⤢"}
+              </button>
+              <button
+                onClick={() => { setSelected({ building: null, floor: "1" }); setFocusRoom(null); setActiveTab("rooms"); setPanelFullscreen(false); }}
+                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#5F6368" }}
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {/* เนื้อหาฟอร์มจัดการ */}
@@ -122,10 +134,15 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
   const [form, setForm] = useState({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacher: "", nodeId: "" });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  // โหมดการแสดงผลของแผงห้อง: 'idle' = รายการทั้งหมด, 'view' = ดู/แก้ไขห้องที่มีข้อมูลแล้ว, 'create' = ห้องที่ยังไม่มีข้อมูล
+  // โหมดการแสดงผลของแผงห้อง: 'idle' = รายการทั้งหมด, 'view' = ดูข้อมูลอย่างเดียว, 'edit' = ฟอร์มแก้ไข, 'create' = ห้องที่ยังไม่มีข้อมูล
   const [manualOverride, setManualOverride] = useState(false); // ผู้ใช้กด "แสดงห้องทั้งหมด" เอง
   const [showAddForm, setShowAddForm] = useState(false); // กดปุ่ม "เพิ่มข้อมูลห้องนี้" แล้วหรือยัง (กรณีกดจาก node)
   const [editForm, setEditForm] = useState(null);
+  const [isEditing, setIsEditing] = useState(false); // false = แสดงข้อมูลอย่างเดียวก่อนเสมอ, true = เข้าฟอร์มแก้ไขแล้ว
+
+  // ผู้ใช้ตั้งใจกด "แก้ไข" มาเลยหรือเปล่า ใช้บอก effect ด้านล่างตอนเปลี่ยนห้องที่โฟกัส
+  // (ทุกห้องที่เพิ่งถูกเลือกใหม่ ค่าเริ่มต้นคือโหมดดูข้อมูลอย่างเดียวเสมอ เว้นแต่ตั้ง flag นี้ไว้)
+  const editIntentRef = useRef(false);
 
   const currentRooms = items.filter((r) => r.building === building && r.floor === floor);
 
@@ -147,6 +164,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
       : null;
 
   // เมื่อพบห้องที่ตรงกับ node ให้เติมข้อมูลลงฟอร์มแก้ไขทันที (เอาข้อมูลจาก pop-up มาเติมในแถบด้านล่าง)
+  // ค่าเริ่มต้นของทุกห้องที่เพิ่งโฟกัสคือโหมดดูข้อมูลอย่างเดียว เว้นแต่กดปุ่ม "แก้ไข" มาโดยตรง (editIntentRef)
   useEffect(() => {
     if (matchedRoom) {
       setEditForm({
@@ -157,9 +175,12 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
         teacher: matchedRoom.teacher || "",
         nodeId: matchedRoom.nodeId || "",
       });
+      setIsEditing(editIntentRef.current);
     } else {
       setEditForm(null);
+      setIsEditing(false);
     }
+    editIntentRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchedRoom?.id]);
 
@@ -179,10 +200,45 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
   const setEdit = (k) => (e) => setEditForm((f) => ({ ...f, [k]: e.target.value }));
   const backToList = () => setManualOverride(true);
 
+  // เปิดห้องนี้ในโหมดดูข้อมูลอย่างเดียว — ใช้ทั้งตอนกดแถวห้องในตาราง "แสดงห้องทั้งหมด"
+  // (แผนที่จะซูมไปที่ห้องนี้ตาม focusedNodeId ที่ส่งต่อไปให้ BuildingFloorPicker)
+  const openView = (r) => {
+    editIntentRef.current = false;
+    setManualOverride(false);
+    setFocusRoom(r);
+  };
+
+  // เปิดห้องนี้แล้วเข้าโหมดแก้ไขทันที — ใช้กับปุ่ม "แก้ไข" ทั้งในตารางและในการ์ดดูข้อมูล
+  const openEdit = (r) => {
+    editIntentRef.current = true;
+    setManualOverride(false);
+    if (matchedRoom && r.id === matchedRoom.id) {
+      // เป็นห้องเดิมที่โฟกัสอยู่แล้ว — id ไม่เปลี่ยน effect ด้านบนจะไม่รัน ต้องสั่งเข้าโหมดแก้ไขตรงนี้เลย
+      setIsEditing(true);
+    }
+    setFocusRoom(r);
+  };
+
+  const doDelete = async (r) => {
+    if (!confirm(`ลบ ${r.name}?`)) return;
+    await destroy(r.id, user);
+    backToList();
+  };
+
+  // เทียบค่าฟอร์มที่กำลังแก้กับค่าที่บันทึกไว้จริงของห้องนี้ ใช้ไฮไลต์ช่องที่ถูกแก้ไข
+  const fieldChanged = (k) => {
+    if (!editForm || !matchedRoom) return false;
+    const saved =
+      k === "capacity" ? matchedRoom.capacity ?? 0
+      : k === "type" ? matchedRoom.type || "ห้องเรียน"
+      : matchedRoom[k] || "";
+    return String(editForm[k]) !== String(saved);
+  };
+
   const rows = currentRooms.filter((r) => (r.code + r.name + r.teacher + r.type).toLowerCase().includes(q.toLowerCase()));
 
-  // ---------- โหมด: ดู/แก้ไขห้องที่มีข้อมูลอยู่แล้ว (กดจาก node บนแผนที่) ----------
-  if (effectiveFocus && matchedRoom && editForm) {
+  // ---------- โหมด: ดูข้อมูลห้องที่มีอยู่แล้วอย่างเดียว (ค่าเริ่มต้นเมื่อกดจากแผนที่/ตาราง) ----------
+  if (effectiveFocus && matchedRoom && editForm && !isEditing) {
     return (
       <>
         <div style={calloutStyle("#E8F0FE", "#C7DBFC", "#1A73E8")}>
@@ -193,35 +249,101 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
         <Card>
           <b style={{ fontSize: 13.5, color: "#202124" }}>ข้อมูลห้อง {matchedRoom.code}</b>
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-            <div style={{ flex: 1 }}><Field label="รหัสห้อง"><Input value={editForm.code} onChange={setEdit("code")} /></Field></div>
-            <div style={{ flex: 2 }}><Field label="ชื่อห้อง"><Input value={editForm.name} onChange={setEdit("name")} /></Field></div>
+            <div style={{ flex: 1 }}><InfoField label="รหัสห้อง" value={matchedRoom.code} /></div>
+            <div style={{ flex: 2 }}><InfoField label="ชื่อห้อง" value={matchedRoom.name} /></div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}><Field label="ประเภท"><Input value={editForm.type} onChange={setEdit("type")} /></Field></div>
-            <div style={{ flex: 1 }}><Field label="ความจุ"><Input type="number" value={editForm.capacity} onChange={setEdit("capacity")} /></Field></div>
+            <div style={{ flex: 1 }}><InfoField label="ประเภท" value={matchedRoom.type} /></div>
+            <div style={{ flex: 1 }}><InfoField label="ความจุ" value={matchedRoom.capacity} /></div>
           </div>
-          <Field label="อาจารย์ประจำห้อง"><Input value={editForm.teacher} onChange={setEdit("teacher")} /></Field>
-          <Field label="รหัส node บนผังชั้น"><Input value={editForm.nodeId} onChange={setEdit("nodeId")} /></Field>
+          <InfoField label="อาจารย์ประจำห้อง" value={matchedRoom.teacher} />
+          <InfoField label="รหัส node บนผังชั้น" value={matchedRoom.nodeId} />
 
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <Btn kind="ghost" onClick={() => { editIntentRef.current = true; setIsEditing(true); }}>แก้ไขข้อมูล</Btn>
+            <Btn kind="danger" onClick={() => doDelete(matchedRoom)}>ลบห้อง</Btn>
+          </div>
+        </Card>
+      </>
+    );
+  }
+
+  // ---------- โหมด: ฟอร์มแก้ไขข้อมูลห้อง (กดปุ่ม "แก้ไขข้อมูล" มาแล้ว) ----------
+  if (effectiveFocus && matchedRoom && editForm && isEditing) {
+    const cancelEdit = () => {
+      setEditForm({
+        code: matchedRoom.code || "",
+        name: matchedRoom.name || "",
+        type: matchedRoom.type || "ห้องเรียน",
+        capacity: matchedRoom.capacity ?? 0,
+        teacher: matchedRoom.teacher || "",
+        nodeId: matchedRoom.nodeId || "",
+      });
+      setIsEditing(false);
+    };
+
+    return (
+      <>
+        <div style={calloutStyle("#E8F0FE", "#C7DBFC", "#1A73E8")}>
+          <span>📍 กำลังแก้ไขห้อง: {matchedRoom.name}</span>
+          <button onClick={backToList} style={linkBtnStyle("#1A73E8")}>แสดงห้องทั้งหมด</button>
+        </div>
+
+        <Card style={{ position: "relative" }}>
+          <button
+            title="ลบห้องนี้"
+            onClick={() => doDelete(matchedRoom)}
+            style={{
+              position: "absolute", top: 10, right: 10, width: 30, height: 30, borderRadius: "50%",
+              border: "1px solid #F5C2C0", background: "#fff", color: "#D93025", cursor: "pointer",
+              display: "grid", placeItems: "center", fontSize: 14, lineHeight: 1,
+            }}
+          >
+            🗑️
+          </button>
+
+          <b style={{ fontSize: 13.5, color: "#202124", display: "block", marginBottom: 2, paddingRight: 36 }}>แก้ไขข้อมูลห้อง {matchedRoom.code}</b>
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <div style={{ flex: 1 }}>
+              <EditField label="รหัสห้อง" changed={fieldChanged("code")}>
+                <Input value={editForm.code} onChange={setEdit("code")} style={diffInputStyle(fieldChanged("code"))} />
+              </EditField>
+            </div>
+            <div style={{ flex: 2 }}>
+              <EditField label="ชื่อห้อง" changed={fieldChanged("name")}>
+                <Input value={editForm.name} onChange={setEdit("name")} style={diffInputStyle(fieldChanged("name"))} />
+              </EditField>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <EditField label="ประเภท" changed={fieldChanged("type")}>
+                <Input value={editForm.type} onChange={setEdit("type")} style={diffInputStyle(fieldChanged("type"))} />
+              </EditField>
+            </div>
+            <div style={{ flex: 1 }}>
+              <EditField label="ความจุ" changed={fieldChanged("capacity")}>
+                <Input type="number" value={editForm.capacity} onChange={setEdit("capacity")} style={diffInputStyle(fieldChanged("capacity"))} />
+              </EditField>
+            </div>
+          </div>
+          <EditField label="อาจารย์ประจำห้อง" changed={fieldChanged("teacher")}>
+            <Input value={editForm.teacher} onChange={setEdit("teacher")} style={diffInputStyle(fieldChanged("teacher"))} />
+          </EditField>
+          <EditField label="รหัส node บนผังชั้น" changed={fieldChanged("nodeId")}>
+            <Input value={editForm.nodeId} onChange={setEdit("nodeId")} style={diffInputStyle(fieldChanged("nodeId"))} />
+          </EditField>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <Btn kind="ghost" onClick={cancelEdit}>ยกเลิกการแก้ไข</Btn>
             <Btn
               onClick={async () => {
                 await patch(matchedRoom.id, { ...editForm, capacity: Number(editForm.capacity) }, user);
+                setIsEditing(false);
                 alert("บันทึกการแก้ไขเรียบร้อยแล้ว");
               }}
             >
               บันทึกการแก้ไข
-            </Btn>
-            <Btn
-              kind="danger"
-              onClick={async () => {
-                if (confirm(`ลบ ${matchedRoom.name}?`)) {
-                  await destroy(matchedRoom.id, user);
-                  backToList();
-                }
-              }}
-            >
-              ลบห้องนี้
             </Btn>
           </div>
         </Card>
@@ -294,7 +416,18 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
         <Table
           columns={[
             { key: "code", label: "รหัส" },
-            { key: "name", label: "ชื่อห้อง" },
+            {
+              key: "name", label: "ชื่อห้อง",
+              // กดชื่อห้องแล้วแผนที่จะซูมไปที่ห้องนั้น พร้อมเปิดการ์ดดูข้อมูล (ยังไม่เข้าโหมดแก้ไข)
+              render: (r) => (
+                <button
+                  onClick={() => openView(r)}
+                  style={{ background: "none", border: "none", padding: 0, margin: 0, font: "inherit", color: "#1A73E8", fontWeight: 700, cursor: "pointer", textAlign: "left" }}
+                >
+                  {r.name}
+                </button>
+              ),
+            },
             { key: "type", label: "ประเภท" },
             { key: "capacity", label: "ความจุ" },
             { key: "teacher", label: "อาจารย์" },
@@ -302,11 +435,8 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
               key: "act", label: "",
               render: (r) => (
                 <div style={{ display: "flex", gap: 6 }}>
-                  <Btn kind="ghost" onClick={() => { 
-                    setManualOverride(false); // ยกเลิก override เพื่อเปิดโหมดโฟกัส
-                    setFocusRoom(r);
-                    }}>แก้ไข</Btn>
-                  <Btn kind="danger" onClick={() => confirm(`ลบ ${r.name}?`) && destroy(r.id, user)}>ลบ</Btn>
+                  <Btn kind="ghost" onClick={() => openEdit(r)}>แก้ไข</Btn>
+                  <Btn kind="danger" onClick={() => doDelete(r)}>ลบ</Btn>
                 </div>
               ),
             },
@@ -398,6 +528,36 @@ function FloorsManager({ building, floor, user }) {
       </div>
     </Card>
   );
+}
+
+// ---------- Helper components สำหรับโหมดดู/แก้ไขห้อง ----------
+
+// แสดงค่าข้อมูลห้องแบบอ่านอย่างเดียว (โหมดดูข้อมูลก่อนกดแก้ไข)
+function InfoField({ label, value }) {
+  return (
+    <div style={{ marginBottom: 9 }}>
+      <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#5F6368", marginBottom: 3 }}>{label}</span>
+      <span style={{ fontSize: 14, color: "#202124" }}>{value === "" || value === null || value === undefined ? "—" : value}</span>
+    </div>
+  );
+}
+
+// ป้ายชื่อช่องกรอกในโหมดแก้ไข — ขึ้นเครื่องหมาย "* แก้ไข" เหนือช่องที่ค่าเปลี่ยนไปจากเดิม
+function EditField({ label, changed, children }) {
+  return (
+    <label style={{ display: "block", marginBottom: 9 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: changed ? "#1A73E8" : "#5F6368", marginBottom: 4 }}>
+        {label}
+        {changed ? <span style={{ fontSize: 10.5, fontWeight: 800, color: "#1A73E8" }}>* แก้ไข</span> : null}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+// ขอบสีน้ำเงินเน้นช่องที่ถูกแก้ไข
+function diffInputStyle(changed) {
+  return changed ? { borderColor: "#1A73E8", borderWidth: 2, boxShadow: "0 0 0 1px rgba(26,115,232,.2)" } : {};
 }
 
 // ---------- Helper styles ----------
