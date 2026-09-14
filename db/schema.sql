@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS users (
                 CHECK (role IN ('exec','marketing','gis','admin','pr','registrar','user')),
   institution   TEXT DEFAULT 'KMITL',
   status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
+  suspend_reason TEXT,
+  suspended_at DATE,
+  suspended_by TEXT,
+
+  restore_reason TEXT,
+  restored_at DATE,
+  restored_by TEXT,
   created_at    DATE NOT NULL DEFAULT CURRENT_DATE
 );
 CREATE INDEX IF NOT EXISTS idx_users_role   ON users(role);

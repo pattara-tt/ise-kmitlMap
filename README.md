@@ -235,4 +235,8 @@ deploy/                     สคริปต์และคู่มือข�
 - รหัสผ่านในตาราง `users` เก็บเป็น plaintext — ต้องเปลี่ยนเป็น bcrypt hash
 - `GET /api/data/users` ส่งฟิลด์ `password` กลับมาด้วย — ควรกรองออกที่ `backend/src/server.js`
 - ยังไม่มีระบบ session/token จริง — `app/page.jsx` เก็บ user ไว้ใน `localStorage` ตรงๆ
+<<<<<<< HEAD
 - ไม่ควร commit ไฟล์ `.env` ขึ้น git ควรใส่ไว้ใน `.gitignore`
+=======
+- ไม่ควร commit ไฟล์ `.env` ขึ้น git ควรใส่ไว้ใน `.gitignore`
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704

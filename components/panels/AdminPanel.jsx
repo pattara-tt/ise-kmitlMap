@@ -84,7 +84,7 @@ function Users() {
 
 // ── UC11 ค้นหาและเรียกดูข้อมูลคำร้อง ──────────────────────
 function Requests({ user, onReport, onQuota }) {
-  const { items, reload } = useCollection("requests");
+  const { items, reload, destroy: destroyRequest } = useCollection("requests");
   const { items: users } = useCollection("users");
   const { items: rooms } = useCollection("rooms");
   const [q, setQ] = useState("");
@@ -111,14 +111,30 @@ function Requests({ user, onReport, onQuota }) {
     })
     .sort((a, b) => {
       if (sortBy === "newest") {
-        return String(b.createdAt || "").localeCompare(
+        const dateCompare = String(b.createdAt || "").localeCompare(
           String(a.createdAt || "")
+        );
+
+        if (dateCompare !== 0) {
+          return dateCompare;
+        }
+
+        return String(a.id || "").localeCompare(
+          String(b.id || "")
         );
       }
 
       if (sortBy === "oldest") {
-        return String(a.createdAt || "").localeCompare(
+        const dateCompare = String(a.createdAt || "").localeCompare(
           String(b.createdAt || "")
+        );
+
+        if (dateCompare !== 0) {
+          return dateCompare;
+        }
+
+        return String(a.id || "").localeCompare(
+          String(b.id || "")
         );
       }
 
@@ -135,7 +151,7 @@ function Requests({ user, onReport, onQuota }) {
       }
 
       return 0;
-    });
+  });
 
   if (selectedRequest) {
     return (
@@ -266,7 +282,7 @@ function Requests({ user, onReport, onQuota }) {
 
 // Selected Request page
 function RequestDetail({ request, onBack, user }) {
-  const { patch: patchRequest } = useCollection("requests");
+  const { patch: patchRequest, destroy: destroyRequest } = useCollection("requests");
   const { items: users } = useCollection("users");
   const { patch: patchRoom } = useCollection("rooms");
 
@@ -530,7 +546,7 @@ const FIELD_LABEL = {
 
 // ── UC14 จัดทำสรุปคำร้อง ───────────────────────
 function RequestReport({ onBack }) {
-  const { items: requests } = useCollection("requests");
+  const { items: requests, destroy: destroyRequest } = useCollection("requests");
   const { items: users } = useCollection("users");
   const { items: rooms } = useCollection("rooms");
 
@@ -1332,6 +1348,7 @@ function Quota({ user, onBack }) {
 // ── UC16 จัดการสถานะบัญชีของผู้ใช้งาน ────────────────────
 function AccountStatus({ user }) {
   const { items, patch } = useCollection("users");
+  const {items: requests, destroy: destroyRequest} = useCollection("requests");
   const [q, setQ] = useState("");
   const [suspending, setSuspending] = useState(null); // user object ที่กำลังจะระงับ
   const [reason, setReason] = useState("");
@@ -1342,7 +1359,17 @@ function AccountStatus({ user }) {
 
   async function confirmSuspend() {
     if (!reason.trim()) return alert("กรุณาระบุเหตุผลการระงับบัญชี");
-    
+
+    if (suspending.role === "user") {
+      const userRequests = requests.filter(
+        (request) => request.userId === suspending.id
+      );
+
+      for (const request of userRequests) {
+        await destroyRequest(request.id, user);
+      }
+    }
+
     await patch(
       suspending.id,
       {
@@ -1363,19 +1390,26 @@ function AccountStatus({ user }) {
       return alert("กรุณาระบุเหตุผลการคืนสิทธิ์");
     }
 
-    await patch(
-      restoring.id,
-      {
-        status: "active",
-        restoreReason: restoreReason,
-        restoredAt: new Date().toISOString().slice(0, 10),
-        restoredBy: user.id
-      },
-      user
-    );
+    try {
+      const result = await patch(
+        restoring.id,
+        {
+          status: "active",
+          restoreReason: restoreReason,
+          restoredAt: new Date().toISOString().slice(0, 10),
+          restoredBy: user.id
+        },
+        user
+      );
 
-    setRestoring(null);
-    setRestoreReason("");
+      console.log("RESTORE SUCCESS:", result);
+
+      setRestoring(null);
+      setRestoreReason("");
+    } catch (error) {
+      console.error("RESTORE ERROR:", error);
+      alert(`คืนสิทธิ์ไม่สำเร็จ: ${error.message}`);
+    }
   }
 
   return (

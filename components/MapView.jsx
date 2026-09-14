@@ -163,7 +163,7 @@ function CompassIcon({ size = 16, color = "currentColor", style }) {
   );
 }
 
-function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
+function SearchPlaceInput({ value, onChange, onPick, placeholder, rooms = [] }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const timerRef = useRef(null);
@@ -173,7 +173,13 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
 
     if (q.length < 1) return [];
 
+    const roomByNodeId = new Map(
+      rooms.map((room) => [room.nodeId, room])
+    );
+
     return SC8_SEARCH_NODES.flatMap((entry) => {
+      const room = roomByNodeId.get(entry.id);
+      const displayName = room?.name || entry.name;
       // node ที่ใช้คำนวณเส้นทาง เช่น จุดหน้าประตู
       const routeNode = KMITL_ALL_NODES[entry.id];
 
@@ -193,6 +199,7 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
       }
 
       const words = [
+        displayName,
         entry.name,
         entry.id,
         routeNode.label,
@@ -213,7 +220,7 @@ function SearchPlaceInput({ value, onChange, onPick, placeholder }) {
 
       return [
         {
-          name: entry.name,
+          name: displayName,
 
           // ใช้พิกัดกลางห้องสำหรับแสดงหมุด
           coord: [
@@ -346,15 +353,24 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   // 🗂️ ผังชั้นที่แอดมิน (GIS Panel → UC8) อัปโหลด+กด "เผยแพร่" ไว้ — โหลดจาก /api/data/mapAssets
   // เอามาสมทบกับรายชื่อชั้นตั้งต้นใน mapConstants.js (KMITL_FLOORS): ถ้ามีไฟล์ที่เผยแพร่แล้วตรงกับชั้นนั้น ใช้ไฟล์นั้นแทน
   const { items: mapAssetItems } = useCollection("mapAssets");
-  const effectiveFloors = useMemo(() => {
-    return KMITL_FLOORS_STATIC.map((f) => {
-      const published = mapAssetItems.find(
-        (a) => a.kind === "floorplan" && a.status === "published" && (a.building || "Sc8") === "Sc8" && String(a.floor) === String(f.id)
-      );
-      return published ? { ...f, svg: published.file } : f;
-    });
-  }, [mapAssetItems]);
 
+  const effectiveFloors = useMemo(() => {
+  return mapAssetItems
+    .filter(
+      (a) =>
+        a.kind === "floorplan" &&
+        (a.building || "Sc8") === "Sc8" &&
+        a.file
+    )
+    .map((a) => ({
+      id: String(a.floor),
+      label: String(a.floor),
+      svg: a.file,
+      placement: a.placement || null,
+      assetId: a.id,
+    }))
+    .sort((a, b) => Number(a.id) - Number(b.id));
+}, [mapAssetItems]);
 
   const reloadEvents = useCallback(async () => {
     try {
@@ -383,6 +399,44 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     }
     await reloadEvents();
   }
+
+  function placementToBounds(placement, fallbackBounds) {
+    if (
+      !placement ||
+      !Array.isArray(placement.center) ||
+      placement.center.length !== 2
+    ) {
+      return fallbackBounds;
+    }
+
+    const lat = Number(placement.center[0]);
+    const lon = Number(placement.center[1]);
+    const widthMeters = Number(placement.widthMeters);
+    const heightMeters = Number(placement.heightMeters);
+
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      !Number.isFinite(widthMeters) ||
+      !Number.isFinite(heightMeters) ||
+      widthMeters <= 0 ||
+      heightMeters <= 0
+    ) {
+      return fallbackBounds;
+    }
+
+    const latHalf = heightMeters / (2 * 111320);
+
+    const lonHalf =
+      widthMeters /
+      (2 * 111320 * Math.cos((lat * Math.PI) / 180));
+
+    return [
+      [lat - latHalf, lon - lonHalf],
+      [lat + latHalf, lon + lonHalf],
+    ];
+  }
+
   // 🔧 สลับโหมดแล้วต้องสั่ง Leaflet คำนวณขนาด container ใหม่เอง — ไม่งั้นแผนที่ค้างขนาดเดิม (เห็นแค่ UI overlay ขยับนิดเดียว แผนที่ไม่เต็มจอ)
   useEffect(() => {
     const m = mapRef.current; if (!m) return;
@@ -704,6 +758,9 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     const layer = L.layerGroup().addTo(m);
     const iconFor = (type) => (type === "Toilet" ? "/data/icon/toilet.svg" : "/data/icon/room.svg");
     for (const entry of SC8_SEARCH_NODES) {
+      const room = rooms.find((r) => r.nodeId === entry.id);
+      const displayName = room?.name || entry.name;
+
       if (!entry.markerId) continue; // ยังไม่มีจุดกลางจริง (เช่นห้องน้ำตอนนี้) — ข้ามไปก่อน จนกว่าจะมีพิกัด
       const center = KMITL_ALL_NODES[entry.markerId];
       const routeNode = KMITL_ALL_NODES[entry.id];
@@ -717,9 +774,9 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
         }),
         zIndexOffset: 700,
       })
-        .bindTooltip(entry.name, { direction: "top", offset: [0, -10] })
+        .bindTooltip(displayName, { direction: "top", offset: [0, -10] })
         // กดหมุดแล้วเปิดการ์ดสถานที่ชุดเดียวกับผลการค้นหา — มีข้อมูลห้อง ปุ่มนำทาง และปุ่มแจ้งปัญหา
-        .on("click", () => openPlaceCard(entry.name, [center.lon, center.lat], {
+        .on("click", () => openPlaceCard(displayName, [center.lon, center.lat], {
           nodeId: entry.id,
           markerNodeId: entry.markerId,
           floor: KMITL_NODE_FLOOR[entry.id] || "1",
@@ -729,30 +786,64 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
         .addTo(layer);
     }
     return () => m.removeLayer(layer);
-  }, [mapReady]);
+  }, [mapReady, rooms]);
 
   // 🏢 วาด/ลบ overlay ผังชั้น KMITL ตาม state เปิด/ปิด และชั้นที่เลือก
   useEffect(() => {
-    const c = ctx.current, L = c.L, m = mapRef.current;
-    if (!L || !m) return;
+  const c = ctx.current;
+  const L = c.L;
+  const m = mapRef.current;
 
-    if (c.kmitlOverlay) { 
-      m.removeLayer(c.kmitlOverlay); 
-      c.kmitlOverlay = null; 
-    }
-    if (!kmitlOpen && mapZoom < 16) return;
+  if (!L || !m) return;
 
-    const shownFloor = kmitlOpen ? kmitlFloor : "1";
-    const f = effectiveFloors.find((x) => x.id === shownFloor);
+  // ลบ overlay เก่าก่อนทุกครั้ง
+  if (c.kmitlOverlay) {
+    m.removeLayer(c.kmitlOverlay);
+    c.kmitlOverlay = null;
+  }
 
-    const targetBounds = f?.bounds?.length === 2 ? f.bounds : (SC8_BOUNDS || KMITL_BOUNDS || FALLBACK_BOUNDS);
+  // ถ้ายังไม่ได้เปิดตึก และยังซูมไม่ถึงระดับที่กำหนด
+  if (!kmitlOpen && mapZoom < 16) return;
 
+  const shownFloor = kmitlOpen ? kmitlFloor : "1";
 
-    if (f && f.svg && !kmitlCalibrate) {
-      c.kmitlOverlay = L.imageOverlay(f.svg, targetBounds, { opacity: 0.96, interactive: false, pane: "bdiFloorPane" }).addTo(m);
-    }else return;
-    // ถ้าชั้นที่เลือกยังไม่มีไฟล์ผัง (f.svg == null) จะไม่วาดอะไร — UI ฝั่งแถบเลือกชั้นจะโชว์ข้อความแจ้งแทน
-  }, [kmitlOpen, kmitlFloor, kmitlCalibrate, mapZoom]);
+  const f = effectiveFloors.find(
+    (x) => String(x.id) === String(shownFloor)
+  );
+
+  if (!f?.svg) return;
+
+  const fallbackBounds =
+    f?.bounds?.length === 2
+      ? f.bounds
+      : (KMITL_BOUNDS || FALLBACK_BOUNDS);
+
+  // ถ้ามี placement จาก UC8 → ใช้ placement
+  // ถ้าไม่มี → ใช้ bounds เดิม
+  const targetBounds = placementToBounds(
+    f.placement,
+    fallbackBounds
+  );
+
+  if (!targetBounds) return;
+
+  c.kmitlOverlay = L.imageOverlay(
+    f.svg,
+    targetBounds,
+      {
+        opacity: 0.88,
+        interactive: false,
+        pane: "bdiFloorPane",
+        zIndex: 1,
+      }
+    ).addTo(m);
+
+  // เก็บข้อมูลไว้เผื่อใช้ต่อ
+  c.kmitlOverlayAssetId = f.assetId || null;
+  c.kmitlOverlayPlacement = f.placement || null;
+
+}, [kmitlOpen,kmitlFloor,kmitlCalibrate,mapZoom,effectiveFloors,
+]);
 
   // เก็บ flag ล่าสุดไว้ใน ctx เพื่อให้ map click handler (ผูกครั้งเดียวตอน mount) อ่านค่าปัจจุบันได้เสมอ
   useEffect(() => { ctx.current.navActive = !!nav?.active; }, [nav]);
@@ -1668,13 +1759,23 @@ async function submitReport() {
                 value={searchQuery}
                 onChange={setSearchQuery}
                 events={events}
+                rooms={rooms}
                 placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ"
                 onPick={async (sg) => {
-                  if (sg.src === "event" && sg.event) { openEventCard(sg.event); return; }
-                  let coord = sg.coord;
-                  if (sg.src === "landmark" && sg.lm) {
-                    try { const r = await resolveLandmark(sg.lm); if (r?.coord) coord = r.coord; } catch (e) {}
+                  if (sg.src === "event" && sg.event) {
+                    openEventCard(sg.event);
+                    return;
                   }
+
+                  let coord = sg.coord;
+
+                  if (sg.src === "landmark" && sg.lm) {
+                    try {
+                      const r = await resolveLandmark(sg.lm);
+                      if (r?.coord) coord = r.coord;
+                    } catch (e) {}
+                  }
+
                   openPlaceCard(sg.name, coord, sg);
                 }}
               />
@@ -2011,7 +2112,7 @@ async function submitReport() {
             </div>
           ) : null}
           <div style={{ position: "absolute", right: 10, top: "30%", zIndex: 1900, display: "flex", flexDirection: "column", gap: 8 }}>
-            {KMITL_FLOORS.map((f) => (
+            {effectiveFloors.map((f) => (
               <button key={f.id} onClick={() => setKmitlFloor(f.id)}
                 style={{ width: 38, height: 38, borderRadius: 12, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14, boxShadow: "0 3px 10px rgba(0,0,0,.45)", background: kmitlFloor === f.id ? "#1A73E8" : "#FFFFFF", color: kmitlFloor === f.id ? "#fff" : "#3C4043", border: "1px solid #DADCE0", opacity: f.svg ? 1 : 0.55 }}>
                 {f.label}

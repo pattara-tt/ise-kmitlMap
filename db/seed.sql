@@ -1,4 +1,4 @@
-in-- ============================================================
+-- ============================================================
 -- ข้อมูลตัวอย่างสำหรับ SciMap (ตรงกับ mock ใน lib/store.js)
 -- รันหลัง schema.sql:  psql "$DATABASE_URL" -f db/seed.sql
 -- ============================================================
@@ -13,7 +13,7 @@ INSERT INTO users (id, email, password, name, username, role, institution, statu
   ('U005','pr@kmitl.ac.th','1234','อาสะ คิม','pr','pr','KMITL','active','2026-02-02'),
   ('U006','registrar@kmitl.ac.th','1234','ฮง ไลเคน','registrar','registrar','KMITL','active','2026-02-02'),
   ('U007','student@kmitl.ac.th','1234','อินฟินิตี้ ไอ','student','user','KMITL','active','2026-03-01'),
-  ('U008','somchai@kmitl.ac.th','1234','สมชาย ตั้งมั่น','somchai','user','KMITL','suspended','2026-03-04')
+  ('U008','somchai@kmitl.ac.th','1234','สมชาย ตั้งมั่น','somchai','user','KMITL','active','2026-03-04')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO request_quota (id, per_user_per_day, per_user_per_month, updated_by) VALUES

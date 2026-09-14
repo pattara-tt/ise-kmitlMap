@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadLeaflet } from "./mapGeo";
+import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
 import {
   BUILDINGS,
   CENTER,
@@ -97,7 +98,9 @@ export default function BuildingFloorPicker({
   floor,
   onChange,
   onSelectRoom,
+  onCloseRoomPopup, // ผู้ใช้กด ✕ บน popup ของ node บนแผนที่โดยตรง — ให้แผงด้านล่างสลับไปแสดง "ห้องทั้งหมด" ทันที
   height = "100%",
+  focusedNodeId = null, // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — ใช้เปลี่ยน icon เป็นปากกาและซูมแผนที่ไปหา
 }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
@@ -241,6 +244,9 @@ export default function BuildingFloorPicker({
   const onSelectRoomRef = useRef(onSelectRoom);
   useEffect(() => { onSelectRoomRef.current = onSelectRoom;}, [onSelectRoom]);
 
+  const onCloseRoomPopupRef = useRef(onCloseRoomPopup);
+  useEffect(() => { onCloseRoomPopupRef.current = onCloseRoomPopup; }, [onCloseRoomPopup]);
+
   /* Sync props */
 
   useEffect(() => {
@@ -260,11 +266,7 @@ export default function BuildingFloorPicker({
     if (!map || !poly) return;
     const center = poly.getBounds().getCenter();
     const targetZoom = 20.2;
-
-    // อย่าตั้ง minZoom === maxZoom แบบเป๊ะๆ เด็ดขาด เพราะถ้า zoom ถูกล็อคตายตัว
-    // แล้ว container กับ maxBounds ไม่พอดีกันพอดี Leaflet จะพยายาม pan เข้า
-    // bounds ซ้ำไปเรื่อยๆ โดยขยับ zoom ไม่ได้เลย จนเกิด stack overflow
-    // (_onPanTransitionEnd / _adjustPan วนไม่รู้จบ) ให้เผื่อช่วงเล็กน้อยแทน
+    
     const ZOOM_LOCK_MARGIN = 0.4;
 
     // ให้แน่ใจว่าขนาด container ถูกต้องก่อน ค่อยคำนวณ view/bounds
@@ -307,14 +309,14 @@ export default function BuildingFloorPicker({
       ctx.current.L = L;
       ctx.current.map = map;
 
-      /* Base map */
-
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-        {
-          maxZoom: 21, attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        }
-      ).addTo(map);
+      /* Base map — วาดถนน/ตึก/พื้นที่สีเขียวเองจาก OSM (เหมือนหน้า User ใน MapView.jsx)
+         แทนการขอ raster tile เต็มจอจาก CARTO ตรงๆ ซึ่งตอนนี้ต้องมี API key ถึงจะไม่มี
+         watermark "API KEY REQUIRED" ทับเต็มแผนที่ (ดู mapBaseLayer.js) */
+      map.getContainer().style.background = "#FFFFFF";
+      drawGoogleLikeBaseMap(L, map, [
+        KMITL_BOUNDS[0][0], KMITL_BOUNDS[0][1],
+        KMITL_BOUNDS[1][0], KMITL_BOUNDS[1][1],
+      ]).catch(() => {});
 
       /* Pane สำหรับ floor plan */
 
@@ -590,6 +592,10 @@ export default function BuildingFloorPicker({
       const size = icon.type === "room" ||
         icon.type === "toilet" ? 24 : 26;
 
+      // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — เน้นด้วยกรอบสีน้ำเงิน (ไม่เปลี่ยน icon)
+      const isFocusedNode = focusedNodeId && id === focusedNodeId;
+      const iconInnerHtml = icon.html;
+
       const marker = L.marker([node.lat, node.lon,], {
             icon: L.divIcon({
                 className: "",
@@ -604,6 +610,7 @@ export default function BuildingFloorPicker({
                       cursor:pointer;
                       background:
                         ${
+                          isFocusedNode ? "#E8F0FE" :
                           icon.type === "room" ? "rgba(255,255,255,.94)" : icon.type === "toilet"
                             ? "rgba(255,255,255,.94)"
                             : "transparent"
@@ -612,16 +619,19 @@ export default function BuildingFloorPicker({
                       border-radius:
                         ${
                           icon.type === "room" ||
-                          icon.type === "toilet" ? "5px" : "50%"
+                          icon.type === "toilet" ||
+                          isFocusedNode ? "5px" : "50%"
                         };
 
                       box-shadow:
                         ${
-                          icon.type === "room" ||
-                          icon.type === "toilet" ? "0 1px 4px rgba(0,0,0,.25)": "none"
+                          isFocusedNode
+                            ? "0 0 0 2px #1A73E8, 0 1px 5px rgba(0,0,0,.3)"
+                            : icon.type === "room" ||
+                              icon.type === "toilet" ? "0 1px 4px rgba(0,0,0,.25)": "none"
                         };
                     ">
-                    ${icon.html}
+                    ${iconInnerHtml}
                   </div>`,
 
                 iconSize: [size,size],
@@ -629,7 +639,7 @@ export default function BuildingFloorPicker({
               }),
 
             zIndexOffset:
-              icon.type === "room" || icon.type === "toilet" ? 900 : 750,
+              isFocusedNode ? 1000 : icon.type === "room" || icon.type === "toilet" ? 900 : 750,
 
             pane: "regGraphPane",
           }
@@ -724,7 +734,21 @@ export default function BuildingFloorPicker({
          - ส่งไป RoomsManager
          =================================================== */
 
+        // จับตอนผู้ใช้กด ✕ บน popup โดยตรง (ต่างจากตอน popup ถูกปิดเพราะ marker ถูกสร้างใหม่ตอน re-render)
+        // เพื่อรู้ว่า popupclose รอบนี้เกิดจากผู้ใช้กดเองจริง ๆ ไม่ใช่ effect วาด marker ใหม่แล้วปิดไปโดยไม่ตั้งใจ
+        marker.on("popupopen", (e) => {
+          const closeBtn = e.popup.getElement()?.querySelector(".leaflet-popup-close-button");
+          closeBtn?.addEventListener(
+            "click",
+            () => { ctx.current.userClosedPopup = true; },
+            { once: true }
+          );
+        });
+
         marker.on("popupclose", () => {
+        const wasUserClose = ctx.current.userClosedPopup;
+        ctx.current.userClosedPopup = false;
+
         const currentMap = ctx.current.map;
         const currentLayer = openKey ? ctx.current.buildingLayers[openKey] : null;
 
@@ -737,7 +761,19 @@ export default function BuildingFloorPicker({
             duration: 0.5,
             });
         }
+
+        // กด ✕ บน popup เอง (ไม่ใช่ popup ถูกปิดเพราะ marker ถูกสร้างใหม่) — สั่งแผงด้านล่างกลับไปหน้าห้องทั้งหมดทันที
+        if (wasUserClose) {
+          onCloseRoomPopupRef.current?.();
+        }
         });
+
+        // ห้องนี้กำลังถูกโฟกัส/แสดงอยู่ในแผงด้านล่าง — เปิด popup ค้างไว้เสมอ
+        // แม้ effect นี้จะ re-run แล้วสร้าง marker ใหม่ทับของเดิม (เช่น ตอนเพิ่งกด icon แล้ว focusedNodeId เปลี่ยน)
+        // ก็ให้ popup เปิดค้างอยู่ต่อ ไม่ใช่หายไปเฉย ๆ
+        if (isFocusedNode) {
+          marker.openPopup();
+        }
 
         marker.on("click", () => {
             map.setView([node.lat, node.lon,], 20, { animate: true,});
@@ -776,7 +812,22 @@ export default function BuildingFloorPicker({
     floorNodes,
     roomByNode,
     b,
+    focusedNodeId,
   ]);
+
+  /* ===================================================
+     ซูมแผนที่ไปหา node ที่ถูกเลือกจากแผงจัดการด้านล่าง
+     (เช่น กดแถวห้องหรือปุ่มแก้ไขในตาราง "แสดงห้องทั้งหมด")
+     ไม่ใช่แค่ตอนคลิก icon บนแผนที่โดยตรงเท่านั้น
+     =================================================== */
+
+  useEffect(() => {
+    const { map } = ctx.current;
+    if (!map || !openKey || !focusedNodeId) return;
+    const node = floorNodes[focusedNodeId];
+    if (!node || !Number.isFinite(node.lat) || !Number.isFinite(node.lon)) return;
+    map.setView([node.lat, node.lon], 20, { animate: true });
+  }, [openKey, curFloor, focusedNodeId, floorNodes]);
 
   /* Search */
 

@@ -1,5 +1,17 @@
+<<<<<<< HEAD
+<<<<<<< HEAD
+node_modules/
+.next/
+.env.local
+=======
+=======
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 node_modules
 .next
 .env
 .env.local
 *.dump
+<<<<<<< HEAD
+>>>>>>> f4a5eb92eee1e7645eea5979445093c6b6dbfce9
+=======
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
