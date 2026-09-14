@@ -711,12 +711,9 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     const layer = L.layerGroup().addTo(m);
     const iconFor = (type) => (type === "Toilet" ? "/data/icon/toilet.svg" : "/data/icon/room.svg");
     for (const entry of SC8_SEARCH_NODES) {
-<<<<<<< HEAD
-=======
       const room = rooms.find((r) => r.nodeId === entry.id);
       const displayName = room?.name || entry.name;
 
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       if (!entry.markerId) continue; // ยังไม่มีจุดกลางจริง (เช่นห้องน้ำตอนนี้) — ข้ามไปก่อน จนกว่าจะมีพิกัด
       const center = KMITL_ALL_NODES[entry.markerId];
       const routeNode = KMITL_ALL_NODES[entry.id];
@@ -730,15 +727,9 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
         }),
         zIndexOffset: 700,
       })
-<<<<<<< HEAD
-        .bindTooltip(entry.name, { direction: "top", offset: [0, -10] })
-        // กดหมุดแล้วเปิดการ์ดสถานที่ชุดเดียวกับผลการค้นหา — มีข้อมูลห้อง ปุ่มนำทาง และปุ่มแจ้งปัญหา
-        .on("click", () => openPlaceCard(entry.name, [center.lon, center.lat], {
-=======
         .bindTooltip(displayName, { direction: "top", offset: [0, -10] })
         // กดหมุดแล้วเปิดการ์ดสถานที่ชุดเดียวกับผลการค้นหา — มีข้อมูลห้อง ปุ่มนำทาง และปุ่มแจ้งปัญหา
         .on("click", () => openPlaceCard(displayName, [center.lon, center.lat], {
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
           nodeId: entry.id,
           markerNodeId: entry.markerId,
           floor: KMITL_NODE_FLOOR[entry.id] || "1",
@@ -748,25 +739,12 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
         .addTo(layer);
     }
     return () => m.removeLayer(layer);
-<<<<<<< HEAD
-  }, [mapReady]);
-=======
   }, [mapReady, rooms]);
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 
   // 🏢 วาด/ลบ overlay ผังชั้น KMITL ตาม state เปิด/ปิด และชั้นที่เลือก
   useEffect(() => {
     const c = ctx.current, L = c.L, m = mapRef.current;
     if (!L || !m) return;
-<<<<<<< HEAD
-    if (c.kmitlOverlay) { m.removeLayer(c.kmitlOverlay); c.kmitlOverlay = null; }
-    if (!kmitlOpen && mapZoom < 16) return;
-    const shownFloor = kmitlOpen ? kmitlFloor : "1";
-    const f = KMITL_FLOORS.find((x) => x.id === shownFloor);
-    if (f && f.svg && !kmitlCalibrate) {
-      c.kmitlOverlay = L.imageOverlay(f.svg, KMITL_BOUNDS, { opacity: 0.96, interactive: false, pane: "bdiFloorPane" }).addTo(m);
-    }
-=======
 
     if (c.kmitlOverlay) { 
       m.removeLayer(c.kmitlOverlay); 
@@ -783,7 +761,6 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     if (f && f.svg && !kmitlCalibrate) {
       c.kmitlOverlay = L.imageOverlay(f.svg, targetBounds, { opacity: 0.96, interactive: false, pane: "bdiFloorPane" }).addTo(m);
     }else return;
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
     // ถ้าชั้นที่เลือกยังไม่มีไฟล์ผัง (f.svg == null) จะไม่วาดอะไร — UI ฝั่งแถบเลือกชั้นจะโชว์ข้อความแจ้งแทน
   }, [kmitlOpen, kmitlFloor, kmitlCalibrate, mapZoom]);
 
@@ -802,16 +779,6 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
       if (c.calImg) { m.removeLayer(c.calImg); c.calImg = null; }
     };
     if (!kmitlOpen || !kmitlCalibrate) { cleanup(); return; }
-<<<<<<< HEAD
-    const f = KMITL_FLOORS.find((x) => x.id === kmitlFloor);
-    if (!f || !f.svg) return;
-    let nw = [KMITL_BOUNDS[1][0], KMITL_BOUNDS[0][1]]; // [north, west]
-    let se = [KMITL_BOUNDS[0][0], KMITL_BOUNDS[1][1]]; // [south, east]
-    const update = () => {
-      const bounds = [[se[0], nw[1]], [nw[0], se[1]]];
-      if (c.calImg) m.removeLayer(c.calImg);
-      c.calImg = L.imageOverlay(f.svg, bounds, { opacity: 0.85, interactive: false, pane: "bdiFloorPane" }).addTo(m);
-=======
     const f = effectiveFloor.find((x) => x.id === kmitlFloor);
 
     if (!f || !f.svg) return;
@@ -823,7 +790,6 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
       // const bounds = [[se[0], nw[1]], [nw[0], se[1]]];
       if (c.calImg) m.removeLayer(c.calImg);
       c.calImg = L.imageOverlay(f.svg, f.bounds, { opacity: 0.85, interactive: false, pane: "bdiFloorPane" }).addTo(m);
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
       const dms = (d) => { const dir = d >= 0 ? "" : "-"; d = Math.abs(d); const deg = Math.floor(d); const minF = (d - deg) * 60; const min = Math.floor(minF); const sec = ((minF - min) * 60).toFixed(2); return `${dir}${deg}°${min}'${sec}"`; };
       setKmitlCalReadout({
         nw: `${dms(nw[0])}N ${dms(nw[1])}E`,
@@ -847,10 +813,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     if (!L || !m) return;
     (c.kmitlNodeMarkers || []).forEach((mk) => m.removeLayer(mk));
     c.kmitlNodeMarkers = [];
-<<<<<<< HEAD
-=======
     
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
     if (!kmitlOpen) return;
     kmitlNodes.filter((n) => n.floor === kmitlFloor).forEach((n) => {
       const t = getNodeType(n.type);
@@ -905,11 +868,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
       if (latlngs.length > 1) c.kmitlGraphLayer.push(L.polyline(latlngs, { color: "#F9AB00", weight: 6, opacity: 0.95, pane: "bdiFloorPane" }).addTo(m));
     }
     return () => { (c.kmitlGraphLayer || []).forEach((ly) => { if (m.hasLayer(ly)) m.removeLayer(ly); }); c.kmitlGraphLayer = []; };
-<<<<<<< HEAD
-  }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlRouteResult, chips, isMapAdmin]);
-=======
   }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlRouteResult, chips]);
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
 
   // 🎪 หมุดกิจกรรม — กิจกรรมที่ผู้ใช้กดสนใจจะเป็นหมุดแดงเด่น แสดงตลอดไม่ว่าจะซูมระดับไหน
   useEffect(() => {
@@ -1719,15 +1678,6 @@ async function submitReport() {
                 value={searchQuery}
                 onChange={setSearchQuery}
                 events={events}
-<<<<<<< HEAD
-                placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ"
-                onPick={async (sg) => {
-                  if (sg.src === "event" && sg.event) { openEventCard(sg.event); return; }
-                  let coord = sg.coord;
-                  if (sg.src === "landmark" && sg.lm) {
-                    try { const r = await resolveLandmark(sg.lm); if (r?.coord) coord = r.coord; } catch (e) {}
-                  }
-=======
                 rooms={rooms}
                 placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ"
                 onPick={async (sg) => {
@@ -1745,7 +1695,6 @@ async function submitReport() {
                     } catch (e) {}
                   }
 
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
                   openPlaceCard(sg.name, coord, sg);
                 }}
               />
@@ -2090,31 +2039,6 @@ async function submitReport() {
             ))}
           </div>
 
-<<<<<<< HEAD
-          {/* 🧭 ทดสอบหาเส้นทางในตึกชั้นที่กำลังดู — เฉพาะผู้ดูแลแผนที่ */}
-          {isMapAdmin && Object.keys(kmitlFloorNodes).length ? (
-            <div style={{ position: "absolute", top: 196, left: 14, zIndex: 1900, background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12, padding: "10px 12px", color: "#3C4043", fontSize: 11.5, width: 200 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>🧭 ทดสอบหาเส้นทางในตึก</div>
-              <select value={kmitlRouteFrom} onChange={(e) => setKmitlRouteFrom(e.target.value)} style={{ width: "100%", marginBottom: 6, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
-                <option value="">-- จุดเริ่ม --</option>
-                {Object.keys(kmitlFloorNodes).map((id) => <option key={id} value={id}>{id}{kmitlFloorNodes[id].label ? ` (${kmitlFloorNodes[id].label})` : ""}</option>)}
-              </select>
-              <select value={kmitlRouteTo} onChange={(e) => setKmitlRouteTo(e.target.value)} style={{ width: "100%", marginBottom: 8, padding: 4, borderRadius: 6, border: "1px solid #DADCE0" }}>
-                <option value="">-- จุดปลาย --</option>
-                {Object.keys(kmitlFloorNodes).map((id) => <option key={id} value={id}>{id}{kmitlFloorNodes[id].label ? ` (${kmitlFloorNodes[id].label})` : ""}</option>)}
-              </select>
-              <button onClick={() => { if (kmitlRouteFrom && kmitlRouteTo) setKmitlRouteResult(indoorFloorRoute(kmitlRouteFrom, kmitlRouteTo, kmitlFloorNodes, kmitlFloorEdges)); }}
-                style={{ width: "100%", background: "#1A73E8", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>หาเส้นทาง</button>
-              {kmitlRouteResult ? (
-                <div style={{ marginTop: 8 }}>
-                  {kmitlRouteResult.path ? <><b>ระยะทาง:</b> {kmitlRouteResult.distance.toFixed(1)} ม.<br /><b>เส้นทาง:</b> {kmitlRouteResult.path.join(" → ")}</> : <span style={{ color: "#D93025" }}>หาเส้นทางไม่ได้ (ไม่มี edge เชื่อมถึงกัน)</span>}
-                </div>
-              ) : null}
-              {kmitlRouteResult ? <button onClick={() => setKmitlRouteResult(null)} style={{ width: "100%", marginTop: 6, background: "#F1F3F4", color: "#5F6368", border: "none", borderRadius: 6, padding: "5px 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>ล้างเส้นทางทดสอบ</button> : null}
-            </div>
-          ) : null}
-=======
->>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
         </>
       ) : null}
 
