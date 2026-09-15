@@ -146,12 +146,18 @@ function Contracts({ user }) {
 function Audit() {
   const { items } = useCollection("mapEdits");
   const [q, setQ] = useState("");
-  const rows = items.filter((r) => (r.action + r.target + r.actorName).toLowerCase().includes(q.toLowerCase()));
+  const rows = items.filter((r) =>
+  [r.id, r.action, r.target, r.actorName]
+    .map((v) => String(v ?? ""))
+    .join(" ")
+    .toLowerCase()
+    .includes(q.toLowerCase())
+  );
 
   return (
     <>
       <UCHead title="ตรวจสอบบันทึกประวัติการแก้ไขข้อมูลแผนที่" desc="ระบบบันทึกอัตโนมัติทุกครั้งที่มีการเพิ่ม/แก้ไข/ลบข้อมูลแผนผัง ห้อง ชั้น หรือตำแหน่งกิจกรรม" />
-      <SearchBar value={q} onChange={setQ} placeholder="ค้นหาผู้แก้ไข / รายการที่ถูกแก้ไข" />
+      <SearchBar value={q} onChange={setQ} placeholder="ค้นหา ID / ผู้แก้ไข / รายการที่ถูกแก้ไข" />
       <Table
         columns={[
           { key: "id", label: "ID" },
