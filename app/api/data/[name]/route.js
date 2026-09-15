@@ -51,3 +51,47 @@ export async function DELETE(req, { params }) {
   if (ok && MAP_COLLECTIONS[name]) await logMapEdit({ actorName: actor, action: "ลบ" + MAP_COLLECTIONS[name], target: before.name || before.label || before.code || id, before: "มีอยู่", after: "ถูกลบ" });
   return Response.json({ ok });
 }
+
+// เมื่อฝ่ายแผนที่เผยแพร่ floorplan ใน mapAssets ระบบจะสร้าง/ซิงก์ baseline ของ floors ให้อัตโนมัติ ให้ฝ่ายทะเบียนใส่ข้อมูลได้ทันที
+async function syncFloorFromMapAsset(asset) {
+  if (
+    !asset ||
+    asset.kind !== "floorplan" ||
+    asset.status !== "published" ||
+    !asset.building ||
+    asset.floor == null
+  ) {
+    return null;
+  }
+
+  const floorId = String(asset.floor);
+  const floors = await list("floors");
+  const existing = floors.find(
+    (f) => f.building === asset.building && String(f.floor) === floorId
+  );
+
+  if (existing) {
+    const patch = {};
+    if (asset.file && existing.svg !== asset.file) patch.svg = asset.file;
+    if (!existing.name) patch.name = `ชั้น ${floorId}`;
+    // status คงไว้ active เสมอ สถานะของชั้นถูกกำหนดจากข้อมูลแผนที่
+    if (existing.status !== "active") patch.status = "active";
+    return Object.keys(patch).length ? await update("floors", existing.id, patch) : existing;
+  }
+
+  return insert("floors", {
+    building: asset.building,
+    floor: floorId,
+    name: `ชั้น ${floorId}`,
+    svg: asset.file || "",
+    note: "",
+    status: "active",
+  });
+}
+
+async function syncFloorsFromPublishedMapAssets() {
+  const assets = await list("mapAssets");
+  for (const asset of assets) {
+    await syncFloorFromMapAsset(asset);
+  }
+}

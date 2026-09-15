@@ -254,8 +254,18 @@ export function useCollection(name) {
   }, [name, reload]);
 
   const destroy = useCallback(async (id, actor) => {
-    await fetch(`/api/data/${name}?id=${encodeURIComponent(id)}&actor=${encodeURIComponent(actor?.name || "")}`, { method: "DELETE" });
+    const r = await fetch(
+      `/api/data/${name}?id=${encodeURIComponent(id)}&actor=${encodeURIComponent(actor?.name || "")}`,
+      { method: "DELETE" }
+    );
+    const j = await r.json().catch(() => ({}));
+
+    if (!r.ok || j.ok === false) {
+      throw new Error(j.error || `ลบข้อมูลไม่สำเร็จ (${r.status})`);
+    }
+
     await reload();
+    return true;
   }, [name, reload]);
 
   return { items, loading, reload, create, patch, destroy };

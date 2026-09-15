@@ -23,7 +23,7 @@
 ### ครั้งแรก
 
 ```bash
-cp .env.example .env      # แล้วเปิดแก้ POSTGRES_PASSWORD เป็นรหัสของตัวเอง
+ .env.example .env      # แล้วเปิดแก้ POSTGRES_PASSWORD เป็นรหัสของตัวเอง
 docker compose up -d --build
 ```
 
@@ -43,7 +43,7 @@ file .env        # ต้องไม่ขึ้นคำว่า "CRLF line t
 ถ้าเป็น CRLF ให้แก้ด้วย `dos2unix .env` หรือใน VS Code กดที่คำว่า CRLF มุมขวาล่างแล้วเปลี่ยนเป็น LF
 
 **2. แก้ `db/seed.sql` แล้วข้อมูลไม่เปลี่ยน → ต้องล้าง volume**
-
+cp
 ไฟล์ใน `docker-entrypoint-initdb.d` จะรัน **ครั้งเดียวตอนสร้าง volume ใหม่เท่านั้น**
 ถ้าเคยรันไปแล้ว ข้อมูลเก่าจะค้างอยู่ตลอดไม่ว่าจะแก้ `seed.sql` กี่รอบ
 

@@ -98,9 +98,9 @@ export default function BuildingFloorPicker({
   floor,
   onChange,
   onSelectRoom,
-  onCloseRoomPopup, // ผู้ใช้กด ✕ บน popup ของ node บนแผนที่โดยตรง — ให้แผงด้านล่างสลับไปแสดง "ห้องทั้งหมด" ทันที
+  onCloseRoomPopup, // ผู้ใช้กด ✕ บน popup ของ node บนแผนที่โดยตรง ให้แผงด้านล่างสลับไปแสดง "ห้องทั้งหมด" ทันที
   height = "100%",
-  focusedNodeId = null, // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — ใช้เปลี่ยน icon เป็นปากกาและซูมแผนที่ไปหา
+  focusedNodeId = null, // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง กรอบฟ้าและซูมแผนที่ไปหา
 }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
@@ -129,63 +129,83 @@ export default function BuildingFloorPicker({
   // ใช้บอก effect fit/lock ให้รู้ว่าตอนนี้อ่าน buildingLayers[openKey] ได้แล้วจริง ๆ
   const [layersReady, setLayersReady] = useState(false);
 
-  /* Firestore */
-
+  // ข้อมูลผังจากฝ่ายแผนที่ + รายละเอียดห้องจากฝ่ายทะเบียน 
   const { items: floorRecords } = useCollection("floors");
   const { items: allRooms } = useCollection("rooms");
+  const mapAssetsRef = useRef(mapAssets);
+  useEffect(() => { mapAssetsRef.current = mapAssets; }, [mapAssets]);
   const b = openKey ? BUILDINGS[openKey] : null;
 
-
-  /* Merge floor data */
-
+  // รายชื่อชั้นของฝ่ายทะเบียนต้องมาจากผังที่ฝ่ายแผนที่เผยแพร่แล้วเท่านั้น
   const mergedFloors = useMemo(() => {
     if (!b) return [];
-    const overrides = {};
-    for (const rec of floorRecords || []) {
-      // schema ของตาราง floors กำหนด status เป็น 'active' | 'draft' เท่านั้น
-      // (เดิมเทียบกับ "inactive" ซึ่งไม่มีทางเป็นจริง ทำให้ชั้นที่ถูกซ่อนยังโผล่อยู่)
-      if (rec.building === b.name && rec.status !== "draft" && rec.svg) {
-        overrides[rec.floor] = rec.svg;
-      }
-    }
 
-    const base = b.floors || [];
-    const merged = base.map((f) =>
-      overrides[f.id] ? { ...f, svg: overrides[f.id],}: f
-    );
-
-    for (const floorId in overrides) {
-      if (!merged.some((f) => f.id === floorId)) {
-        merged.push({
-          id: floorId,
-          label: floorId,
-          svg: overrides[floorId],
-        });
-      }
-    }
-
-    merged.sort((a, z) => {
-      const na = Number(a.id);
-      const nz = Number(z.id);
-
+    const byFloor = new Map();
+    for (const asset of mapAssets || []) {
       if (
-        Number.isFinite(na) &&
-        Number.isFinite(nz)
+        asset.kind === "floorplan" &&
+        asset.status === "published" &&
+        asset.building === b.name &&
+        asset.floor != null
       ) {
-        return nz - na;
+        const floorId = String(asset.floor);
+        // ถ้ามีหลายไฟล์ของชั้นเดียวกัน ให้รายการที่เจอก่อนเป็น source ปัจจุบัน
+        if (!byFloor.has(floorId)) byFloor.set(floorId, asset);
       }
+    }
 
-      return String(z.id).localeCompare(
-        String(a.id)
-      );
+    const floors = Array.from(byFloor.entries()).map(([floorId, asset]) => {
+      const base = (b.floors || []).find((f) => String(f.id) === floorId);
+      return {
+        ...(base || {}),
+        id: floorId,
+        label: base?.label || `ชั้น ${floorId}`,
+        svg: asset.file,
+        mapAssetId: asset.id,
+      };
     });
 
-    return merged;
-  }, [b, floorRecords]);
+    floors.sort((a, z) => {
+      const na = Number(a.id);
+      const nz = Number(z.id);
+      if (Number.isFinite(na) && Number.isFinite(nz)) return nz - na;
+      return String(z.id).localeCompare(String(a.id));
+    });
 
+    return floors;
+  }, [b, mapAssets]);
+
+  const firstPublishedFloorForBuilding = (buildingName) => {
+    const ids = (mapAssetsRef.current || [])
+      .filter(
+        (a) =>
+          a.kind === "floorplan" &&
+          a.status === "published" &&
+          a.building === buildingName &&
+          a.floor != null
+      )
+      .map((a) => String(a.floor))
+      .sort((a, z) => {
+        const na = Number(a);
+        const nz = Number(z);
+        if (Number.isFinite(na) && Number.isFinite(nz)) return na - nz;
+        return a.localeCompare(z);
+      });
+    return ids[0] || null;
+  };
+
+  // ถ้าชั้นที่เลือกอยู่ไม่ใช่ชั้นที่ฝ่ายแผนที่เผยแพร่แล้ว ให้ย้ายไปชั้นแรกที่มีจริง
+  useEffect(() => {
+    if (!b || !mergedFloors.length) return;
+    const exists = mergedFloors.some((f) => String(f.id) === String(curFloor));
+    if (exists) return;
+
+    const nextFloor = String(mergedFloors[mergedFloors.length - 1].id);
+    setCurFloor(nextFloor);
+    onChangeRef.current?.({ building: b.name, floor: nextFloor });
+  }, [b, curFloor, mergedFloors]);
 
   /* Current rooms */
-
   const currentRooms = useMemo(() => {
     if (!b) return [];
 
@@ -216,7 +236,6 @@ export default function BuildingFloorPicker({
     return result;
   }, [b, curFloor]);
 
-
   const floorEdges = useMemo(() => {
     if (String(curFloor) === "1") { return KMITL_FLOOR1_EDGES || [];}
     return [];
@@ -224,7 +243,6 @@ export default function BuildingFloorPicker({
 
 
   /* Match room กับ node */
-
   const roomByNode = useMemo(() => {
     const result = {};
 
@@ -235,7 +253,6 @@ export default function BuildingFloorPicker({
     }
     return result;
   }, [currentRooms]);
-
 
   /* Callback refs  */
   const onChangeRef = useRef(onChange);
@@ -248,7 +265,6 @@ export default function BuildingFloorPicker({
   useEffect(() => { onCloseRoomPopupRef.current = onCloseRoomPopup; }, [onCloseRoomPopup]);
 
   /* Sync props */
-
   useEffect(() => {
     const key = Object.keys(BUILDINGS).find((k) => BUILDINGS[k].name === building);
     setOpenKey(key || null);
@@ -257,11 +273,9 @@ export default function BuildingFloorPicker({
 
 
   /* Map bounds */
-
   const KMITL_BOUNDS = [[13.720, 100.765],[13.740, 100.788],];
 
   /* Fit building */
-
   const fitBuilding = (map,poly) => {
     if (!map || !poly) return;
     const center = poly.getBounds().getCenter();
@@ -281,7 +295,6 @@ export default function BuildingFloorPicker({
   };
 
   /* Initialize map */
-
   useEffect(() => {
     let dead = false;
     (async () => {const L = await loadLeaflet();
@@ -309,32 +322,27 @@ export default function BuildingFloorPicker({
       ctx.current.L = L;
       ctx.current.map = map;
 
-      /* Base map — วาดถนน/ตึก/พื้นที่สีเขียวเองจาก OSM (เหมือนหน้า User ใน MapView.jsx)
-         แทนการขอ raster tile เต็มจอจาก CARTO ตรงๆ ซึ่งตอนนี้ต้องมี API key ถึงจะไม่มี
-         watermark "API KEY REQUIRED" ทับเต็มแผนที่ (ดู mapBaseLayer.js) */
+      // Base map — วาดถนน/ตึก/พื้นที่สีเขียวเองจาก OSM 
       map.getContainer().style.background = "#FFFFFF";
       drawGoogleLikeBaseMap(L, map, [
         KMITL_BOUNDS[0][0], KMITL_BOUNDS[0][1],
         KMITL_BOUNDS[1][0], KMITL_BOUNDS[1][1],
       ]).catch(() => {});
 
-      /* Pane สำหรับ floor plan */
-
+      // Pane สำหรับ floor plan 
       if (!map.getPane("regFloorPane")) {
         map.createPane("regFloorPane");
         map.getPane("regFloorPane").style.zIndex = "350";
         map.getPane("regFloorPane").style.pointerEvents = "none";
       }
 
-      /* Pane สำหรับ graph / icons */
-
+      // Pane สำหรับ graph / icons 
       if (!map.getPane("regGraphPane")) {
         map.createPane("regGraphPane");
         map.getPane("regGraphPane").style.zIndex = "600";
       }
 
-      /* Building labels */
-
+      // Building labels 
       for (const [key, buildingData,] of Object.entries(BUILDINGS)) {
         const outline = buildingData.outline && buildingData.outline.length >= 3? buildingData.outline : buildingData.bounds ? [
                 [
@@ -433,7 +441,6 @@ export default function BuildingFloorPicker({
 
 
   /* Zoom เมื่อเลือกตึก  */
-
   useEffect(() => {
     const map = ctx.current.map;
     const layer = openKey ? ctx.current.buildingLayers[openKey] : null;
@@ -446,8 +453,8 @@ export default function BuildingFloorPicker({
   /* =======================================================
      ล็อคแผนที่ให้อยู่แค่บริเวณตึกที่กำลังแก้ไข (เฉพาะฝ่ายทะเบียน)
      - เลือกตึกแล้ว (openKey มีค่า): ล็อคขอบเขตแค่ตัวตึกนั้น ลากแผนที่ออกนอกตึกไม่ได้
-       ต้องกด ✕ ปิดตึกก่อน ถึงจะขยับแผนที่ไปที่อื่นได้
-     - ยังไม่เลือกตึก / กด ✕ ปิดแล้ว (openKey === null): คืนขอบเขตกลับเป็นทั้งแคมปัสตามเดิม
+       ต้องกด x ปิดตึกก่อน ถึงจะขยับแผนที่ไปที่อื่นได้
+     - ยังไม่เลือกตึก / กด x ปิดแล้ว (openKey === null): คืนขอบเขตกลับเป็นทั้งแคมปัสตามเดิม
      ======================================================= */
 
   useEffect(() => {
@@ -467,7 +474,6 @@ export default function BuildingFloorPicker({
 
 
   /* Floor SVG */
-
   useEffect(() => {const {L,map,} = ctx.current;
     if (!L || !map) {return;}
 
@@ -499,8 +505,7 @@ export default function BuildingFloorPicker({
     b,
   ]);
 
-  /* Draw graph edges */
-
+  // Draw graph edges 
   useEffect(() => {const {L, map,} = ctx.current;
     if (!L || !map) {return;}
 
@@ -512,7 +517,7 @@ export default function BuildingFloorPicker({
 
     if (!openKey) return;
 
-    /* วาด edge ทางเดิน เหมือน MapView */
+    // วาด edge ทางเดิน 
     for (const [from,to,] of floorEdges) {
       const a = floorNodes[from];
       const z = floorNodes[to];
@@ -555,14 +560,12 @@ export default function BuildingFloorPicker({
     floorEdges,
   ]);
 
-
-  /* Draw ALL indoor nodes */
-
+  // Draw ALL indoor nodes 
   useEffect(() => {
     const {L,map,} = ctx.current;
     if (!L || !map) {return;}
 
-    /* clear */
+    // clear 
     for (const marker of ctx.current.poiLayer) {
       if (map.hasLayer(marker)) {
         map.removeLayer(marker);
@@ -588,11 +591,11 @@ export default function BuildingFloorPicker({
       const icon = getNodeIcon(effectiveNode);
       const typeLabel = exterior ? "ทางเข้า / ทางออก" : getNodeTypeLabel(node);
 
-      /* ขนาด icon */
+      // ขนาด icon 
       const size = icon.type === "room" ||
         icon.type === "toilet" ? 24 : 26;
 
-      // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — เน้นด้วยกรอบสีน้ำเงิน (ไม่เปลี่ยน icon)
+      // node ที่กำลังถูกเลือก/ดูอยู่ในแผงจัดการด้านล่าง — เน้นด้วยกรอบสีน้ำเงิน 
       const isFocusedNode = focusedNodeId && id === focusedNodeId;
       const iconInnerHtml = icon.html;
 
@@ -647,7 +650,6 @@ export default function BuildingFloorPicker({
 
 
       /* Tooltip */
-
       const tooltipText = room
           ? `${room.name || `ห้อง ${room.code || ""}`}`
           : node.label
@@ -662,8 +664,7 @@ export default function BuildingFloorPicker({
         }
       );
 
-      /* Popup */
-
+      // Popup 
       const popupRoom = room ? 
             `<div
                 style="min-width:190px;
@@ -762,14 +763,14 @@ export default function BuildingFloorPicker({
             });
         }
 
-        // กด ✕ บน popup เอง (ไม่ใช่ popup ถูกปิดเพราะ marker ถูกสร้างใหม่) — สั่งแผงด้านล่างกลับไปหน้าห้องทั้งหมดทันที
+        // กด ✕ บน popup เอง สั่งแผงด้านล่างกลับไปหน้าห้องทั้งหมดทันที
         if (wasUserClose) {
           onCloseRoomPopupRef.current?.();
         }
         });
 
         // ห้องนี้กำลังถูกโฟกัส/แสดงอยู่ในแผงด้านล่าง — เปิด popup ค้างไว้เสมอ
-        // แม้ effect นี้จะ re-run แล้วสร้าง marker ใหม่ทับของเดิม (เช่น ตอนเพิ่งกด icon แล้ว focusedNodeId เปลี่ยน)
+        // แม้ effect นี้จะ re-run แล้วสร้าง marker ใหม่ทับของเดิม 
         // ก็ให้ popup เปิดค้างอยู่ต่อ ไม่ใช่หายไปเฉย ๆ
         if (isFocusedNode) {
           marker.openPopup();
@@ -796,7 +797,6 @@ export default function BuildingFloorPicker({
       );
       ctx.current.poiLayer.push(marker);
     }
-
 
     return () => {
       for (const marker of ctx.current.poiLayer) {
@@ -829,14 +829,13 @@ export default function BuildingFloorPicker({
     map.setView([node.lat, node.lon], 20, { animate: true });
   }, [openKey, curFloor, focusedNodeId, floorNodes]);
 
-  /* Search */
-
+  // Search 
   const searchResults =
     useMemo(() => {
       const q = normalize(search);
       if (!q) return [];
       const result = [];
-      /* อาคาร */
+      // อาคาร 
       for (
         const [key,data,] of Object.entries(BUILDINGS)) {
         const text = normalize(`${data.name} ${key}`);
@@ -850,7 +849,7 @@ export default function BuildingFloorPicker({
         }
       }
 
-      /* ห้องจากทะเบียน */
+      // ห้องจากทะเบียน 
       for (const room of allRooms || []) {
         const text =
           normalize(
@@ -879,7 +878,7 @@ export default function BuildingFloorPicker({
         }
       }
 
-      /* node ใน indoor map */
+      // node ใน indoor map 
       for (
         const [id,node,] of Object.entries(
           floorNodes
@@ -901,7 +900,7 @@ export default function BuildingFloorPicker({
           continue;
         }
 
-        /* ถ้ามี room อยู่แล้ว ไม่ต้องแสดงซ้ำ */
+        // ถ้ามี room อยู่แล้ว ไม่ต้องแสดงซ้ำ 
         if (roomByNode[id]) continue;
         
         const icon = getNodeIcon(node);
@@ -927,14 +926,13 @@ export default function BuildingFloorPicker({
     ]);
 
   /* Search select */
-
   const selectSearch =
     (item) => {setSearchOpen(false);
       const map =ctx.current.map;
 
       if (!map) {return;}
 
-      /* อาคาร */
+      // อาคาร 
       if (item.kind === "building") {
         const data = BUILDINGS[item.key];
         setOpenKey(item.key);
@@ -951,7 +949,7 @@ export default function BuildingFloorPicker({
         return;
       }
 
-      /* ห้อง */
+      // ห้อง 
       if (item.kind === "room"
       ) {
         const room = item.room;
@@ -966,8 +964,7 @@ export default function BuildingFloorPicker({
         onChangeRef.current?.({building: room.building, floor: room.floor || "1",
         });
 
-        const node =
-          item.node;
+        const node = item.node;
 
         if (node) {
           setTimeout(() => {
@@ -981,16 +978,15 @@ export default function BuildingFloorPicker({
         return;
       }
 
-      /* node */
-      if (
-        item.kind === "node"
-      ) {const node = item.node;
+      // node 
+      if (item.kind === "node") {
+        const node = item.node;
         map.setView(
           [node.lat, node.lon,], 20,
           {animate: true,}
         );
 
-        /* เปิด popup ของ marker */
+        // เปิด popup ของ marker 
         const marker = ctx.current.poiLayer.find(
               (m) => {
                 const p = m.getLatLng();
@@ -1011,7 +1007,7 @@ export default function BuildingFloorPicker({
       }
     };
 
-  /* Resize observer */
+  // Resize observer 
   useEffect(() => {
     if (!elRef.current || typeof ResizeObserver === "undefined") {return;}
 
@@ -1022,8 +1018,7 @@ export default function BuildingFloorPicker({
     return () => ro.disconnect();
   }, []);
 
-  /* RETURN */
-
+  // RETURN 
   return (
     <div
       style={{
@@ -1034,10 +1029,10 @@ export default function BuildingFloorPicker({
       }}
     >
 
-      {/* ===================================================
+      {
+      /* ===================================================
           Map
-          =================================================== */}
-
+      =================================================== */}
       <div
         ref={elRef}
         style={{
@@ -1046,10 +1041,10 @@ export default function BuildingFloorPicker({
         }}
       />
 
-
-      {/* ===================================================
+      {
+      /* ===================================================
           Search
-          =================================================== */}
+      =================================================== */}
 
       <div
         style={{
@@ -1181,7 +1176,6 @@ export default function BuildingFloorPicker({
 
 
         {/* Search result */}
-
         {searchOpen &&
           searchResults.length >
             0 && (

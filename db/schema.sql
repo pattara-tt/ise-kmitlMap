@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS event_stats (
   searched    INTEGER NOT NULL DEFAULT 0
 );
 
--- ─────────── ฝ่ายทะเบียน: ชั้นและห้อง ───────────
+-- ─────────── รายละเอียดชั้น/ห้องสำหรับฝ่ายทะเบียน (โครงสร้างชั้นและ node มาจากฝ่ายแผนที่) ───────────
 CREATE TABLE IF NOT EXISTS floors (
   id          TEXT PRIMARY KEY,
   building    TEXT NOT NULL,

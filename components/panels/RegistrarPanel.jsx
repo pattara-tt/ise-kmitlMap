@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"; // useEffect ใช้ซิงก์ activeTab ตาม uc prop (ดูด้านล่าง)
 import dynamic from "next/dynamic";
-import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, useCollection } from "../ui";
+import { Btn, Card, Field, Input, Pill, SearchBar, Table, Textarea, useCollection } from "../ui";
 
 const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
   ssr: false,
@@ -13,7 +13,7 @@ const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
   ),
 });
 
-// รับ uc ("rooms" หรือ "floors") จาก app/page.jsx เพื่อกำหนดว่าเข้ามาจากเมนู UC21 หรือ UC22
+// รับ uc ("rooms" หรือ "floors") จาก app/page.jsx เพื่อกำหนด sub-flow ของ UC16
 // — ถ้าไม่ส่งมา (หรือค่าอื่น) fallback เป็น "rooms" เหมือนเดิม
 export default function RegistrarPanel({ uc, user }) {
   const [selected, setSelected] = useState({ building: null, floor: "1" });
@@ -21,7 +21,7 @@ export default function RegistrarPanel({ uc, user }) {
   const [focusRoom, setFocusRoom] = useState(null); // ห้องที่ถูกกดจาก node บนแผนที่ ให้ RoomsManager โฟกัส/แสดงข้อมูลให้
   const [panelFullscreen, setPanelFullscreen] = useState(false); // แผงจัดการด้านล่างขยายเต็มจอหรือไม่
 
-  // ผู้ใช้อาจสลับเมนู UC21 <-> UC22 โดยที่ RegistrarPanel component เดิมไม่ remount (React reuse เดิม)
+  // ผู้ใช้อาจสลับ sub-flow ข้อมูลห้อง <-> ข้อมูลชั้น โดยที่ RegistrarPanel component เดิมไม่ remount
   // ต้องซิงก์ activeTab ตาม uc ทุกครั้งที่ prop เปลี่ยน ไม่ใช่แค่ตอน mount ครั้งแรก
   useEffect(() => {
     if (uc === "floors" || uc === "rooms") setActiveTab(uc);
@@ -86,13 +86,13 @@ export default function RegistrarPanel({ uc, user }) {
                   onClick={() => setActiveTab("rooms")}
                   style={{ border: "none", padding: "4px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", background: activeTab === "rooms" ? "#fff" : "transparent", color: activeTab === "rooms" ? "#1A73E8" : "#5F6368" }}
                 >
-                  จัดการห้อง (UC21)
+                  ข้อมูลห้อง
                 </button>
                 <button
                   onClick={() => setActiveTab("floors")}
                   style={{ border: "none", padding: "4px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", background: activeTab === "floors" ? "#fff" : "transparent", color: activeTab === "floors" ? "#1A73E8" : "#5F6368" }}
                 >
-                  จัดการผังชั้น (UC22)
+                  ข้อมูลชั้น
                 </button>
               </div>
             </div>
@@ -231,8 +231,13 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
     const r = confirmTarget;
     if (!r) return;
     setConfirmTarget(null);
-    await destroy(r.id, user);
-    backToList();
+    try {
+      await destroy(r.id, user);
+      backToList();
+      setNotice({ icon: "✅", title: "สำเร็จ", message: "ลบข้อมูลห้องเรียบร้อยแล้ว" });
+    } catch (e) {
+      setNotice({ icon: "❌", title: "ลบข้อมูลไม่สำเร็จ", message: e?.message || String(e) });
+    }
   };
 
   // เทียบค่าฟอร์มที่กำลังแก้กับค่าที่บันทึกไว้จริงของห้องนี้ ใช้ไฮไลต์ช่องที่ถูกแก้ไข
@@ -253,8 +258,8 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
       {confirmTarget && (
         <ModalPopup
           icon="🗑️"
-          title="ลบห้อง"
-          message={`ลบ ${confirmTarget.name}?`}
+          title="ลบข้อมูลห้อง"
+          message={`ลบข้อมูลรายละเอียดของ ${confirmTarget.name}?\nตัวห้องบนแผนที่จะยังคงอยู่`}
           confirmText="ลบ"
           cancelText="ยกเลิก"
           danger
@@ -288,7 +293,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
             <b style={{ fontSize: 13.5, color: "#202124" }}>ข้อมูลห้อง {matchedRoom.code}</b>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
               <Btn kind="ghost" onClick={() => { editIntentRef.current = true; setIsEditing(true); }}>แก้ไขข้อมูล</Btn>
-              <Btn kind="danger" onClick={() => doDelete(matchedRoom)}>ลบห้อง</Btn>
+              <Btn kind="danger" onClick={() => doDelete(matchedRoom)}>ลบข้อมูลห้อง</Btn>
             </div>
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
@@ -330,7 +335,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
 
         <Card style={{ position: "relative" }}>
           <button
-            title="ลบห้องนี้"
+            title="ลบข้อมูลห้องนี้"
             onClick={() => doDelete(matchedRoom)}
             style={{
               position: "absolute", top: 10, right: 10, width: 30, height: 30, borderRadius: "50%",
@@ -370,7 +375,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
             <Input value={editForm.teacher} onChange={setEdit("teacher")} style={diffInputStyle(fieldChanged("teacher"))} />
           </EditField>
           <EditField label="รหัส node บนผังชั้น" changed={fieldChanged("nodeId")}>
-            <Input value={editForm.nodeId} onChange={setEdit("nodeId")} style={diffInputStyle(fieldChanged("nodeId"))} />
+            <Input value={editForm.nodeId} readOnly title="รหัส node มาจากข้อมูลแผนที่ของฝ่ายแผนที่" style={{ ...diffInputStyle(false), background: "#F8F9FA", color: "#5F6368" }} />
           </EditField>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
@@ -421,7 +426,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
               <div style={{ flex: 1 }}><Field label="ความจุ"><Input type="number" value={form.capacity} onChange={set("capacity")} /></Field></div>
             </div>
             <Field label="อาจารย์ประจำห้อง"><Input value={form.teacher} onChange={set("teacher")} placeholder="อ.ดร. ..." /></Field>
-            <Field label="รหัส node บนผังชั้น"><Input value={form.nodeId} onChange={set("nodeId")} placeholder="Sc8StudyRoom4F1" /></Field>
+            <Field label="รหัส node บนผังชั้น (จากฝ่ายแผนที่)"><Input value={form.nodeId} readOnly placeholder="Sc8StudyRoom4F1" style={{ background: "#F8F9FA", color: "#5F6368" }} /></Field>
 
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <Btn
@@ -431,16 +436,19 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
                   }
                   // ตาราง rooms มี UNIQUE (building, floor, code) — ถ้ารหัสห้องซ้ำในชั้นเดียวกัน
                   // create() จะ throw ต้องดักไว้ ไม่งั้นปุ่มจะเงียบไปเฉยๆ โดยผู้ใช้ไม่รู้สาเหตุ
+                  let createdRoom;
                   try {
-                    await create({ ...form, building, floor, capacity: Number(form.capacity) }, user);
+                    createdRoom = await create({ ...form, building, floor, capacity: Number(form.capacity) }, user);
                   } catch (e) {
                     return setNotice({ icon: "❌", title: "บันทึกไม่สำเร็จ", message: "อาจมีรหัสห้องนี้อยู่แล้วในชั้นนี้ — " + (e?.message || e) });
                   }
                   setForm({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacher: "", nodeId: "" });
                   setShowAddForm(false);
+                  if (createdRoom) setFocusRoom(createdRoom);
+                  setNotice({ icon: "✅", title: "สำเร็จ", message: "เพิ่มข้อมูลห้องเรียบร้อยแล้ว" });
                 }}
               >
-                บันทึกห้องใหม่
+                บันทึกข้อมูลห้อง
               </Btn>
               <Btn kind="ghost" onClick={() => setShowAddForm(false)}>ยกเลิก</Btn>
             </div>
@@ -479,7 +487,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
               render: (r) => (
                 <div style={{ display: "flex", gap: 6 }}>
                   <Btn kind="ghost" onClick={() => openEdit(r)}>แก้ไข</Btn>
-                  <Btn kind="danger" onClick={() => doDelete(r)}>ลบ</Btn>
+                  <Btn kind="danger" onClick={() => doDelete(r)}>ลบข้อมูล</Btn>
                 </div>
               ),
             },
@@ -493,50 +501,74 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
   );
 }
 
-// Sub-Component: จัดการรายละเอียดชั้น (UC22)
-// รองรับทั้งรายละเอียดชั้น พาธไฟล์ผังชั้น (SVG) และสถานะเปิด/ซ่อนชั้น
-// — ความสามารถ 2 อย่างหลังเคยมีในแผงเดิม ถ้าตัดออกฝ่ายทะเบียนจะผูกไฟล์ผังชั้นใหม่ไม่ได้เลย
+// Sub-Component: จัดการรายละเอียดชั้น
+// โครงสร้างชั้นและไฟล์ผัง (SVG) เป็นข้อมูลจาก "ฝ่ายแผนที่" ผ่าน mapAssets
+// ฝ่ายทะเบียนแก้ไขได้เฉพาะ "รายละเอียดชั้น" เท่านั้น ไม่สร้าง/ลบชั้น และไม่แก้ไฟล์ผัง
 function FloorsManager({ building, floor, user }) {
-  const { items, create, patch } = useCollection("floors");
+  const { items, patch } = useCollection("floors");
   const { items: rooms } = useCollection("rooms");
-  const floorData = items.find((f) => f.building === building && f.floor === floor);
+  const { items: mapAssets } = useCollection("mapAssets");
 
-  const [form, setForm] = useState({ note: "", svg: "" });
+  const floorData = items.find(
+    (f) => f.building === building && String(f.floor) === String(floor)
+  );
+
+  // source of truth ของ "ชั้นที่มีอยู่จริงบนแผนที่" มาจากฝ่ายแผนที่ (UC8/UC9)
+  const mapFloorAsset = mapAssets.find(
+    (a) =>
+      a.kind === "floorplan" &&
+      a.status === "published" &&
+      a.building === building &&
+      String(a.floor) === String(floor)
+  );
+
+  const [form, setForm] = useState({ note: "" });
   const [saving, setSaving] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // false = ดูข้อมูลอย่างเดียวก่อนเสมอ, true = กด "แก้ไข" แล้วค่อยแก้ฟอร์มได้
-  const [notice, setNotice] = useState(null); // popup แจ้งผลบันทึก/ผิดพลาด แทน alert()
+  const [isEditing, setIsEditing] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   const savedNote = floorData?.note || "";
-  const savedSvg = floorData?.svg || "";
 
-  // ให้ค่าฟอร์มอัปเดตตามข้อมูลผังชั้นจริงทุกครั้งที่สลับอาคาร/ชั้น (เอาข้อมูลเดิมมาเติมให้อัตโนมัติ) และกลับสู่โหมดดูข้อมูลก่อนเสมอ
   useEffect(() => {
-    setForm({ note: savedNote, svg: savedSvg });
+    setForm({ note: savedNote });
     setIsEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [building, floor, floorData?.id]);
 
-  const roomCount = rooms.filter((r) => r.building === building && r.floor === floor).length;
-  const status = floorData?.status || "active";
+  const roomCount = rooms.filter(
+    (r) => r.building === building && String(r.floor) === String(floor)
+  ).length;
 
-  // เทียบค่าฟอร์มที่กำลังแก้กับค่าที่บันทึกไว้จริง ใช้ไฮไลต์กรอบฟ้า + "* แก้ไข" เหมือนโหมดแก้ไขห้อง
-  const fieldChanged = (k) => String(form[k]) !== String(k === "note" ? savedNote : savedSvg);
-
-  const startEdit = () => setIsEditing(true);
+  const fieldChanged = () => String(form.note) !== String(savedNote);
 
   const cancelEdit = () => {
-    setForm({ note: savedNote, svg: savedSvg });
+    setForm({ note: savedNote });
     setIsEditing(false);
   };
 
-  const save = async (extra = {}) => {
+  const save = async () => {
+    // ฝ่ายทะเบียนต้องแก้ได้เฉพาะชั้นที่ฝ่ายแผนที่เผยแพร่มาแล้ว
+    if (!mapFloorAsset) {
+      setNotice({
+        icon: "⚠️",
+        title: "ไม่พบข้อมูลชั้นจากฝ่ายแผนที่",
+        message: "ชั้นนี้ยังไม่มีผังที่เผยแพร่จากฝ่ายแผนที่ จึงยังไม่สามารถแก้ไขรายละเอียดได้",
+      });
+      return false;
+    }
+
+    if (!floorData) {
+      setNotice({
+        icon: "⚠️",
+        title: "ข้อมูลชั้นยังไม่พร้อม",
+        message: "ระบบยังไม่ได้รับข้อมูลชั้นจากฝ่ายแผนที่ กรุณาให้ฝ่ายแผนที่เผยแพร่ผังชั้นอีกครั้ง",
+      });
+      return false;
+    }
+
     setSaving(true);
     try {
-      if (floorData) {
-        await patch(floorData.id, { ...form, ...extra }, user);
-      } else {
-        await create({ building, floor, name: `ชั้น ${floor}`, status: "active", ...form, ...extra }, user);
-      }
+      await patch(floorData.id, { note: form.note }, user);
     } catch (e) {
       setNotice({ icon: "❌", title: "บันทึกไม่สำเร็จ", message: e?.message || String(e) });
       return false;
@@ -556,30 +588,41 @@ function FloorsManager({ building, floor, user }) {
     />
   );
 
-  // ---------- โหมด: ดูข้อมูลชั้นอย่างเดียว (ค่าเริ่มต้นเสมอ ต้องกด "แก้ไข" ก่อนถึงจะแก้ฟอร์มได้) ----------
+  if (!mapFloorAsset) {
+    return (
+      <Card>
+        <b style={{ fontSize: 13.5, color: "#202124" }}>ผังชั้นของ {building} — ชั้น {floor}</b>
+        <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "#FEF7E0", border: "1px solid #FDE293", color: "#7A4F00", fontSize: 12.5, lineHeight: 1.5 }}>
+          ยังไม่พบผังชั้นที่เผยแพร่จากฝ่ายแผนที่ ฝ่ายทะเบียนไม่สามารถสร้างชั้นเองได้
+        </div>
+        {popupEl}
+      </Card>
+    );
+  }
+
+  // ดูข้อมูลชั้น: ข้อมูลโครงสร้าง/ไฟล์ผังมาจากฝ่ายแผนที่ และเป็น read-only สำหรับฝ่ายทะเบียน
   if (!isEditing) {
     return (
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
           <b style={{ fontSize: 13.5, color: "#202124" }}>ผังชั้นของ {building} — ชั้น {floor}</b>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <Pill color="#1A73E8" bg="#E8F0FE">{roomCount} ห้องในชั้นนี้</Pill>
-            <Status value={status} />
-          </div>
+          <Pill color="#1A73E8" bg="#E8F0FE">{roomCount} ห้องที่มีรายละเอียด</Pill>
         </div>
 
         <div style={{ marginTop: 8 }}>
           <InfoField label="รายละเอียดชั้น" value={savedNote} />
-          <InfoField label="ไฟล์ผังชั้น (SVG)" value={savedSvg} />
+          <InfoField label="ผังชั้นจากฝ่ายแผนที่" value={mapFloorAsset.name || `ชั้น ${floor}`} />
+          <InfoField
+            label="ไฟล์ผัง (อ่านอย่างเดียว)"
+            value={String(mapFloorAsset.file || "").startsWith("data:") ? "ไฟล์ SVG ที่ฝ่ายแผนที่อัปโหลด" : mapFloorAsset.file}
+          />
+
           <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: -4, marginBottom: 8 }}>
-            {savedSvg ? "ไฟล์นี้จะถูกซ้อนทับบนแผนที่เมื่อผู้ใช้ซูมเข้าอาคาร" : "ยังไม่ผูกไฟล์ผังชั้น — ชั้นนี้จะไม่มีภาพผังซ้อนบนแผนที่"}
+            อาคาร ชั้น และไฟล์ผังถูกส่งมาจากฝ่ายแผนที่ ฝ่ายทะเบียนแก้ไขเฉพาะรายละเอียดชั้น
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <Btn onClick={startEdit}>แก้ไขข้อมูลชั้น</Btn>
-            {status === "active"
-              ? <Btn kind="ghost" disabled={saving} onClick={() => save({ status: "draft" })}>ซ่อนชั้นนี้</Btn>
-              : <Btn kind="ok" disabled={saving} onClick={() => save({ status: "active" })}>เปิดใช้งานชั้นนี้</Btn>}
+            <Btn onClick={() => setIsEditing(true)} disabled={!floorData}>แก้ไขข้อมูลชั้น</Btn>
           </div>
         </div>
         {popupEl}
@@ -587,41 +630,25 @@ function FloorsManager({ building, floor, user }) {
     );
   }
 
-  // ---------- โหมด: ฟอร์มแก้ไขข้อมูลชั้น (กดปุ่ม "แก้ไขข้อมูลชั้น" มาแล้ว) ----------
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <b style={{ fontSize: 13.5, color: "#202124" }}>แก้ไขผังชั้นของ {building} — ชั้น {floor}</b>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <Pill color="#1A73E8" bg="#E8F0FE">{roomCount} ห้องในชั้นนี้</Pill>
-          <Status value={status} />
-        </div>
+        <b style={{ fontSize: 13.5, color: "#202124" }}>แก้ไขรายละเอียด {building} — ชั้น {floor}</b>
+        <Pill color="#1A73E8" bg="#E8F0FE">ข้อมูลผังจากฝ่ายแผนที่</Pill>
       </div>
 
       <div style={{ marginTop: 8 }}>
-        {/* กล่องรายละเอียดชั้น: ฝ่ายทะเบียนใส่ข้อมูลเพิ่มเติมเกี่ยวกับชั้นนี้ได้
-            ค่านี้จะไปแสดงต่อท้ายป้าย "Sc8 · ชั้น N" บนแผนที่ของผู้ใช้ทั่วไปด้วย */}
-        <EditField label="รายละเอียดชั้น" changed={fieldChanged("note")}>
+        <EditField label="รายละเอียดชั้น" changed={fieldChanged()}>
           <Textarea
             value={form.note}
-            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+            onChange={(e) => setForm({ note: e.target.value })}
             placeholder="เช่น ชั้นนี้เป็นโซนห้องเรียนวิชาเอก มีลิฟต์ 2 ตัว..."
             rows={3}
-            style={diffInputStyle(fieldChanged("note"))}
+            style={diffInputStyle(fieldChanged())}
           />
         </EditField>
 
-        <EditField label="ไฟล์ผังชั้น (SVG)" changed={fieldChanged("svg")}>
-          <Input
-            value={form.svg}
-            onChange={(e) => setForm((f) => ({ ...f, svg: e.target.value }))}
-            placeholder={`/data/floorplans/${building}/floor${floor}.svg`}
-            style={diffInputStyle(fieldChanged("svg"))}
-          />
-        </EditField>
-        <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: -4, marginBottom: 8 }}>
-          {form.svg ? "ไฟล์นี้จะถูกซ้อนทับบนแผนที่เมื่อผู้ใช้ซูมเข้าอาคาร" : "ยังไม่ผูกไฟล์ผังชั้น — ชั้นนี้จะไม่มีภาพผังซ้อนบนแผนที่"}
-        </div>
+        <InfoField label="ผังชั้นจากฝ่ายแผนที่" value={mapFloorAsset.name || `ชั้น ${floor}`} />
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
           <Btn kind="ghost" disabled={saving} onClick={cancelEdit}>ยกเลิก</Btn>
