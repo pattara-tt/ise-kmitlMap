@@ -54,7 +54,18 @@ export default function Page() {
         fetch("/api/data/users")
           .then((r) => r.ok ? r.json() : null)
           .then((data) => {
-            const fresh = data?.items?.find((u) => u.id === cached.id || u.email === cached.email);
+            const fresh = data?.items?.find(
+              (u) => u.id === cached.id || u.email === cached.email
+            );
+
+            if (fresh?.status === "suspended") {
+              localStorage.removeItem("kmitlmap:user");
+              alert(
+                `บัญชีของคุณถูกระงับการใช้งาน\nเนื่องจาก: ${fresh.suspendReason || "ไม่ระบุ"}`
+              );
+              return;
+            }
+
             applyLogin(fresh || cached, !!fresh);
           })
           .catch(() => applyLogin(cached, false));
