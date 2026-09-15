@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Btn, Card, Field, Input, Pill, SearchBar, Select, Status, Table, Textarea, Tiles, UCHead, useCollection, useStats } from "../ui";
 import { ROLE_LABEL } from "../../lib/usecases";
+import { invalidateSession } from "../../lib/auth";
 
 // Actor: ฝ่ายดูแลระบบ — UC10–UC16
 export default function AdminPanel({ uc, user }) {
@@ -524,7 +525,20 @@ function Roles({ user }) {
               <b style={{ fontSize: 14, color: "#202124" }}>{u.name}</b>
               <div style={{ fontSize: 11.5, color: "#5F6368" }}>{u.email} · {u.id}</div>
             </div>
-            <Select value={u.role} onChange={(e) => patch(u.id, { role: e.target.value }, user)} style={{ width: 210 }}>
+            <Select
+              value={u.role}
+              onChange={async (e) => {
+                const newRole = e.target.value;
+
+                try {
+                  await patch(u.id, { role: newRole }, user);
+                  invalidateSession(u.id);
+                  alert("เปลี่ยนสิทธิ์ผู้ใช้เรียบร้อย");
+                } catch (error) {
+                  alert(`เปลี่ยนสิทธิ์ไม่สำเร็จ: ${error.message}`);
+                }
+              }}
+              style={{ width: 210 }}>
               {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
           </div>
@@ -1348,7 +1362,7 @@ function Quota({ user, onBack }) {
 // ── UC16 จัดการสถานะบัญชีของผู้ใช้งาน ────────────────────
 function AccountStatus({ user }) {
   const { items, patch } = useCollection("users");
-  const {items: requests, destroy: destroyRequest} = useCollection("requests");
+  const { items: requests, patch: patchRequest } = useCollection("requests");
   const [q, setQ] = useState("");
   const [suspending, setSuspending] = useState(null); // user object ที่กำลังจะระงับ
   const [reason, setReason] = useState("");
@@ -1358,31 +1372,32 @@ function AccountStatus({ user }) {
   const rows = items.filter((u) => (u.name + u.email).toLowerCase().includes(q.toLowerCase()));
 
   async function confirmSuspend() {
-    if (!reason.trim()) return alert("กรุณาระบุเหตุผลการระงับบัญชี");
-
-    if (suspending.role === "user") {
-      const userRequests = requests.filter(
-        (request) => request.userId === suspending.id
-      );
-
-      for (const request of userRequests) {
-        await destroyRequest(request.id, user);
-      }
+    if (!reason.trim()) {
+      return alert("กรุณาระบุเหตุผลการระงับบัญชี");
     }
 
-    await patch(
-      suspending.id,
-      {
-        status: "suspended",
-        suspendReason: reason,
-        suspendedAt: new Date().toISOString().slice(0, 10),
-        suspendedBy: user.id
-      },
-      user
-    );
+    try {
+      const result = await patch(
+        suspending.id,
+        {
+          status: "suspended",
+          suspendReason: reason,
+          suspendedAt: new Date().toISOString().slice(0, 10),
+          suspendedBy: user.id
+        },
+        user
+      );
 
-    setSuspending(null);
-    setReason("");
+      console.log("SUSPEND SUCCESS:", result);
+
+      setSuspending(null);
+      setReason("");
+
+      alert("ระงับบัญชีเรียบร้อย");
+    } catch (error) {
+      console.error("SUSPEND ERROR:", error);
+      alert(`ระงับบัญชีไม่สำเร็จ: ${error.message}`);
+    }
   }
 
   async function confirmRestore() {

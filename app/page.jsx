@@ -54,13 +54,70 @@ export default function Page() {
         fetch("/api/data/users")
           .then((r) => r.ok ? r.json() : null)
           .then((data) => {
-            const fresh = data?.items?.find((u) => u.id === cached.id || u.email === cached.email);
-            applyLogin(fresh || cached, !!fresh);
+            const fresh = data?.items?.find(
+              (u) => u.id === cached.id || u.email === cached.email
+            );
+
+            if (!fresh) {
+              localStorage.removeItem("kmitlmap:user");
+              alert("ไม่พบข้อมูลบัญชี กรุณาเข้าสู่ระบบใหม่");
+              return;
+            }
+
+            if (fresh.status === "suspended") {
+              localStorage.removeItem("kmitlmap:user");
+              alert(
+                `บัญชีของคุณถูกระงับการใช้งาน\nเนื่องจาก: ${fresh.suspendReason || "ไม่ระบุ"}`
+              );
+              return;
+            }
+
+            if (fresh.role !== cached.role) {
+              localStorage.removeItem("kmitlmap:user");
+              alert("สิทธิ์การใช้งานของคุณถูกเปลี่ยน กรุณาเข้าสู่ระบบใหม่");
+              return;
+            }
+
+            applyLogin(fresh, true);
           })
           .catch(() => applyLogin(cached, false));
       }
     } catch (e) {}
   }, []);
+
+  // ── ตรวจสอบ role / status ของ session ทุก 10 วินาที ──
+  useEffect(() => {
+    if (!user) return;
+
+    const timer = setInterval(async () => {
+      try {
+        const r = await fetch("/api/data/users");
+        if (!r.ok) return;
+
+        const data = await r.json();
+        const fresh = data?.items?.find((u) => u.id === user.id);
+
+        if (!fresh) return;
+
+        // ถ้า role ในระบบถูกเปลี่ยน → เด้งออก
+        if (fresh.role !== user.role) {
+          logout();
+          alert("สิทธิ์การใช้งานของคุณถูกเปลี่ยน กรุณาเข้าสู่ระบบใหม่");
+          return;
+        }
+
+        // ถ้าบัญชีถูกระงับ → เด้งออก
+        if (fresh.status === "suspended") {
+          logout();
+          alert("บัญชีของคุณถูกระงับการใช้งาน");
+        }
+      } catch (e) {
+        // ถ้าเช็กไม่ได้ ไม่ต้องทำอะไร
+      }
+    }, 10000);
+
+    return () => clearInterval(timer);
+  }, [user]);
 
   function pickView(v) {
     setView(v);

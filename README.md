@@ -23,7 +23,7 @@
 ### ครั้งแรก
 
 ```bash
- .env.example .env      # แล้วเปิดแก้ POSTGRES_PASSWORD เป็นรหัสของตัวเอง
+cp .env.example .env      # แล้วเปิดแก้ POSTGRES_PASSWORD เป็นรหัสของตัวเอง
 docker compose up -d --build
 ```
 
@@ -43,7 +43,6 @@ file .env        # ต้องไม่ขึ้นคำว่า "CRLF line t
 ถ้าเป็น CRLF ให้แก้ด้วย `dos2unix .env` หรือใน VS Code กดที่คำว่า CRLF มุมขวาล่างแล้วเปลี่ยนเป็น LF
 
 **2. แก้ `db/seed.sql` แล้วข้อมูลไม่เปลี่ยน → ต้องล้าง volume**
-cp
 ไฟล์ใน `docker-entrypoint-initdb.d` จะรัน **ครั้งเดียวตอนสร้าง volume ใหม่เท่านั้น**
 ถ้าเคยรันไปแล้ว ข้อมูลเก่าจะค้างอยู่ตลอดไม่ว่าจะแก้ `seed.sql` กี่รอบ
 
@@ -59,7 +58,7 @@ docker compose logs -f backend      # ดู log ของ backend
 docker compose logs -f db           # ดู log ตอน db รัน schema/seed
 docker compose ps                   # ดูสถานะทั้ง 3 คอนเทนเนอร์
 docker compose restart backend      # รีสตาร์ทเฉพาะ backend
-docker compose down               ฤ  # หยุด (ข้อมูลใน db ยังอยู่)
+docker compose down                 # หยุด (ข้อมูลใน db ยังอยู่)
 docker compose down -v              # หยุด + ล้างข้อมูล db ทั้งหมด
 ```
 
@@ -235,4 +234,12 @@ deploy/                     สคริปต์และคู่มือข�
 - รหัสผ่านในตาราง `users` เก็บเป็น plaintext — ต้องเปลี่ยนเป็น bcrypt hash
 - `GET /api/data/users` ส่งฟิลด์ `password` กลับมาด้วย — ควรกรองออกที่ `backend/src/server.js`
 - ยังไม่มีระบบ session/token จริง — `app/page.jsx` เก็บ user ไว้ใน `localStorage` ตรงๆ
+<<<<<<< HEAD
 - ไม่ควร commit ไฟล์ `.env` ขึ้น git ควรใส่ไว้ใน `.gitignore`
+=======
+<<<<<<< HEAD
+- ไม่ควร commit ไฟล์ `.env` ขึ้น git ควรใส่ไว้ใน `.gitignore`
+=======
+- ไม่ควร commit ไฟล์ `.env` ขึ้น git ควรใส่ไว้ใน `.gitignore`
+>>>>>>> 897d53c22c4f7dc8bb3bbafbe34fd555dc87b704
+>>>>>>> e3b78505339e61c5120a7065bad1a424b6e60e17

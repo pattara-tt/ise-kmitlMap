@@ -223,7 +223,11 @@ CREATE TABLE IF NOT EXISTS event_stats (
   searched    INTEGER NOT NULL DEFAULT 0
 );
 
+<<<<<<< HEAD
 -- ─────────── รายละเอียดชั้น/ห้องสำหรับฝ่ายทะเบียน (โครงสร้างชั้นและ node มาจากฝ่ายแผนที่) ───────────
+=======
+-- ─────────── ฝ่ายทะเบียน: ชั้นและห้อง ───────────
+>>>>>>> e3b78505339e61c5120a7065bad1a424b6e60e17
 CREATE TABLE IF NOT EXISTS floors (
   id          TEXT PRIMARY KEY,
   building    TEXT NOT NULL,
@@ -260,4 +264,8 @@ CREATE TABLE IF NOT EXISTS usage (
   routes        INTEGER DEFAULT 0
 );
 
+<<<<<<< HEAD
 COMMIT;
+=======
+COMMIT;
+>>>>>>> e3b78505339e61c5120a7065bad1a424b6e60e17

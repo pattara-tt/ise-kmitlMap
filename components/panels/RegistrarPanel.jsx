@@ -234,9 +234,9 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom }) {
     try {
       await destroy(r.id, user);
       backToList();
-      setNotice({ icon: "✅", title: "สำเร็จ", message: "ลบข้อมูลห้องเรียบร้อยแล้ว" });
+      setNotice({ title: "สำเร็จ", message: "ลบข้อมูลห้องเรียบร้อยแล้ว" });
     } catch (e) {
-      setNotice({ icon: "❌", title: "ลบข้อมูลไม่สำเร็จ", message: e?.message || String(e) });
+      setNotice({ title: "ลบข้อมูลไม่สำเร็จ", message: e?.message || String(e) });
     }
   };
 
@@ -570,7 +570,7 @@ function FloorsManager({ building, floor, user }) {
     try {
       await patch(floorData.id, { note: form.note }, user);
     } catch (e) {
-      setNotice({ icon: "❌", title: "บันทึกไม่สำเร็จ", message: e?.message || String(e) });
+      setNotice({ title: "บันทึกไม่สำเร็จ", message: e?.message || String(e) });
       return false;
     } finally {
       setSaving(false);
