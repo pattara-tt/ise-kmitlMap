@@ -324,28 +324,3 @@ export async function logMapEdit({ actorName, actorId, action, target, before = 
 }
 
 export { uid, today };
-
-
-// ล้างคิวคำร้องคนที่ถูกระงับ
-export function cancelPendingRequestsByUser(userId, { actorName = "ระบบ" } = {}) {
-  const arr = db.requests || [];
-  const cancelled = [];
-  for (const r of arr) {
-    if (r.userId === userId && r.status === "pending") {
-      r.status = "cancelled";
-      r.note = "ยกเลิก: บัญชีผู้ยื่นถูกระงับ";
-      cancelled.push(r.id);
-    }
-  }
-  return cancelled;
-}
-
-export function notifyUser(userId, title, message) {
-  return insert("notifications", {
-    userId,
-    title,
-    body: message,
-    read: false,
-    kind: "system",
-  });
-}

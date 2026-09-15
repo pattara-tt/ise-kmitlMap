@@ -62,6 +62,40 @@ export default function Page() {
     } catch (e) {}
   }, []);
 
+  // ── ตรวจสอบ role / status ของ session ทุก 10 วินาที ──
+  useEffect(() => {
+    if (!user) return;
+
+    const timer = setInterval(async () => {
+      try {
+        const r = await fetch("/api/data/users");
+        if (!r.ok) return;
+
+        const data = await r.json();
+        const fresh = data?.items?.find((u) => u.id === user.id);
+
+        if (!fresh) return;
+
+        // ถ้า role ในระบบถูกเปลี่ยน → เด้งออก
+        if (fresh.role !== user.role) {
+          logout();
+          alert("สิทธิ์การใช้งานของคุณถูกเปลี่ยน กรุณาเข้าสู่ระบบใหม่");
+          return;
+        }
+
+        // ถ้าบัญชีถูกระงับ → เด้งออก
+        if (fresh.status === "suspended") {
+          logout();
+          alert("บัญชีของคุณถูกระงับการใช้งาน");
+        }
+      } catch (e) {
+        // ถ้าเช็กไม่ได้ ไม่ต้องทำอะไร
+      }
+    }, 10000);
+
+    return () => clearInterval(timer);
+  }, [user]);
+
   function pickView(v) {
     setView(v);
     try { localStorage.setItem("kmitlmap:view", v); } catch (e) {}

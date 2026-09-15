@@ -6,6 +6,7 @@
 import express from "express";
 import cors from "cors";
 import { list, insert, update, remove, logMapEdit, ROLES, USE_PG } from "./store.js";
+import { cancelPendingRequestsByUser, notifyUser } from "./account.js";
 import { osmHandler, walknetHandler } from "./overpass.js";
 
 const app = express();
@@ -95,10 +96,31 @@ app.patch("/api/data/:name", wrap(async (req, res) => {
   const { name } = req.params;
   const { id, _actor, ...patch } = req.body || {};
   const row = await update(name, id, patch);
+
+  if (name === "users" && patch.status === "suspended") {
+    await cancelPendingRequestsByUser(id);
+
+    await notifyUser(
+      id,
+      "บัญชีถูกระงับ",
+      `บัญชีของคุณถูกระงับ: ${patch.suspendReason || ""}`
+    );
+  }
+
+  if (name === "users" && patch.status === "active" && patch.restoreReason) {
+    await notifyUser(
+      id,
+      "บัญชีได้รับการคืนสิทธิ์",
+      `บัญชีของคุณได้รับการคืนสิทธิ์: ${patch.restoreReason}`
+    );
+  }
+
   if (!row) return res.status(404).json({ ok: false, error: "ไม่พบรายการ" });
+
   if (MAP_COLLECTIONS[name]) {
     await logMapEdit({ actorName: _actor?.name, actorId: _actor?.id, action: "แก้ไข" + MAP_COLLECTIONS[name], target: row.name || row.label || row.code || row.id, after: JSON.stringify(patch).slice(0, 80) });
   }
+
   res.json({ ok: true, item: row });
 }));
 
