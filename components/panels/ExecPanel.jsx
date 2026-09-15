@@ -154,6 +154,7 @@ function Audit() {
       <SearchBar value={q} onChange={setQ} placeholder="ค้นหาผู้แก้ไข / รายการที่ถูกแก้ไข" />
       <Table
         columns={[
+          { key: "id", label: "รหัสการแก้ไข" },
           { key: "at", label: "เวลา" },
           { key: "actorName", label: "ผู้แก้ไข" },
           { key: "action", label: "การกระทำ" },
