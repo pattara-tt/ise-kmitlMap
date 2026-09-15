@@ -154,11 +154,20 @@ function Audit() {
       <SearchBar value={q} onChange={setQ} placeholder="ค้นหาผู้แก้ไข / รายการที่ถูกแก้ไข" />
       <Table
         columns={[
+          { key: "id", label: "ID" },
           { key: "at", label: "เวลา" },
           { key: "actorName", label: "ผู้แก้ไข" },
           { key: "action", label: "การกระทำ" },
           { key: "target", label: "รายการ" },
-          { key: "after", label: "ค่าหลังแก้ไข", render: (r) => <span style={{ color: "#5F6368" }}>{String(r.after).slice(0, 60)}</span> },
+          {
+            key: "after",
+            label: "ค่าหลังแก้ไข",
+            render: (r) => (
+              <span style={{ color: "#5F6368" }}>
+                {String(r.after).slice(0, 60)}
+              </span>
+            ),
+          },
         ]}
         rows={rows}
         empty="ยังไม่มีประวัติการแก้ไข"
