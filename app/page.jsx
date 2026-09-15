@@ -58,7 +58,13 @@ export default function Page() {
               (u) => u.id === cached.id || u.email === cached.email
             );
 
-            if (fresh?.status === "suspended") {
+            if (!fresh) {
+              localStorage.removeItem("kmitlmap:user");
+              alert("ไม่พบข้อมูลบัญชี กรุณาเข้าสู่ระบบใหม่");
+              return;
+            }
+
+            if (fresh.status === "suspended") {
               localStorage.removeItem("kmitlmap:user");
               alert(
                 `บัญชีของคุณถูกระงับการใช้งาน\nเนื่องจาก: ${fresh.suspendReason || "ไม่ระบุ"}`
@@ -66,7 +72,13 @@ export default function Page() {
               return;
             }
 
-            applyLogin(fresh || cached, !!fresh);
+            if (fresh.role !== cached.role) {
+              localStorage.removeItem("kmitlmap:user");
+              alert("สิทธิ์การใช้งานของคุณถูกเปลี่ยน กรุณาเข้าสู่ระบบใหม่");
+              return;
+            }
+
+            applyLogin(fresh, true);
           })
           .catch(() => applyLogin(cached, false));
       }
