@@ -132,39 +132,74 @@ export default function BuildingFloorPicker({
   // ข้อมูลผังจากฝ่ายแผนที่ + รายละเอียดห้องจากฝ่ายทะเบียน 
   const { items: floorRecords } = useCollection("floors");
   const { items: allRooms } = useCollection("rooms");
-  const mapAssetsRef = useRef(mapAssets);
-  useEffect(() => { mapAssetsRef.current = mapAssets; }, [mapAssets]);
+  const { items: mapAssets } = useCollection("mapAssets");
   const b = openKey ? BUILDINGS[openKey] : null;
 
-  // รายชื่อชั้นของฝ่ายทะเบียนต้องมาจากผังที่ฝ่ายแผนที่เผยแพร่แล้วเท่านั้น
   const mergedFloors = useMemo(() => {
     if (!b) return [];
 
     const byFloor = new Map();
-    for (const asset of mapAssets || []) {
-      if (
-        asset.kind === "floorplan" &&
-        asset.status === "published" &&
-        asset.building === b.name &&
-        asset.floor != null
-      ) {
-        const floorId = String(asset.floor);
-        // ถ้ามีหลายไฟล์ของชั้นเดียวกัน ให้รายการที่เจอก่อนเป็น source ปัจจุบัน
-        if (!byFloor.has(floorId)) byFloor.set(floorId, asset);
-      }
+
+    // ผังที่ประกาศไว้ใน mapConstants / BUILDINGS
+    // แสดงชั้นตามที่ประกาศไว้เสมอ แม้ยังไม่มีไฟล์ svg (จะได้เห็นปุ่มชั้นครบ
+    // ส่วน overlay ของ svg จะถูกวาดก็ต่อเมื่อ floorData.svg มีค่าจริงเท่านั้น — ดู effect "Floor SVG")
+    for (const base of b.floors || []) {
+      if (!base?.id) continue;
+      const floorId = String(base.id);
+      byFloor.set(floorId, {
+        ...base,
+        id: floorId,
+        label: base.label || `ชั้น ${floorId}`,
+        svg: base.svg || null,
+      });
     }
 
-    const floors = Array.from(byFloor.entries()).map(([floorId, asset]) => {
+    // ผังที่มีอยู่ในข้อมูล floors จากฝ่ายแผนที่ (ถ้ามี ให้ใช้ทับของตั้งต้น)
+    // ยังต้องขึ้นชั้นนี้ในลิสต์แม้ record จะยังไม่มี svg เพราะฝ่ายแผนที่อาจประกาศชั้นไว้ก่อน
+    // ค่อยอัปโหลดผังตามทีหลัง
+    for (const record of floorRecords || []) {
+      if (
+        record.building !== b.name ||
+        record.floor == null
+      ) continue;
+
+      const floorId = String(record.floor);
       const base = (b.floors || []).find((f) => String(f.id) === floorId);
-      return {
+      const current = byFloor.get(floorId);
+      byFloor.set(floorId, {
         ...(base || {}),
+        ...(current || {}),
         id: floorId,
-        label: base?.label || `ชั้น ${floorId}`,
+        label: base?.label || record.name || current?.label || `ชั้น ${floorId}`,
+        svg: record.svg || current?.svg || null,
+        floorRecordId: record.id,
+      });
+    }
+
+    // ไฟล์ผังที่อัปโหลดเข้ามา ใช้ได้ทันทีแม้ยังเป็น draft
+    //   ตรงนี้ดูแค่ว่าเป็น floorplan และมีไฟล์จริง ไม่สน status/published
+    for (const asset of mapAssets || []) {
+      if (
+        asset.kind !== "floorplan" ||
+        asset.building !== b.name ||
+        asset.floor == null ||
+        !asset.file
+      ) continue;
+
+      const floorId = String(asset.floor);
+      const base = (b.floors || []).find((f) => String(f.id) === floorId);
+      const current = byFloor.get(floorId);
+      byFloor.set(floorId, {
+        ...(base || {}),
+        ...(current || {}),
+        id: floorId,
+        label: base?.label || current?.label || `ชั้น ${floorId}`,
         svg: asset.file,
         mapAssetId: asset.id,
-      };
-    });
+      });
+    }
 
+    const floors = Array.from(byFloor.values());
     floors.sort((a, z) => {
       const na = Number(a.id);
       const nz = Number(z.id);
@@ -173,28 +208,9 @@ export default function BuildingFloorPicker({
     });
 
     return floors;
-  }, [b, mapAssets]);
+  }, [b, floorRecords, mapAssets]);
 
-  const firstPublishedFloorForBuilding = (buildingName) => {
-    const ids = (mapAssetsRef.current || [])
-      .filter(
-        (a) =>
-          a.kind === "floorplan" &&
-          a.status === "published" &&
-          a.building === buildingName &&
-          a.floor != null
-      )
-      .map((a) => String(a.floor))
-      .sort((a, z) => {
-        const na = Number(a);
-        const nz = Number(z);
-        if (Number.isFinite(na) && Number.isFinite(nz)) return na - nz;
-        return a.localeCompare(z);
-      });
-    return ids[0] || null;
-  };
-
-  // ถ้าชั้นที่เลือกอยู่ไม่ใช่ชั้นที่ฝ่ายแผนที่เผยแพร่แล้ว ให้ย้ายไปชั้นแรกที่มีจริง
+  // ถ้าชั้นที่เลือกอยู่ยังไม่มีภาพผัง ให้ย้ายไปชั้นแรกที่มีภาพจริง
   useEffect(() => {
     if (!b || !mergedFloors.length) return;
     const exists = mergedFloors.some((f) => String(f.id) === String(curFloor));
@@ -321,6 +337,21 @@ export default function BuildingFloorPicker({
       mapRef.current = map;
       ctx.current.L = L;
       ctx.current.map = map;
+
+      // ดักคลิกปุ่ม ✕ ของ popup ทุกอัน ด้วย delegated listener ตัวเดียวที่ระดับ map container (capture phase)
+      // แทนที่จะผูก listener ทีละ marker/ทีละครั้งที่ popup เปิด (ของเดิม) ซึ่งเปราะบาง — ถ้า popup ถูกอัปเดทเนื้อหา
+      // (setPopupContent) หรือ marker ถูก setIcon ระหว่างที่ผู้ใช้กำลังดูอยู่ ปุ่ม/ลิสเทนเนอร์เดิมอาจไม่ทำงานตามคาด
+      // delegated listener ตัวนี้อยู่ที่ container ซึ่งไม่มีวันถูกลบ/สร้างใหม่ จึงชัวร์กว่าและทำงานถูก "ก่อน"
+      // ตัว popupclose event เสมอ เพราะ capture phase รันก่อน bubble phase ของปุ่มปิดเองที่ Leaflet ผูกไว้
+      map.getContainer().addEventListener(
+        "click",
+        (e) => {
+          if (e.target.closest?.(".leaflet-popup-close-button")) {
+            ctx.current.userClosedPopup = true;
+          }
+        },
+        { capture: true }
+      );
 
       // Base map — วาดถนน/ตึก/พื้นที่สีเขียวเองจาก OSM 
       map.getContainer().style.background = "#FFFFFF";
@@ -560,12 +591,81 @@ export default function BuildingFloorPicker({
     floorEdges,
   ]);
 
-  // Draw ALL indoor nodes 
+  // เก็บ ref ของ roomByNode ล่าสุดไว้ให้ click handler อ่านได้เสมอ
+  // (ไม่งั้น handler ที่ผูกไว้ตอนสร้าง marker ครั้งแรกจะเห็นแต่ข้อมูลห้อง ณ ตอนนั้น ไม่ใช่ข้อมูลล่าสุด)
+  const roomByNodeRef = useRef(roomByNode);
+  useEffect(() => { roomByNodeRef.current = roomByNode; }, [roomByNode]);
+
+  /* สร้าง html ของ popup + tooltip จาก node/room ปัจจุบัน — ใช้ทั้งตอนสร้าง marker ครั้งแรก
+     และตอนอัปเดตเนื้อหา popup ที่เปิดค้างอยู่ทันทีที่ข้อมูลห้องถูกแก้ไข */
+  const buildPopupContent = (id, node, room, icon, typeLabel) => {
+    const tooltipText = room
+        ? `${room.name || `ห้อง ${room.code || ""}`}`
+        : node.label
+        ? `${typeLabel} · ${node.label}`
+        : `${typeLabel} · ${id}`;
+
+    const popupHtml = room
+          ? `<div
+                style="min-width:190px;
+                font-family:Arial,sans-serif;
+                "
+              >
+                <div
+                  style="
+                    font-weight:800;
+                    font-size:15px;
+                    margin-bottom:6px;
+                    color:#202124;
+                  "
+                >
+                  🚪 ${
+                    room.name || `ห้อง ${room.code || ""}`
+                  }
+                </div>
+
+                ${room.code ? `<div>รหัสห้อง: <b>${room.code}</b></div>` : ""}
+                ${room.type ? `<div>ประเภท: ${room.type}</div>`: ""}
+                ${room.capacity ? `<div>ความจุ: ${room.capacity}</div>`: ""}
+                ${room.teacher ? `<div>อาจารย์: ${room.teacher}</div>` : ""}
+
+                <div style="margin-top:8px; color:#5F6368; font-size:11px;">
+                  ${b?.name || ""}· ชั้น ${curFloor}
+                </div>
+              </div>`
+          : `<div
+                style=" min-width:170px; font-family:Arial,sans-serif;"
+              >
+                <div
+                  style=" font-weight:800; font-size:14px; margin-bottom:5px; color:#202124;"
+                >
+                  ${icon.html}
+                  ${typeLabel}
+                </div>
+
+                <div
+                  style="color:#5F6368; font-size:12px;"
+                >
+                  ${node.label ||id}
+                </div>
+
+                <div
+                  style="color:#80868B; font-size:10px;margin-top:5px;"
+                >
+                  ${b?.name || ""}· ชั้น ${curFloor}
+                </div>
+              </div>`;
+
+    return { tooltipText, popupHtml };
+  };
+
+  // Draw ALL indoor nodes (สร้าง marker ครั้งเดียวต่อ node)
+  // และแผนที่ pan กลับกึ่งกลางตึกโดยไม่ตั้งใจ (จาก popupclose handler)
   useEffect(() => {
     const {L,map,} = ctx.current;
     if (!L || !map) {return;}
 
-    // clear 
+    // clear
     for (const marker of ctx.current.poiLayer) {
       if (map.hasLayer(marker)) {
         map.removeLayer(marker);
@@ -573,13 +673,14 @@ export default function BuildingFloorPicker({
     }
 
     ctx.current.poiLayer = [];
+    ctx.current.markersByNodeId = {};
     if (!openKey || !Object.keys(floorNodes).length) {return;}
     for (const [id,node,] of Object.entries(floorNodes)) {
       if (!Number.isFinite(node?.lat) || !Number.isFinite(node?.lon)) {
         continue;
       }
 
-      const room = roomByNode[id];
+      const room = roomByNodeRef.current[id];
 
       const exterior = isExteriorNode(id);
       const effectiveNode = exterior ? {
@@ -648,13 +749,10 @@ export default function BuildingFloorPicker({
           }
         ).addTo(map);
 
+      marker.__nodeId = id;
 
-      /* Tooltip */
-      const tooltipText = room
-          ? `${room.name || `ห้อง ${room.code || ""}`}`
-          : node.label
-          ? `${typeLabel} · ${node.label}`
-          : `${typeLabel} · ${id}`;
+      /* Tooltip + Popup — เนื้อหามาจาก buildPopupContent ที่ใช้ร่วมกับ effect อัปเดตด้านล่าง */
+      const { tooltipText, popupHtml } = buildPopupContent(id, node, room, icon, typeLabel);
 
       marker.bindTooltip(
         tooltipText,
@@ -664,59 +762,7 @@ export default function BuildingFloorPicker({
         }
       );
 
-      // Popup 
-      const popupRoom = room ? 
-            `<div
-                style="min-width:190px;
-                font-family:Arial,sans-serif;
-                "
-              >
-                <div
-                  style="
-                    font-weight:800;
-                    font-size:15px;
-                    margin-bottom:6px;
-                    color:#202124;
-                  "
-                >
-                  🚪 ${
-                    room.name || `ห้อง ${room.code || ""}`
-                  }
-                </div>
-
-                ${room.code ? `<div>รหัสห้อง: <b>${room.code}</b></div>` : ""}
-                ${room.type ? `<div>ประเภท: ${room.type}</div>`: ""}
-                ${room.capacity ? `<div>ความจุ: ${room.capacity}</div>`: ""}
-                ${room.teacher ? `<div>อาจารย์: ${room.teacher}</div>` : ""}
-
-                <div style="margin-top:8px; color:#5F6368; font-size:11px;">
-                  ${b?.name || ""}· ชั้น ${curFloor}
-                </div>
-              </div>`
-          : `<div
-                style=" min-width:170px; font-family:Arial,sans-serif;"
-              >
-                <div
-                  style=" font-weight:800; font-size:14px; margin-bottom:5px; color:#202124;"
-                >
-                  ${icon.html}
-                  ${typeLabel}
-                </div>
-
-                <div
-                  style="color:#5F6368; font-size:12px;"
-                >
-                  ${node.label ||id}
-                </div>
-
-                <div
-                  style="color:#80868B; font-size:10px;margin-top:5px;"
-                >
-                  ${b?.name || ""}· ชั้น ${curFloor}
-                </div>
-              </div>`;
-
-      marker.bindPopup(popupRoom, {
+      marker.bindPopup(popupHtml, {
           closeButton: true,
           offset: [0, -8,],
           maxWidth: 260,
@@ -735,16 +781,8 @@ export default function BuildingFloorPicker({
          - ส่งไป RoomsManager
          =================================================== */
 
-        // จับตอนผู้ใช้กด ✕ บน popup โดยตรง (ต่างจากตอน popup ถูกปิดเพราะ marker ถูกสร้างใหม่ตอน re-render)
-        // เพื่อรู้ว่า popupclose รอบนี้เกิดจากผู้ใช้กดเองจริง ๆ ไม่ใช่ effect วาด marker ใหม่แล้วปิดไปโดยไม่ตั้งใจ
-        marker.on("popupopen", (e) => {
-          const closeBtn = e.popup.getElement()?.querySelector(".leaflet-popup-close-button");
-          closeBtn?.addEventListener(
-            "click",
-            () => { ctx.current.userClosedPopup = true; },
-            { once: true }
-          );
-        });
+        // หมายเหตุ: การดัก "ผู้ใช้กด ✕ เอง" ย้ายไปใช้ delegated listener ระดับ map container แล้ว
+        // (ดูตอน initialize map ด้านบน) เพื่อความทนทานกว่าเดิม ไม่ต้องผูก/ถอด listener ทุกครั้งที่ popup เปิด
 
         marker.on("popupclose", () => {
         const wasUserClose = ctx.current.userClosedPopup;
@@ -769,16 +807,9 @@ export default function BuildingFloorPicker({
         }
         });
 
-        // ห้องนี้กำลังถูกโฟกัส/แสดงอยู่ในแผงด้านล่าง — เปิด popup ค้างไว้เสมอ
-        // แม้ effect นี้จะ re-run แล้วสร้าง marker ใหม่ทับของเดิม 
-        // ก็ให้ popup เปิดค้างอยู่ต่อ ไม่ใช่หายไปเฉย ๆ
-        if (isFocusedNode) {
-          marker.openPopup();
-        }
-
         marker.on("click", () => {
             map.setView([node.lat, node.lon,], 20, { animate: true,});
-            const room = roomByNode[id];
+            const room = roomByNodeRef.current[id];
 
             if (icon.type === "room") {
                 onSelectRoomRef.current?.(
@@ -796,6 +827,7 @@ export default function BuildingFloorPicker({
         }
       );
       ctx.current.poiLayer.push(marker);
+      ctx.current.markersByNodeId[id] = marker;
     }
 
     return () => {
@@ -805,7 +837,97 @@ export default function BuildingFloorPicker({
         }
       }
       ctx.current.poiLayer = [];
+      ctx.current.markersByNodeId = {};
     };
+  }, [
+    openKey,
+    curFloor,
+    floorNodes,
+    b,
+  ]);
+
+  // อัปเดตเนื้อหา popup/tooltip ของ marker ที่มีอยู่แล้วทันทีที่ข้อมูลห้องเปลี่ยน (เช่น กด "บันทึกการแก้ไข" ในแผงทะเบียน)
+  // ไม่แตะ marker เดิมเลย แค่เปลี่ยนเนื้อหา popup/tooltip — ถ้า popup ห้องนั้นเปิดอยู่ ผู้ใช้จะเห็นข้อมูลใหม่ทันทีโดยไม่ต้องปิดแล้วเปิดใหม่
+  // ส่วนกรอบสีน้ำเงิน (โฟกัส) และการเปิด popup ค้างไว้ ก็จัดการอยู่ในนี้เช่นกัน
+  useEffect(() => {
+    const { L, map } = ctx.current;
+    if (!L || !map || !openKey) return;
+
+    for (const [id, node] of Object.entries(floorNodes)) {
+      const marker = ctx.current.markersByNodeId?.[id];
+      if (!marker || !Number.isFinite(node?.lat) || !Number.isFinite(node?.lon)) continue;
+
+      const room = roomByNode[id];
+      const exterior = isExteriorNode(id);
+      const effectiveNode = exterior ? {
+              ...node,
+              type: node.type === "path" || !node.type ? "exit": node.type,
+            }
+          : node;
+      const icon = getNodeIcon(effectiveNode);
+      const typeLabel = exterior ? "ทางเข้า / ทางออก" : getNodeTypeLabel(node);
+
+      const { tooltipText, popupHtml } = buildPopupContent(id, node, room, icon, typeLabel);
+
+      // อัปเดตเนื้อหา — ถ้า popup เปิดค้างอยู่ Leaflet จะ re-render เนื้อหาให้เองทันทีโดยไม่ปิด popup
+      marker.setTooltipContent(tooltipText);
+      marker.setPopupContent(popupHtml);
+
+      // กรอบสีน้ำเงินไฮไลต์ node ที่กำลังโฟกัส — อัปเดต icon ในตัวโดยไม่ลบ/สร้าง marker ใหม่
+      const isFocusedNode = focusedNodeId && id === focusedNodeId;
+      const size = icon.type === "room" || icon.type === "toilet" ? 24 : 26;
+
+      marker.setIcon(
+        L.divIcon({
+          className: "",
+          html:
+            `<div
+                style="
+                  width:${size}px;
+                  height:${size}px;
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  cursor:pointer;
+                  background:
+                    ${
+                      isFocusedNode ? "#E8F0FE" :
+                      icon.type === "room" ? "rgba(255,255,255,.94)" : icon.type === "toilet"
+                        ? "rgba(255,255,255,.94)"
+                        : "transparent"
+                    };
+
+                  border-radius:
+                    ${
+                      icon.type === "room" ||
+                      icon.type === "toilet" ||
+                      isFocusedNode ? "5px" : "50%"
+                    };
+
+                  box-shadow:
+                    ${
+                      isFocusedNode
+                        ? "0 0 0 2px #1A73E8, 0 1px 5px rgba(0,0,0,.3)"
+                        : icon.type === "room" ||
+                          icon.type === "toilet" ? "0 1px 4px rgba(0,0,0,.25)": "none"
+                    };
+                ">
+                ${icon.html}
+              </div>`,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+        })
+      );
+
+      marker.setZIndexOffset(
+        isFocusedNode ? 1000 : icon.type === "room" || icon.type === "toilet" ? 900 : 750
+      );
+
+      // ห้องนี้กำลังถูกโฟกัส/แสดงอยู่ในแผงด้านล่าง — เปิด popup ค้างไว้เสมอถ้ายังไม่เปิด
+      if (isFocusedNode && !marker.isPopupOpen()) {
+        marker.openPopup();
+      }
+    }
   }, [
     openKey,
     curFloor,

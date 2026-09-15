@@ -191,6 +191,31 @@ export function SearchBar({ value, onChange, placeholder }) {
 }
 
 // ───────── hook เรียกข้อมูลจาก /api/data/[name] ─────────
+
+// แต่ละหน้า/คอมโพเนนต์ที่เรียก useCollection(name) จะมี state ของตัวเอง แยกกันคนละก้อน
+// พอฝั่งหนึ่งบันทึก/ลบข้อมูลสำเร็จ อีกฝั่งจะไม่รู้ตัวเลย ต้องรีเฟรชหน้าถึงจะเห็นของใหม่
+// ตรงนี้เลยทำ pub/sub เล็กๆ ผูกกับชื่อ collection ไว้: ทุกครั้งที่ instance ไหน create/patch/destroy สำเร็จ
+// จะ broadcast บอกให้ instance อื่นๆ ที่ดู collection ชื่อเดียวกันอยู่ (ไม่ว่าจะอยู่คอมโพเนนต์ไหนของหน้า)
+// เรียก reload() ของตัวเองทันที โดยไม่ต้องรีเฟรชทั้งหน้า และ state อื่นๆ ของแต่ละคอมโพเนนต์ (เช่น ตำแหน่งแผนที่/ห้องที่โฟกัสอยู่) ไม่ถูกแตะต้อง
+const collectionSubscribers = new Map(); // name -> Set<reloadFn>
+
+function subscribeCollection(name, reloadFn) {
+  if (!collectionSubscribers.has(name)) collectionSubscribers.set(name, new Set());
+  collectionSubscribers.get(name).add(reloadFn);
+  return () => {
+    collectionSubscribers.get(name)?.delete(reloadFn);
+  };
+}
+
+// เรียก reload() ของทุก instance ที่ subscribe ชื่อ collection นี้อยู่ ยกเว้นตัวที่เพิ่งเรียก reload() ไปเองแล้ว (skipFn)
+function broadcastCollectionReload(name, skipFn) {
+  const subs = collectionSubscribers.get(name);
+  if (!subs) return;
+  for (const fn of subs) {
+    if (fn !== skipFn) fn();
+  }
+}
+
 export function useCollection(name) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -208,6 +233,9 @@ export function useCollection(name) {
   }, [name]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // ผูก reload ของ instance นี้เข้ากับ collection ชื่อเดียวกัน เพื่อรับสัญญาณ "มีการอัปเดทที่อื่น" แบบทันที
+  useEffect(() => subscribeCollection(name, reload), [name, reload]);
 
   // const create = useCallback(async (item, actor) => {
   //   await fetch("/api/data/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, _actor: actor }) });
@@ -228,6 +256,7 @@ export function useCollection(name) {
       }
 
       await reload();
+      broadcastCollectionReload(name, reload); // บอก instance อื่นๆ ของ collection นี้ให้รีเฟรชตามทันที
       return j.item;
     }, [name, reload]);
 
@@ -250,6 +279,7 @@ export function useCollection(name) {
     }
 
     await reload();
+    broadcastCollectionReload(name, reload); // บอก instance อื่นๆ ของ collection นี้ให้รีเฟรชตามทันที
     return j.item;
   }, [name, reload]);
 
@@ -265,6 +295,7 @@ export function useCollection(name) {
     }
 
     await reload();
+    broadcastCollectionReload(name, reload); // บอก instance อื่นๆ ของ collection นี้ให้รีเฟรชตามทันที
     return true;
   }, [name, reload]);
 
