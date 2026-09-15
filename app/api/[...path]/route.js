@@ -13,14 +13,12 @@ async function forward(req, path) {
     method: req.method,
     headers: { "Content-Type": req.headers.get("content-type") || "application/json" },
     // GET/HEAD ส่ง body ไม่ได้
-    body: ["GET", "HEAD"].includes(req.method) ? undefined : await req.body,
-    duplex: "half",
+    body: ["GET", "HEAD"].includes(req.method) ? undefined : await req.text(),
   };
 
   try {
     const res = await fetch(target, init);
     const text = await res.text();
-    
     return new Response(text, {
       status: res.status,
       headers: { "Content-Type": res.headers.get("content-type") || "application/json" },
