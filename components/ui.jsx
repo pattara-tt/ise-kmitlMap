@@ -195,6 +195,39 @@ export function SearchBar({ value, onChange, placeholder }) {
   );
 }
 
+function apiFetch(url, options = {}) {
+  const sessionId = localStorage.getItem("kmitlmap:session");
+
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(sessionId ? { "x-session-id": sessionId } : {}),
+    },
+  }).then(async (res) => {
+    if (res.status === 401) {
+      let data = null;
+
+      try {
+        data = await res.clone().json();
+      } catch (e) {}
+
+      window.dispatchEvent(
+        new CustomEvent("session-invalid", {
+          detail: {
+            code: data?.code || "SESSION_EXPIRED",
+            message:
+              data?.error ||
+              "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่",
+          },
+        })
+      );
+    }
+
+    return res;
+  });
+}
+
 // ───────── hook เรียกข้อมูลจาก /api/data/[name] ─────────
 export function useCollection(name) {
   const [items, setItems] = useState([]);
@@ -203,7 +236,7 @@ export function useCollection(name) {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/data/" + name);
+      const r = await apiFetch("/api/data/" + name);
       const j = await r.json();
       setItems(j.items || []);
     } catch (e) {
@@ -215,12 +248,12 @@ export function useCollection(name) {
   useEffect(() => { reload(); }, [reload]);
 
   // const create = useCallback(async (item, actor) => {
-  //   await fetch("/api/data/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, _actor: actor }) });
+  //   await apiFetch("/api/data/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, _actor: actor }) });
   //   await reload();
   // }, [name, reload]);
 
   const create = useCallback(async (item, actor) => {
-      const r = await fetch("/api/data/" + name, {
+      const r = await apiFetch("/api/data/" + name, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...item, _actor: actor })
@@ -237,12 +270,12 @@ export function useCollection(name) {
     }, [name, reload]);
 
   // const patch = useCallback(async (id, p, actor) => {
-  //   await fetch("/api/data/" + name, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p, _actor: actor }) });
+  //   await apiFetch("/api/data/" + name, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p, _actor: actor }) });
   //   await reload();
   // }, [name, reload]);
 
   const patch = useCallback(async (id, p, actor) => {
-    const r = await fetch("/api/data/" + name, { 
+    const r = await apiFetch("/api/data/" + name, { 
       method: "PATCH", 
       headers: { "Content-Type": "application/json" }, 
       body: JSON.stringify({ id, ...p, _actor: actor }) 
@@ -259,7 +292,7 @@ export function useCollection(name) {
   }, [name, reload]);
 
   const destroy = useCallback(async (id, actor) => {
-    await fetch(`/api/data/${name}?id=${encodeURIComponent(id)}&actor=${encodeURIComponent(actor?.name || "")}`, { method: "DELETE" });
+    await apiFetch(`/api/data/${name}?id=${encodeURIComponent(id)}&actor=${encodeURIComponent(actor?.name || "")}`, { method: "DELETE" });
     await reload();
   }, [name, reload]);
 
@@ -269,7 +302,7 @@ export function useCollection(name) {
 export function useStats() {
   const [stats, setStats] = useState(null);
   useEffect(() => {
-    fetch("/api/stats").then((r) => r.json()).then(setStats).catch(() => setStats(null));
+    apiFetch("/api/stats").then((r) => r.json()).then(setStats).catch(() => setStats(null));
   }, []);
   return stats;
 }

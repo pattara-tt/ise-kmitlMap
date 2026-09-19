@@ -44,80 +44,54 @@ export default function Page() {
 
   // ── คืนค่า session + โหมดการแสดงผลที่เคยเลือกไว้ ──
   useEffect(() => {
-    try {
-      const v = localStorage.getItem("kmitlmap:view");
-      if (v) setView(v);
-      const raw = localStorage.getItem("kmitlmap:user");
-      if (raw) {
-        const cached = JSON.parse(raw);
-        // localStorage อาจเก็บชื่อเก่าจากก่อนแก้ seed ไว้ — ใช้ข้อมูล user ปัจจุบันจาก backend เป็นหลัก
-        fetch("/api/data/users")
-          .then((r) => r.ok ? r.json() : null)
-          .then((data) => {
-            const fresh = data?.items?.find(
-              (u) => u.id === cached.id || u.email === cached.email
-            );
-
-            if (!fresh) {
-              localStorage.removeItem("kmitlmap:user");
-              alert("ไม่พบข้อมูลบัญชี กรุณาเข้าสู่ระบบใหม่");
-              return;
-            }
-
-            if (fresh.status === "suspended") {
-              localStorage.removeItem("kmitlmap:user");
-              alert(
-                `บัญชีของคุณถูกระงับการใช้งาน\nเนื่องจาก: ${fresh.suspendReason || "ไม่ระบุ"}`
-              );
-              return;
-            }
-
-            if (fresh.role !== cached.role) {
-              localStorage.removeItem("kmitlmap:user");
-              alert("สิทธิ์การใช้งานของคุณถูกเปลี่ยน กรุณาเข้าสู่ระบบใหม่");
-              return;
-            }
-
-            applyLogin(fresh, true);
-          })
-          .catch(() => applyLogin(cached, false));
-      }
-    } catch (e) {}
-  }, []);
-
-  // ── ตรวจสอบ role / status ของ session ทุก 10 วินาที ──
-  useEffect(() => {
-    if (!user) return;
-
-    const timer = setInterval(async () => {
+    async function restoreSession() {
       try {
-        const r = await fetch("/api/data/users");
-        if (!r.ok) return;
+        const v = localStorage.getItem("kmitlmap:view");
+        if (v) setView(v);
 
-        const data = await r.json();
-        const fresh = data?.items?.find((u) => u.id === user.id);
+        const rawUser = localStorage.getItem("kmitlmap:user");
+        const sessionId = localStorage.getItem("kmitlmap:session");
 
-        if (!fresh) return;
-
-        // ถ้า role ในระบบถูกเปลี่ยน → เด้งออก
-        if (fresh.role !== user.role) {
-          logout();
-          alert("สิทธิ์การใช้งานของคุณถูกเปลี่ยน กรุณาเข้าสู่ระบบใหม่");
+        if (!rawUser || !sessionId) {
           return;
         }
 
-        // ถ้าบัญชีถูกระงับ → เด้งออก
-        if (fresh.status === "suspended") {
-          logout();
-          alert("บัญชีของคุณถูกระงับการใช้งาน");
-        }
-      } catch (e) {
-        // ถ้าเช็กไม่ได้ ไม่ต้องทำอะไร
-      }
-    }, 10000);
+        const cachedUser = JSON.parse(rawUser);
 
-    return () => clearInterval(timer);
-  }, [user]);
+        const res = await fetch("/api/auth/session", {
+          method: "GET",
+          headers: {
+            "x-session-id": sessionId,
+          },
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+          // Session ยังใช้ได้ → restore ตามปกติ
+          applyLogin(data.user || cachedUser, sessionId, false);
+          return;
+        }
+
+        // Session ใช้ไม่ได้ → แจ้งเหตุผลจาก backend
+        window.dispatchEvent(
+          new CustomEvent("session-invalid", {
+            detail: {
+              code: data?.code || "SESSION_EXPIRED",
+              message:
+                data?.error ||
+                "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่",
+            },
+          })
+        );
+      } catch (e) {
+        // Backend ติดต่อไม่ได้
+        // ยังไม่ลบ session ทิ้ง เพราะอาจเป็นปัญหา network ชั่วคราว
+      }
+    }
+
+    restoreSession();
+  }, []);
 
   function pickView(v) {
     setView(v);
@@ -127,18 +101,61 @@ export default function Page() {
     setTimeout(() => window.dispatchEvent(new Event("resize")), 320);
   }
 
-  function applyLogin(u, persist = true) {
+  function applyLogin(u, sessionId, persist = true) {
     setUser(u);
+
     const list = USE_CASES[u.role] || [];
     setUc(u.role === "user" ? null : list[0]?.key || null);
     setTab("map");
-    if (persist) { try { localStorage.setItem("kmitlmap:user", JSON.stringify(u)); } catch (e) {} }
+
+    if (persist) { 
+      try { 
+        localStorage.setItem("kmitlmap:user", JSON.stringify(u));
+        localStorage.setItem("kmitlmap:session", sessionId);
+      } 
+      catch (e) {} 
+    }
   }
 
   function logout() {
-    try { localStorage.removeItem("kmitlmap:user"); } catch (e) {}
-    setUser(null); setUc(null); setMenuOpen(false);
+    try {
+      localStorage.removeItem("kmitlmap:user");
+      localStorage.removeItem("kmitlmap:session");
+    } catch (e) {}
+
+    setUser(null);
+    setUc(null);
+    setMenuOpen(false);
   }
+
+  useEffect(() => {
+    function handleSessionInvalid(event) {
+      const code = event.detail?.code;
+      const message =
+        event.detail?.message ||
+        "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่";
+
+      logout();
+
+      if (
+        code === "ROLE_CHANGED" ||
+        code === "ACCOUNT_SUSPENDED"
+      ) {
+        alert(message);
+        window.location.reload();
+        return;
+      }
+
+      alert(message);
+    }
+
+    window.addEventListener("session-invalid", handleSessionInvalid);
+
+    return () => {
+      window.removeEventListener("session-invalid", handleSessionInvalid);
+    };
+  }, []);
+
 
   // โหมดที่ใช้จริง = ที่ผู้ใช้เลือก หรือถ้า auto ก็ตัดสินจากความกว้างจอ
   const desktop = view === "desktop" || (view === "auto" && wide);

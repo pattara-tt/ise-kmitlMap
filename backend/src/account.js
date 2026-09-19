@@ -23,6 +23,7 @@ export async function cancelPendingRequestsByUser(userId) {
 export function notifyUser(userId, title, message) {
   return insert("notifications", {
     userId,
+    kind: "system",
     title,
     body: message,
     read: false

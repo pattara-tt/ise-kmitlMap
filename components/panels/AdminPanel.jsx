@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Btn, Card, Field, Input, Pill, SearchBar, Select, Status, Table, Textarea, Tiles, UCHead, useCollection, useStats } from "../ui";
 import { ROLE_LABEL } from "../../lib/usecases";
-import { invalidateSession } from "../../lib/auth";
 
 // Actor: ฝ่ายดูแลระบบ — UC10–UC16
 export default function AdminPanel({ uc, user }) {
@@ -532,7 +531,6 @@ function Roles({ user }) {
 
                 try {
                   await patch(u.id, { role: newRole }, user);
-                  invalidateSession(u.id);
                   alert("เปลี่ยนสิทธิ์ผู้ใช้เรียบร้อย");
                 } catch (error) {
                   alert(`เปลี่ยนสิทธิ์ไม่สำเร็จ: ${error.message}`);

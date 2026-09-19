@@ -9,10 +9,13 @@ async function forward(req, path) {
   const url = new URL(req.url);
   const target = `${BACKEND_URL()}/api/${path.join("/")}${url.search}`;
 
+  const sessionId = req.headers.get("x-session-id");
   const init = {
     method: req.method,
-    headers: { "Content-Type": req.headers.get("content-type") || "application/json" },
-    // GET/HEAD ส่ง body ไม่ได้
+    headers: {
+      "Content-Type": req.headers.get("content-type") || "application/json",
+      ...(sessionId ? { "x-session-id": sessionId } : {}),
+    },
     body: ["GET", "HEAD"].includes(req.method) ? undefined : await req.text(),
   };
 

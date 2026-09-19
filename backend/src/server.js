@@ -7,6 +7,8 @@ import express from "express";
 import cors from "cors";
 import { list, insert, update, remove, logMapEdit, ROLES, USE_PG } from "./store.js";
 import { osmHandler, walknetHandler } from "./overpass.js";
+import { cancelPendingRequestsByUser, notifyUser } from "./account.js";
+import { createSession, invalidateSession, getSession, getRevokedReason } from "./auth.js";
 
 const app = express();
 app.use(cors());
@@ -16,11 +18,75 @@ app.use(express.json({ limit: "2mb" }));
 // จะกลายเป็น unhandled rejection แล้ว Node 22 จะ kill process ทั้งคอนเทนเนอร์
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+function requireSession(req, res, next) {
+  const sessionId = req.headers["x-session-id"];
+
+  if (!sessionId) {
+    return res.status(401).json({
+      ok: false,
+      error: "กรุณาเข้าสู่ระบบ",
+      code: "NO_SESSION",
+    });
+  }
+
+  const session = getSession(sessionId);
+
+  if (!session) {
+    const revokedReason = getRevokedReason(sessionId);
+
+    if (revokedReason === "ROLE_CHANGED") {
+      return res.status(401).json({
+        ok: false,
+        error: "มีการเปลี่ยนบทบาทในระบบ กรุณาเข้าสู่ระบบใหม่อีกครั้ง",
+        code: "ROLE_CHANGED",
+      });
+    }
+
+    if (revokedReason === "ACCOUNT_SUSPENDED") {
+      return res.status(401).json({
+        ok: false,
+        error: "บัญชีถูกระงับการใช้งาน กรุณาเข้าสู่ระบบใหม่อีกครั้ง",
+        code: "ACCOUNT_SUSPENDED",
+      });
+    }
+
+    return res.status(401).json({
+      ok: false,
+      error: "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่",
+      code: "SESSION_EXPIRED",
+    });
+  }
+
+  req.session = session;
+  next();
+}
 
 // ── health check สำหรับ docker healthcheck / load balancer ──
 app.get("/health", (_req, res) => res.json({ ok: true, backend: "scimap", storage: USE_PG ? "postgres" : "memory" }));
 
 /* ═══════════════ auth ═══════════════ */
+app.get("/api/auth/session", requireSession, wrap(async (req, res) => {
+  const users = await list("users");
+  const user = users.find((u) => u.id === req.session.userId);
+
+  if (!user) {
+    return res.status(401).json({
+      ok: false,
+      error: "ไม่พบผู้ใช้ กรุณาเข้าสู่ระบบใหม่",
+      code: "SESSION_EXPIRED",
+    });
+  }
+
+  const { password, ...safe } = user;
+
+  return res.json({
+    ok: true,
+    user: safe,
+    session: req.session,
+  });
+}));
+
+
 app.post("/api/auth", wrap(async (req, res) => {
   const body = req.body || {};
   const email = String(body.email || "").trim().toLowerCase();
@@ -45,10 +111,28 @@ app.post("/api/auth", wrap(async (req, res) => {
 
   if (body.action === "login") {
     const user = users.find((u) => u.email.toLowerCase() === email);
-    if (!user || user.password !== String(body.password || "")) return res.status(401).json({ ok: false, error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" });
-    if (user.status !== "active") return res.status(403).json({ ok: false, error: "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อฝ่ายดูแลระบบ" });
+
+    if (!user || user.password !== String(body.password || "")) {
+      return res.status(401).json({
+        ok: false,
+        error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
+      });
+    }
+
+    if (user.status !== "active") {
+      return res.status(403).json({
+        ok: false,
+        error: "บัญชีนี้ถูกระงับการใช้งาน"
+      });
+    }
+
+    const role = user.role;
+    const activities = [];
+
+    const sessionId = createSession(user, role, activities);
+
     const { password, ...safe } = user;
-    return res.json({ ok: true, user: safe });
+    return res.json({ ok: true, user: safe, sessionId });
   }
 
   return res.status(400).json({ ok: false, error: "action ไม่ถูกต้อง" });
@@ -75,12 +159,12 @@ function guard(req, res) {
 }
 
 
-app.get("/api/data/:name", wrap(async (req, res) => {
+app.get("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   res.json({ ok: true, items: await list(req.params.name) });
 }));
 
-app.post("/api/data/:name", wrap(async (req, res) => {
+app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
   const { _actor, ...item } = req.body || {};
@@ -120,7 +204,7 @@ app.post("/api/data/:name", wrap(async (req, res) => {
   res.json({ ok: true, item: row });
 }));
 
-app.patch("/api/data/:name", wrap(async (req, res) => {
+app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
 
   const { name } = req.params;
@@ -148,11 +232,7 @@ app.patch("/api/data/:name", wrap(async (req, res) => {
     });
   }
 
-  const before =
-    name === "institutionAccess"
-      ? (await list(name)).find((r) => r.id === id)
-      : null;
-
+  const before = name === "institutionAccess" || name === "users"? (await list(name)).find((r) => r.id === id) : null;
   const row = await update(name, id, patch);
 
   if (!row) {
@@ -160,6 +240,15 @@ app.patch("/api/data/:name", wrap(async (req, res) => {
       ok: false,
       error: "ไม่พบรายการ",
     });
+  }
+
+  if (name === "users" && patch.status === "suspended") {
+    await cancelPendingRequestsByUser(id);
+    invalidateSession(id, "ACCOUNT_SUSPENDED");
+  }
+
+  if (name === "users" && patch.role && before?.role !== row.role) {
+    invalidateSession(id, "ROLE_CHANGED");
   }
 
   // ประวัติการเปลี่ยนสิทธิ์เป็นข้อมูลประกอบ
@@ -219,7 +308,7 @@ app.patch("/api/data/:name", wrap(async (req, res) => {
   res.json({ ok: true, item: row });
 }));
 
-app.delete("/api/data/:name", wrap(async (req, res) => {
+app.delete("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
   const id = req.query.id;
@@ -233,7 +322,7 @@ app.delete("/api/data/:name", wrap(async (req, res) => {
 }));
 
 /* ═══════════════ สถิติรวม ═══════════════ */
-app.get("/api/stats", wrap(async (_req, res) => {
+app.get("/api/stats", requireSession, wrap(async (_req, res) => {
   const [users, requests, feedback, news, events, eventStats, rooms, contracts, usage] = await Promise.all([
     list("users"), list("requests"), list("feedback"), list("news"),
     list("events"), list("eventStats"), list("rooms"), list("contracts"), list("usage"),

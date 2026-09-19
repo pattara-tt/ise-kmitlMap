@@ -21,12 +21,17 @@ export default function AuthPage({ onLogin }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: mode, ...form }),
       });
+
       const j = await res.json();
-      if (!j.ok) setErr(j.error || "ทำรายการไม่สำเร็จ");
-      else onLogin(j.user);
-    } catch (e) {
+      if (!j.ok) { 
+        setErr(j.error || "ทำรายการไม่สำเร็จ");
+      }
+      else { onLogin(j.user, j.sessionId); }
+    } 
+    catch (e) {
       setErr("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");
     }
+
     setBusy(false);
   }
 
