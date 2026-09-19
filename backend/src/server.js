@@ -6,13 +6,11 @@
 import express from "express";
 import cors from "cors";
 import { list, insert, update, remove, logMapEdit, ROLES, USE_PG } from "./store.js";
-import { cancelPendingRequestsByUser, notifyUser } from "./account.js";
 import { osmHandler, walknetHandler } from "./overpass.js";
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.json({ limit: "2mb" }));
 
 // Express 4 ไม่จับ rejection ของ async handler เอง — ถ้าไม่ห่อไว้ error ตัวเดียว
 // จะกลายเป็น unhandled rejection แล้ว Node 22 จะ kill process ทั้งคอนเทนเนอร์
@@ -58,11 +56,13 @@ app.post("/api/auth", wrap(async (req, res) => {
 
 /* ═══════════════ CRUD กลางของทุก collection ═══════════════ */
 const ALLOWED = new Set([
-  "users", "requests", "feedback", "mapEdits", "contracts", "institutionAccess", "broadcasts",
+  "users", "requests", "feedback", "mapEdits", "contracts", "institutionAccess", "accessHistory", "broadcasts",
   "mapBoundaries", "mapAssets", "mapDrafts", "categories", "news", "events",
   "eventInterest", "eventStats", "floors", "rooms", "usage", "requestQuota", "notifications",
 ]);
 // collection ที่ถือว่าเป็นข้อมูลแผนที่ → บันทึกประวัติให้ผู้บริหารตรวจสอบ
+const ACCESS_STATUS_LABEL = { active: "เปิดใช้งาน", paused: "หยุดชั่วคราว", suspended: "ระงับสิทธิ์" };
+
 const MAP_COLLECTIONS = {
   mapBoundaries: "ขอบเขตแผนผัง", mapAssets: "ข้อมูลประกอบแผนผัง", mapDrafts: "ข้อมูลแผนที่",
   rooms: "ข้อมูลห้อง", floors: "ข้อมูลชั้นอาคาร", events: "ข้อมูลกิจกรรม",
@@ -84,7 +84,36 @@ app.post("/api/data/:name", wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
   const { _actor, ...item } = req.body || {};
+  if (["contracts", "broadcasts", "institutionAccess", "accessHistory"].includes(name) && _actor?.role && _actor.role !== "marketing") {
+    return res.status(403).json({ ok: false, error: "เฉพาะฝ่ายการตลาดเท่านั้นที่แก้ไขข้อมูลชุดนี้ได้" });
+  }
   const row = await insert(name, item);
+
+  // UC-5: เมื่อฝ่ายการตลาดส่งประกาศ ให้สร้าง notification จริง
+  // ให้ผู้ใช้งานทั่วไปที่ active ทันที (สำหรับประกาศที่ถึงกำหนดส่งแล้ว)
+  if (name === "broadcasts") {
+    const sendAt = row.sendAt || row.sentAt || row.createdAt;
+    const sendTime = new Date(sendAt || "").getTime();
+    const due = !Number.isFinite(sendTime) || sendTime <= Date.now();
+
+    if (due) {
+      const users = await list("users");
+      const recipients = users.filter((u) => {
+        if (u.role !== "user" || u.status !== "active") return false;
+        return !row.audience || row.audience === "ทุกมหาวิทยาลัย" || u.institution === row.audience;
+      });
+
+      await Promise.all(recipients.map((u) => insert("notifications", {
+        id: "NT-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+        userId: u.id,
+        kind: "system",
+        title: row.title,
+        body: row.body || "",
+        read: false,
+      })));
+    }
+  }
+
   if (MAP_COLLECTIONS[name]) {
     await logMapEdit({ actorName: _actor?.name, actorId: _actor?.id, action: "เพิ่ม" + MAP_COLLECTIONS[name], target: row.name || row.label || row.code || row.id, after: "สร้างใหม่" });
   }
@@ -93,32 +122,98 @@ app.post("/api/data/:name", wrap(async (req, res) => {
 
 app.patch("/api/data/:name", wrap(async (req, res) => {
   if (!guard(req, res)) return;
+
   const { name } = req.params;
   const { id, _actor, ...patch } = req.body || {};
+
+  if (
+    ["contracts", "broadcasts", "institutionAccess", "accessHistory"].includes(name) &&
+    _actor?.role &&
+    _actor.role !== "marketing"
+  ) {
+    return res.status(403).json({
+      ok: false,
+      error: "เฉพาะฝ่ายการตลาดเท่านั้นที่แก้ไขข้อมูลชุดนี้ได้",
+    });
+  }
+
+  if (
+    name === "institutionAccess" &&
+    patch.accessStatus &&
+    !ACCESS_STATUS_LABEL[patch.accessStatus]
+  ) {
+    return res.status(400).json({
+      ok: false,
+      error: "สถานะสิทธิ์ไม่ถูกต้อง",
+    });
+  }
+
+  const before =
+    name === "institutionAccess"
+      ? (await list(name)).find((r) => r.id === id)
+      : null;
+
   const row = await update(name, id, patch);
 
-  if (name === "users" && patch.status === "suspended") {
-    await cancelPendingRequestsByUser(id);
-
-    await notifyUser(
-      id,
-      "บัญชีถูกระงับ",
-      `บัญชีของคุณถูกระงับ: ${patch.suspendReason || ""}`
-    );
+  if (!row) {
+    return res.status(404).json({
+      ok: false,
+      error: "ไม่พบรายการ",
+    });
   }
 
-  if (name === "users" && patch.status === "active" && patch.restoreReason) {
-    await notifyUser(
-      id,
-      "บัญชีได้รับการคืนสิทธิ์",
-      `บัญชีของคุณได้รับการคืนสิทธิ์: ${patch.restoreReason}`
-    );
+  // ประวัติการเปลี่ยนสิทธิ์เป็นข้อมูลประกอบ
+  // ถ้าบันทึก history ไม่สำเร็จ ต้องไม่ทำให้การเปลี่ยนสิทธิ์หลักล้มเหลว
+  if (
+    name === "institutionAccess" &&
+    patch.accessStatus &&
+    before?.accessStatus !== row.accessStatus
+  ) {
+    try {
+      await insert("accessHistory", {
+        id:
+          "AH-" +
+          Date.now() +
+          "-" +
+          Math.random().toString(36).slice(2, 6),
+        institution: row.institution,
+        institutionAccessId: row.id,
+        beforeStatus:
+          before?.accessStatus || "active",
+        afterStatus: row.accessStatus,
+        beforeStatusLabel:
+          ACCESS_STATUS_LABEL[
+            before?.accessStatus || "active"
+          ],
+        afterStatusLabel:
+          ACCESS_STATUS_LABEL[row.accessStatus],
+        actorId: _actor?.id || "-",
+        actorName: _actor?.name || "ระบบ",
+        changedAt: new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace("T", " "),
+      });
+    } catch (historyError) {
+      console.error(
+        "[scimap-backend] accessHistory insert failed:",
+        historyError
+      );
+    }
   }
-
-  if (!row) return res.status(404).json({ ok: false, error: "ไม่พบรายการ" });
 
   if (MAP_COLLECTIONS[name]) {
-    await logMapEdit({ actorName: _actor?.name, actorId: _actor?.id, action: "แก้ไข" + MAP_COLLECTIONS[name], target: row.name || row.label || row.code || row.id, after: JSON.stringify(patch).slice(0, 80) });
+    await logMapEdit({
+      actorName: _actor?.name,
+      actorId: _actor?.id,
+      action: "แก้ไข" + MAP_COLLECTIONS[name],
+      target:
+        row.name ||
+        row.label ||
+        row.code ||
+        row.id,
+      after: JSON.stringify(patch).slice(0, 80),
+    });
   }
 
   res.json({ ok: true, item: row });

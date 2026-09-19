@@ -136,16 +136,18 @@ function seed() {
       { id: "CT-04", institution: "มหาวิทยาลัย C", plan: "Trial", startDate: "2026-05-01", endDate: "2026-07-31", status: "expired", contact: "office@univ-c.ac.th" },
     ],
     institutionAccess: [
-      { id: "IA-01", institution: "สจล. (KMITL)", level: "full", modules: ["map", "events", "rooms", "reports"], seats: 5000, updatedAt: "2026-07-01" },
-      { id: "IA-02", institution: "มหาวิทยาลัย A", level: "standard", modules: ["map", "events"], seats: 2000, updatedAt: "2026-06-11" },
-      { id: "IA-03", institution: "มหาวิทยาลัย B", level: "full", modules: ["map", "events", "rooms"], seats: 3500, updatedAt: "2026-05-20" },
-      { id: "IA-04", institution: "มหาวิทยาลัย C", level: "readonly", modules: ["map"], seats: 300, updatedAt: "2026-05-01" },
+      { id: "IA-01", institution: "สจล. (KMITL)", level: "full", modules: ["map", "events", "rooms", "reports"], seats: 5000, accessStatus: "active", updatedAt: "2026-07-01" },
+      { id: "IA-02", institution: "มหาวิทยาลัย A", level: "standard", modules: ["map", "events"], seats: 2000, accessStatus: "active", updatedAt: "2026-06-11" },
+      { id: "IA-03", institution: "มหาวิทยาลัย B", level: "full", modules: ["map", "events", "rooms"], seats: 3500, accessStatus: "active", updatedAt: "2026-05-20" },
+      { id: "IA-04", institution: "มหาวิทยาลัย C", level: "readonly", modules: ["map"], seats: 300, accessStatus: "active", updatedAt: "2026-05-01" },
     ],
     // sendAt = วัน-เวลาที่กำหนดให้ส่ง (อนาคต = ยังรอส่ง, อดีต/ปัจจุบัน = ส่งแล้ว)
     broadcasts: [
       { id: "BC-01", title: "แจ้งปิดปรับปรุงระบบ", body: "ระบบจะปิดปรับปรุง 30 ส.ค. 2026 เวลา 01:00–03:00 น.", audience: "ทุกมหาวิทยาลัย", sendAt: "2026-08-15T10:00", sentBy: "อาฮยาน จาง", createdAt: "2026-08-15" },
       { id: "BC-02", title: "แจ้งกำหนดการบำรุงรักษาเซิร์ฟเวอร์", body: "ระบบแผนที่จะไม่สามารถใช้งานได้ชั่วคราวในคืนวันที่กำหนด", audience: "ทุกมหาวิทยาลัย", sendAt: "2026-09-10T08:00", sentBy: "อาฮยาน จาง", createdAt: "2026-08-24" },
     ],
+
+    accessHistory: [],
 
     // ── ข้อมูลแผนผัง (UC7, UC8, UC9) ──────────────────────────
     mapBoundaries: [
@@ -324,3 +326,28 @@ export async function logMapEdit({ actorName, actorId, action, target, before = 
 }
 
 export { uid, today };
+
+
+// ล้างคิวคำร้องคนที่ถูกระงับ
+export function cancelPendingRequestsByUser(userId, { actorName = "ระบบ" } = {}) {
+  const arr = db.requests || [];
+  const cancelled = [];
+  for (const r of arr) {
+    if (r.userId === userId && r.status === "pending") {
+      r.status = "cancelled";
+      r.note = "ยกเลิก: บัญชีผู้ยื่นถูกระงับ";
+      cancelled.push(r.id);
+    }
+  }
+  return cancelled;
+}
+
+export function notifyUser(userId, title, message) {
+  return insert("notifications", {
+    userId,
+    title,
+    body: message,
+    read: false,
+    kind: "system",
+  });
+}

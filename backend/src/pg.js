@@ -16,6 +16,7 @@ export const TABLES = {
   mapEdits: "map_edits",
   contracts: "contracts",
   institutionAccess: "institution_access",
+  accessHistory: "access_history",
   broadcasts: "broadcasts",
   mapBoundaries: "map_boundaries",
   mapAssets: "map_assets",
@@ -40,6 +41,7 @@ const ORDER = {
   requests: "created_at DESC",
   feedback: "created_at DESC",
   usage: "month ASC",
+  accessHistory: "changed_at DESC",
 };
 
 const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());

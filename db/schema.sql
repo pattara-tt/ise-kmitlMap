@@ -130,6 +130,40 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   created_at  DATE NOT NULL DEFAULT CURRENT_DATE
 );
 
+-- เชื่อมการแจ้งเตือนของผู้ใช้กับประกาศที่ฝ่ายการตลาดส่ง
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS broadcast_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_notifications_broadcast ON notifications(broadcast_id);
+-- เพิ่มคอลัมน์สำหรับฐานข้อมูลเดิมที่สร้างตารางไว้แล้ว
+ALTER TABLE institution_access ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'active';
+DO $$ BEGIN
+  ALTER TABLE institution_access ADD CONSTRAINT institution_access_status_check CHECK (access_status IN ('active','paused','suspended'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS access_history (
+  id                    TEXT PRIMARY KEY,
+  institution           TEXT NOT NULL,
+  institution_access_id TEXT,
+  before_status         TEXT,
+  after_status          TEXT NOT NULL,
+  before_status_label   TEXT,
+  after_status_label    TEXT,
+  actor_id              TEXT,
+  actor_name            TEXT,
+  changed_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at             DATE NOT NULL DEFAULT CURRENT_DATE
+);
+CREATE INDEX IF NOT EXISTS idx_access_history_institution ON access_history(institution, changed_at DESC);
+
+CREATE TABLE IF NOT EXISTS broadcasts (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  body        TEXT,
+  audience    TEXT DEFAULT 'ทุกมหาวิทยาลัย',
+  send_at     TIMESTAMP,          -- วัน-เวลาที่กำหนดให้ส่ง (อนาคต = ยังรอส่ง)
+  sent_by     TEXT,
+  created_at  DATE NOT NULL DEFAULT CURRENT_DATE
+);
+
 -- ─────────── ผู้ดูแลข้อมูลสถานที่และอาคาร ───────────
 CREATE TABLE IF NOT EXISTS map_boundaries (
   id          TEXT PRIMARY KEY,
@@ -223,7 +257,7 @@ CREATE TABLE IF NOT EXISTS event_stats (
   searched    INTEGER NOT NULL DEFAULT 0
 );
 
--- ─────────── รายละเอียดชั้น/ห้องสำหรับฝ่ายทะเบียน (โครงสร้างชั้นและ node มาจากฝ่ายแผนที่) ───────────
+-- ─────────── ฝ่ายทะเบียน: ชั้นและห้อง ───────────
 CREATE TABLE IF NOT EXISTS floors (
   id          TEXT PRIMARY KEY,
   building    TEXT NOT NULL,

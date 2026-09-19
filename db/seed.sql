@@ -67,6 +67,10 @@ INSERT INTO institution_access (id, institution, level, modules, seats, updated_
   ('IA-04','มหาวิทยาลัย C','readonly', ARRAY['map'], 300,'2026-05-01')
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO access_history (id, institution, institution_access_id, before_status, after_status, before_status_label, after_status_label, actor_id, actor_name, changed_at) VALUES
+  ('AH-001','มหาวิทยาลัย C','IA-04','active','suspended','เปิดใช้งาน','ระงับสิทธิ์','U002','อาฮยาน จาง','2026-08-20 10:00')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO categories (id, name, kind, color, "desc") VALUES
   ('CAT-01','วิชาการ','event','#1A73E8','สัมมนา บรรยาย อบรม'),
   ('CAT-02','กีฬา/นันทนาการ','event','#188038','กิจกรรมกีฬาและสันทนาการ'),

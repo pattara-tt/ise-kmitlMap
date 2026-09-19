@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Btn, Card, Field, Icon, Input, Pill, Status, Textarea, UCHead, useCollection } from "./ui";
 import { EVENT_STATE_LABEL, eventState, fmt } from "../lib/schedule";
@@ -14,6 +14,21 @@ const MapView = dynamic(() => import("./MapView"), {
 // Actor: ผู้ใช้งานทั่วไป — แผนที่/นำทาง · กิจกรรม · แจ้งเตือน · แจ้งปัญหา
 export default function UserApp({ user, tab, viewMode = "auto" }) {
   const mapApi = useRef(null);
+  const { items: accessRows, loading: accessLoading } = useCollection("institutionAccess");
+  const access = accessRows.find((x) => x.institution === user.institution);
+
+  if (accessLoading) return <div className="bdi-page"><div className="bdi-page-inner"><div style={{ padding: 24, color: "#5F6368" }}>กำลังตรวจสอบสิทธิ์สถาบัน…</div></div></div>;
+  if (access && access.accessStatus && access.accessStatus !== "active") {
+    const paused = access.accessStatus === "paused";
+    return (
+      <div className="bdi-page"><div className="bdi-page-inner">
+        <Card>
+          <b style={{ fontSize: 16, color: paused ? "#B06000" : "#D93025" }}>{paused ? "ระบบถูกหยุดชั่วคราว" : "สิทธิ์การใช้งานถูกระงับ"}</b>
+          <div style={{ marginTop: 8, fontSize: 13, color: "#5F6368", lineHeight: 1.7 }}>สถาบัน {user.institution} ไม่สามารถใช้งานระบบได้ในขณะนี้ กรุณาติดต่อผู้ดูแลระบบหรือฝ่ายการตลาดของสถาบัน</div>
+        </Card>
+      </div></div>
+    );
+  }
 
   return (
     <>
@@ -117,6 +132,7 @@ const NOTI_KINDS = {
 };
 
 function NotificationsPage({ user }) {
+  const { items: notifications } = useCollection("notifications");
   const { items: broadcasts } = useCollection("broadcasts");
   const { items: events } = useCollection("events");
   const { items: news } = useCollection("news");
@@ -126,8 +142,31 @@ function NotificationsPage({ user }) {
   const feed = useMemo(() => {
     const out = [];
 
+    // ประกาศจากฝ่ายการตลาดที่ส่งจริงจะถูกสร้างเป็น notification รายผู้ใช้
+    // จึงแสดงจาก notifications เป็นหลัก เพื่อให้เป็นการแจ้งเตือนของผู้ใช้จริง
+    const notifiedBroadcastIds = new Set();
+    for (const n of notifications) {
+      if (n.userId !== user.id || n.kind !== "system") continue;
+      const b = n.broadcastId ? broadcasts.find((x) => x.id === n.broadcastId) : null;
+      const at = n.createdAt || b?.sendAt || b?.sentAt || b?.createdAt;
+      const t = new Date(at || "").getTime();
+      if (Number.isFinite(t) && t > Date.now()) continue;
+      if (b) notifiedBroadcastIds.add(b.id);
+      out.push({
+        id: n.id,
+        kind: "system",
+        title: n.title,
+        body: n.body,
+        at,
+        meta: `ถึง ${b?.audience || "ทุกมหาวิทยาลัย"}`,
+      });
+    }
+
+    // รองรับประกาศเก่าที่มีอยู่ก่อนระบบ notification รายผู้ใช้
+    // โดยจะไม่แสดงซ้ำกับ notification ที่สร้างจากประกาศนั้นแล้ว
     for (const b of broadcasts) {
-      // แจ้งเตือนที่ฝ่ายการตลาดตั้งเวลาไว้ล่วงหน้า จะยังไม่แสดงจนกว่าจะถึงกำหนด
+      if (notifiedBroadcastIds.has(b.id)) continue;
+      if (b.audience && b.audience !== "ทุกมหาวิทยาลัย" && b.audience !== user.institution) continue;
       const at = b.sendAt || b.sentAt || b.createdAt;
       const t = new Date(at || "").getTime();
       if (Number.isFinite(t) && t > Date.now()) continue;
@@ -150,7 +189,7 @@ function NotificationsPage({ user }) {
     }
 
     return out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
-  }, [broadcasts, events, news]);
+  }, [notifications, broadcasts, events, news, user.id, user.institution]);
 
   const rows = feed.filter((f) => filter === "all" || f.kind === filter);
   const countOf = (k) => feed.filter((f) => f.kind === k).length;
