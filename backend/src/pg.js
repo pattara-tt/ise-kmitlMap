@@ -17,6 +17,7 @@ export const TABLES = {
   contracts: "contracts",
   institutionAccess: "institution_access",
   accessHistory: "access_history",
+  accountHistory: "account_history",
   broadcasts: "broadcasts",
   mapBoundaries: "map_boundaries",
   mapAssets: "map_assets",
@@ -42,6 +43,7 @@ const ORDER = {
   feedback: "created_at DESC",
   usage: "month ASC",
   accessHistory: "changed_at DESC",
+  accountHistory: "changed_at DESC",
 };
 
 const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -85,10 +87,63 @@ export async function list(name) {
   return rows.map(rowOut);
 }
 
+async function generateId(name) {
+  if (name === "users") {
+    const { rows } = await query(
+      `SELECT id FROM ${table(name)}
+       WHERE id ~ '^U[0-9]+$'
+       ORDER BY CAST(SUBSTRING(id FROM 2) AS INTEGER) DESC
+       LIMIT 1`
+    );
+
+    const last = rows[0]?.id;
+    const next = last ? Number(last.slice(1)) + 1 : 1;
+
+    return `U${String(next).padStart(3, "0")}`;
+  }
+
+  if (name === "requests") {
+    const { rows } = await query(
+      `SELECT id FROM ${table(name)}
+       WHERE id ~ '^RQ-[0-9]+$'
+       ORDER BY CAST(SUBSTRING(id FROM 4) AS INTEGER) DESC
+       LIMIT 1`
+    );
+
+    const last = rows[0]?.id;
+    const next = last ? Number(last.slice(3)) + 1 : 1001;
+
+    return `RQ-${next}`;
+  }
+
+  if (name === "accountHistory") {
+    const { rows } = await query(
+      `SELECT id FROM ${table(name)}
+      WHERE id ~ '^ACC-LOG-[0-9]+$'
+      ORDER BY CAST(SUBSTRING(id FROM 9) AS INTEGER) DESC
+      LIMIT 1`
+    );
+
+    const last = rows[0]?.id;
+    const next = last ? Number(last.slice(8)) + 1 : 1001;
+
+    return `ACC-LOG-${next}`;
+  }
+
+  return (
+    name.slice(0, 2).toUpperCase() +
+    "-" +
+    Math.random().toString(36).slice(2, 8)
+  );
+}
+
 export async function insert(name, item) {
   const pk = PK[name] || "id";
   const row = { ...item };
-  if (pk === "id" && !row.id) row.id = name.slice(0, 2).toUpperCase() + "-" + Math.random().toString(36).slice(2, 8);
+
+  if (pk === "id" && !row.id) {
+    row.id = await generateId(name);
+  }
 
   const keys = Object.keys(row).filter((k) => row[k] !== undefined);
   const cols = keys.map((k) => `"${snake(k)}"`).join(", ");

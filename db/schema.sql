@@ -29,6 +29,23 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_role   ON users(role);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
+-- ─────────── ประวัติการเปลี่ยนแปลงบัญชี ───────────
+CREATE TABLE IF NOT EXISTS account_history (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action TEXT NOT NULL CHECK (
+    action IN ('SUSPENDED', 'RESTORED', 'ROLE_CHANGED')
+  ),
+  old_value TEXT,
+  new_value TEXT,
+  reason TEXT,
+  changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  changed_by TEXT REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_account_history_user ON account_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_account_history_changed_at ON account_history(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_account_history_action ON account_history(action);
+
 -- ─────────── คำร้อง (ฝ่ายดูแลระบบ) ───────────
 CREATE TABLE IF NOT EXISTS requests (
   id           TEXT PRIMARY KEY,
@@ -58,7 +75,7 @@ CREATE TABLE IF NOT EXISTS request_quota (
   created_at          DATE NOT NULL DEFAULT CURRENT_DATE
 );
 
--- แจ้งเตือนรายบุคคล (เช่น ผลการพิจารณาคำร้อง)
+-- แจ้งเตือนรายบุคคล
 CREATE TABLE IF NOT EXISTS notifications (
   id          TEXT PRIMARY KEY,
   user_id     TEXT REFERENCES users(id) ON DELETE CASCADE,

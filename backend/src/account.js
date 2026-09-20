@@ -9,7 +9,7 @@ export async function cancelPendingRequestsByUser(userId) {
     if (r.userId === userId && r.status === "pending") {
       await update("requests", r.id, {
         status: "cancelled",
-        note: "ยกเลิก: บัญชีผู้ยื่นถูกระงับ"
+        note: "บัญชีผู้ยื่นถูกระงับ"
       });
 
       cancelled.push(r.id);

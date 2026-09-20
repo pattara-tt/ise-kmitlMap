@@ -158,7 +158,7 @@ export function Status({ value }) {
   return <Pill color={color} bg={bg}>{label}</Pill>;
 }
 
-export function Table({ columns, rows, empty = "ไม่มีข้อมูล" }) {
+export function Table({ columns, rows, empty = "ไม่มีข้อมูล", rowStyle}) {
   if (!rows.length) return <div style={{ fontSize: 13, color: "#5F6368", padding: "10px 2px" }}>{empty}</div>;
   return (
     <div style={{ overflowX: "auto", border: "1px solid #DADCE0", borderRadius: 12, background: "#fff" }}>
@@ -172,7 +172,7 @@ export function Table({ columns, rows, empty = "ไม่มีข้อมู�
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={r.id || i}>
+            <tr key={r.id || i} style={typeof rowStyle === "function" ? rowStyle(r, i) : undefined}>
               {columns.map((c) => (
                 <td key={c.key} style={{ padding: "10px 12px", borderBottom: "1px solid #E8EAED", color: "#202124", verticalAlign: "top" }}>
                   {c.render ? c.render(r) : r[c.key]}

@@ -7,7 +7,7 @@ import express from "express";
 import cors from "cors";
 import { list, insert, update, remove, logMapEdit, ROLES, USE_PG } from "./store.js";
 import { osmHandler, walknetHandler } from "./overpass.js";
-import { cancelPendingRequestsByUser, notifyUser } from "./account.js";
+import { cancelPendingRequestsByUser} from "./account.js";
 import { createSession, invalidateSession, getSession, getRevokedReason } from "./auth.js";
 
 const app = express();
@@ -45,7 +45,7 @@ function requireSession(req, res, next) {
     if (revokedReason === "ACCOUNT_SUSPENDED") {
       return res.status(401).json({
         ok: false,
-        error: "บัญชีถูกระงับการใช้งาน กรุณาเข้าสู่ระบบใหม่อีกครั้ง",
+        error: "บัญชีถูกระงับการใช้งาน",
         code: "ACCOUNT_SUSPENDED",
       });
     }
@@ -122,7 +122,7 @@ app.post("/api/auth", wrap(async (req, res) => {
     if (user.status !== "active") {
       return res.status(403).json({
         ok: false,
-        error: "บัญชีนี้ถูกระงับการใช้งาน"
+        error: "บัญชีถูกระงับการใช้งาน"
       });
     }
 
@@ -140,7 +140,7 @@ app.post("/api/auth", wrap(async (req, res) => {
 
 /* ═══════════════ CRUD กลางของทุก collection ═══════════════ */
 const ALLOWED = new Set([
-  "users", "requests", "feedback", "mapEdits", "contracts", "institutionAccess", "accessHistory", "broadcasts",
+  "users", "requests", "feedback", "mapEdits", "contracts", "institutionAccess", "accessHistory", "accountHistory", "broadcasts",
   "mapBoundaries", "mapAssets", "mapDrafts", "categories", "news", "events",
   "eventInterest", "eventStats", "floors", "rooms", "usage", "requestQuota", "notifications",
 ]);
@@ -242,13 +242,44 @@ app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
     });
   }
 
-  if (name === "users" && patch.status === "suspended") {
+  if (name === "users" && patch.status === "suspended" && before?.status !== row.status) {
     await cancelPendingRequestsByUser(id);
     invalidateSession(id, "ACCOUNT_SUSPENDED");
+
+    await insert("accountHistory", {
+      userId: row.id,
+      action: "SUSPENDED",
+      oldValue: before?.status || null,
+      newValue: row.status,
+      reason: row.suspendReason || null,
+      changedAt: new Date().toISOString(),
+      changedBy: req.session?.userId || null,
+    });
+  }
+
+  if (name === "users" && patch.status === "active" && before?.status === "suspended" && before?.status !== row.status) {
+    await insert("accountHistory", {
+      userId: row.id,
+      action: "RESTORED",
+      oldValue: before.status,
+      newValue: row.status,
+      reason: row.restoreReason || null,
+      changedAt: new Date().toISOString(),
+      changedBy: req.session?.userId || null,
+    });
   }
 
   if (name === "users" && patch.role && before?.role !== row.role) {
     invalidateSession(id, "ROLE_CHANGED");
+    await insert("accountHistory", {
+      userId: row.id,
+      action: "ROLE_CHANGED",
+      oldValue: before?.role || null,
+      newValue: row.role,
+      reason: null,
+      changedAt: new Date().toISOString(),
+      changedBy: req.session?.userId || null,
+    });
   }
 
   // ประวัติการเปลี่ยนสิทธิ์เป็นข้อมูลประกอบ
