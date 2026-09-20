@@ -203,8 +203,8 @@ function Contracts({ user }) {
           new Date().toLocaleString("th-TH"),
       });
 
+      // ปิดฟอร์มต่ออายุ แล้วเปิดเอกสารยืนยันให้เห็นทันที
       setRenewing(null);
-      alert("ต่ออายุสัญญาเรียบร้อย");
     } catch (error) {
       alert(
         error?.message ||
@@ -278,11 +278,10 @@ function Contracts({ user }) {
           new Date().toLocaleString("th-TH"),
       });
 
+      // ปิดฟอร์มยกเลิก แล้วเปิดเอกสารยืนยันให้เห็นทันที
       setCanceling(null);
       setCancelReason("");
       setCancelConfirmed(false);
-
-      alert("ยกเลิกสัญญาเรียบร้อย");
     } catch (error) {
       alert(
         error?.message ||
