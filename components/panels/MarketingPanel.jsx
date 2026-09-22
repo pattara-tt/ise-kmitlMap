@@ -34,16 +34,24 @@ const daysLeft = (d) =>
 
 function Contracts({ user }) {
   const { items, patch } = useCollection("contracts");
-  const { items: institutionAccess } =
-    useCollection("institutionAccess");
+  const { items: institutionAccess } = useCollection("institutionAccess");
 
   const [q, setQ] = useState("");
 
+  // รายการที่กำลังจะต่ออายุ
   const [renewing, setRenewing] = useState(null);
+  // วันที่ใหม่
   const [renewDate, setRenewDate] = useState("");
-  const [renewSaving, setRenewSaving] = useState(false);
-  const [renewDoc, setRenewDoc] = useState(null);
+  // หมายเหตุ
+  const [renewNote, setRenewNote] = useState("");
+  // checkbox ยืนยัน
+  const [confirmed, setConfirmed] = useState(false);
+  // กำลังบันทึก
+  const [saving, setSaving] = useState(false);
+  // เอกสารยืนยันหลังต่ออายุสำเร็จ
+  const [renewedDoc, setRenewedDoc] = useState(null);
 
+  // สถานะยกเลิกสัญญา
   const [canceling, setCanceling] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelConfirmed, setCancelConfirmed] = useState(false);
@@ -55,9 +63,7 @@ function Contracts({ user }) {
     let stopped = false;
 
     async function pauseExpiredAccess() {
-      const today = new Date()
-        .toISOString()
-        .slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
 
       const expired = items.filter(
         (c) =>
@@ -68,8 +74,7 @@ function Contracts({ user }) {
 
       for (const contract of expired) {
         const access = institutionAccess.find(
-          (a) =>
-            a.institution === contract.institution
+          (a) => a.institution === contract.institution
         );
 
         if (
@@ -87,19 +92,13 @@ function Contracts({ user }) {
               user
             );
           } catch (error) {
-            console.error(
-              "[UC-4] auto pause access failed:",
-              error
-            );
+            console.error("[UC-4] auto pause access failed:", error);
           }
         }
       }
     }
 
-    if (
-      items.length > 0 &&
-      institutionAccess.length > 0
-    ) {
+    if (items.length > 0 && institutionAccess.length > 0) {
       pauseExpiredAccess();
     }
 
@@ -120,43 +119,66 @@ function Contracts({ user }) {
     )
     .sort((a, b) => a.left - b.left);
 
-  const soon = rows.filter(
-    (c) => c.left >= 0 && c.left <= 30
-  ).length;
+  const soon = rows.filter((c) => c.left >= 0 && c.left <= 30).length;
+  const expired = rows.filter((c) => c.left < 0).length;
 
-  const expired = rows.filter(
-    (c) => c.left < 0
-  ).length;
-
+  // เปิดแบบฟอร์มต่ออายุ
   function openRenew(c) {
     setRenewing(c);
-    setRenewDate(c.endDate || "");
+    setRenewDate(String(c.endDate || "").slice(0, 10));
+    setRenewNote("");
+    setConfirmed(false);
+    setRenewedDoc(null);
   }
 
+  // ปิดแบบฟอร์มต่ออายุ
+  function closeRenew() {
+    if (saving) return;
+    setRenewing(null);
+    setRenewDate("");
+    setRenewNote("");
+    setConfirmed(false);
+  }
+
+  // เปิดแบบฟอร์มยกเลิกสัญญา
   function openCancel(c) {
     setCanceling(c);
     setCancelReason("");
     setCancelConfirmed(false);
   }
 
+  // ยืนยันการต่ออายุ
   async function confirmRenew() {
-    if (!renewing || !renewDate) {
-      alert("กรุณาระบุวันที่ต่ออายุ");
+    if (!renewing) return;
+
+    if (!renewDate) {
+      alert("กรุณาเลือกวันสิ้นสุดสัญญาใหม่");
       return;
     }
 
-    if (renewDate <= (renewing.endDate || "")) {
-      alert(
-        "วันสิ้นสุดสัญญาใหม่ต้องมากกว่าวันสิ้นสุดเดิม"
-      );
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(renewDate)) {
+      alert("รูปแบบวันที่ไม่ถูกต้อง");
       return;
     }
 
-    if (renewSaving) return;
+    // วันใหม่ต้องมากกว่าวันเดิม
+    const oldDate = new Date(renewing.endDate);
+    const newDate = new Date(renewDate);
+
+    if (newDate <= oldDate) {
+      alert("วันสิ้นสุดสัญญาใหม่ต้องมากกว่าวันสิ้นสุดสัญญาเดิม");
+      return;
+    }
+
+    if (!confirmed) {
+      alert("กรุณาติ๊กยืนยันการต่ออายุสัญญา");
+      return;
+    }
 
     try {
-      setRenewSaving(true);
+      setSaving(true);
 
+      // บันทึกข้อมูลลง contracts
       await patch(
         renewing.id,
         {
@@ -166,55 +188,51 @@ function Contracts({ user }) {
         user
       );
 
+      // ปรับสถานะสิทธิ์สถาบันกลับมาเป็น active หากเคยหยุดชั่วคราว
       const access = institutionAccess.find(
-        (a) =>
-          a.institution === renewing.institution
+        (a) => a.institution === renewing.institution
       );
-
       if (access) {
         await patch(
           access.id,
           {
             accessStatus: "active",
-            updatedAt: new Date()
-              .toISOString()
-              .slice(0, 10),
+            updatedAt: new Date().toISOString().slice(0, 10),
           },
           user
         );
       }
 
-      setRenewDoc({
-        docNo:
-          "REN-" +
-          new Date()
-            .toISOString()
-            .slice(0, 10)
-            .replaceAll("-", "") +
-          "-" +
-          renewing.id,
+      // สร้างเลขที่เอกสารสำหรับการยืนยัน
+      const docNo =
+        "REN-" +
+        new Date().toISOString().slice(0, 10).replace(/-/g, "") +
+        "-" +
+        String(renewing.id).replace(/[^a-zA-Z0-9]/g, "");
+
+      setRenewedDoc({
+        docNo,
         institution: renewing.institution,
         plan: renewing.plan,
-        oldEndDate: renewing.endDate,
+        oldEndDate: String(renewing.endDate || "").slice(0, 10),
         newEndDate: renewDate,
-        renewedBy:
-          user?.name || "ฝ่ายการตลาด",
-        renewedAt:
-          new Date().toLocaleString("th-TH"),
+        note: renewNote,
+        renewedBy: user?.name || "ฝ่ายการตลาด",
+        renewedAt: new Date().toLocaleString("th-TH"),
       });
 
-      // ปิดฟอร์มต่ออายุ แล้วเปิดเอกสารยืนยันให้เห็นทันที
       setRenewing(null);
+      setRenewDate("");
+      setRenewNote("");
+      setConfirmed(false);
     } catch (error) {
-      alert(
-        error?.message ||
-          "ต่ออายุสัญญาไม่สำเร็จ"
-      );
+      alert(error?.message || "ต่ออายุสัญญาไม่สำเร็จ");
     } finally {
-      setRenewSaving(false);
+      setSaving(false);
     }
   }
 
+  // ยืนยันการยกเลิกสัญญา
   async function confirmCancel() {
     if (!canceling) return;
 
@@ -242,8 +260,7 @@ function Contracts({ user }) {
       );
 
       const access = institutionAccess.find(
-        (a) =>
-          a.institution === canceling.institution
+        (a) => a.institution === canceling.institution
       );
 
       if (access) {
@@ -251,9 +268,7 @@ function Contracts({ user }) {
           access.id,
           {
             accessStatus: "suspended",
-            updatedAt: new Date()
-              .toISOString()
-              .slice(0, 10),
+            updatedAt: new Date().toISOString().slice(0, 10),
           },
           user
         );
@@ -262,31 +277,22 @@ function Contracts({ user }) {
       setCancelDoc({
         docNo:
           "CAN-" +
-          new Date()
-            .toISOString()
-            .slice(0, 10)
-            .replaceAll("-", "") +
+          new Date().toISOString().slice(0, 10).replaceAll("-", "") +
           "-" +
           canceling.id,
         institution: canceling.institution,
         plan: canceling.plan,
         endDate: canceling.endDate,
         reason: cancelReason.trim(),
-        cancelledBy:
-          user?.name || "ฝ่ายการตลาด",
-        cancelledAt:
-          new Date().toLocaleString("th-TH"),
+        cancelledBy: user?.name || "ฝ่ายการตลาด",
+        cancelledAt: new Date().toLocaleString("th-TH"),
       });
 
-      // ปิดฟอร์มยกเลิก แล้วเปิดเอกสารยืนยันให้เห็นทันที
       setCanceling(null);
       setCancelReason("");
       setCancelConfirmed(false);
     } catch (error) {
-      alert(
-        error?.message ||
-          "ยกเลิกสัญญาไม่สำเร็จ"
-      );
+      alert(error?.message || "ยกเลิกสัญญาไม่สำเร็จ");
     } finally {
       setCancelSaving(false);
     }
@@ -296,7 +302,7 @@ function Contracts({ user }) {
     <>
       <UCHead
         title="ติดตามระยะสัญญาบริการ"
-        desc="เรียงตามวันที่ใกล้หมดอายุที่สุด — เมื่อหมดอายุจะหยุดสิทธิ์ชั่วคราว และฝ่ายการตลาดสามารถต่ออายุหรือยกเลิกสัญญาได้"
+        desc="เรียงตามวันที่ใกล้หมดอายุที่สุด — สัญญาใหม่ก่อนหมดอายุสัญญา"
       />
 
       <Tiles
@@ -315,11 +321,8 @@ function Contracts({ user }) {
           },
           {
             label: "อยู่ในระยะสัญญา",
-            value: rows.filter(
-              (c) =>
-                c.left >= 0 &&
-                c.status !== "cancelled"
-            ).length,
+            value: rows.filter((c) => c.left >= 0 && c.status !== "cancelled")
+              .length,
           },
         ]}
       />
@@ -349,24 +352,15 @@ function Contracts({ user }) {
             label: "ระยะคงเหลือสัญญา",
             render: (c) =>
               c.left < 0 ? (
-                <Pill
-                  color="#D93025"
-                  bg="#FCE8E6"
-                >
+                <Pill color="#D93025" bg="#FCE8E6">
                   หมดอายุ {Math.abs(c.left)} วัน
                 </Pill>
               ) : c.left <= 30 ? (
-                <Pill
-                  color="#B06000"
-                  bg="#FEF7E0"
-                >
+                <Pill color="#B06000" bg="#FEF7E0">
                   เหลือ {c.left} วัน
                 </Pill>
               ) : (
-                <Pill
-                  color="#188038"
-                  bg="#E6F4EA"
-                >
+                <Pill color="#188038" bg="#E6F4EA">
                   เหลือ {c.left} วัน
                 </Pill>
               ),
@@ -374,21 +368,13 @@ function Contracts({ user }) {
           {
             key: "status",
             label: "สถานะ",
-            render: (c) => (
-              <Status value={c.status} />
-            ),
+            render: (c) => <Status value={c.status} />,
           },
           {
             key: "act",
             label: "การจัดการ",
             render: (c) => (
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  flexWrap: "wrap",
-                }}
-              >
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <Btn
                   kind="ghost"
                   onClick={() => openRenew(c)}
@@ -396,7 +382,6 @@ function Contracts({ user }) {
                 >
                   ต่ออายุ
                 </Btn>
-
                 <Btn
                   kind="ghost"
                   onClick={() => openCancel(c)}
@@ -411,184 +396,332 @@ function Contracts({ user }) {
         rows={rows}
       />
 
-      {/* Modal ต่ออายุ */}
+      {/* =================================================
+          FORM : แบบฟอร์มต่ออายุสัญญา
+      ================================================= */}
       {renewing && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,.35)",
+            background: "rgba(32,33,36,.45)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: 20,
             zIndex: 1000,
-          }}
-        >
-          <Card
-            style={{
-              width: "min(520px, 100%)",
-              maxHeight: "90vh",
-              overflow: "auto",
-            }}
-          >
-            <b style={{ fontSize: 16 }}>
-              ต่ออายุสัญญา
-            </b>
-
-            <div
-              style={{
-                fontSize: 13,
-                color: "#5F6368",
-                marginTop: 6,
-              }}
-            >
-              {renewing.institution}
-            </div>
-
-            <Field label="วันสิ้นสุดสัญญาใหม่">
-              <Input
-                type="date"
-                value={renewDate}
-                onChange={(e) =>
-                  setRenewDate(e.target.value)
-                }
-              />
-            </Field>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-                marginTop: 10,
-              }}
-            >
-              <Btn
-                kind="ghost"
-                onClick={() => setRenewing(null)}
-              >
-                ย้อนกลับ
-              </Btn>
-
-              <Btn
-                onClick={confirmRenew}
-                disabled={renewSaving}
-              >
-                {renewSaving
-                  ? "กำลังบันทึก..."
-                  : "ยืนยันต่ออายุ"}
-              </Btn>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* เอกสารต่ออายุ */}
-      {renewDoc && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
             padding: 20,
-            zIndex: 1001,
           }}
         >
-          <Card
+          <div
             style={{
-              width: "min(600px, 100%)",
+              width: "100%",
+              maxWidth: 650,
               maxHeight: "90vh",
-              overflow: "auto",
+              overflowY: "auto",
+              background: "#fff",
+              borderRadius: 16,
+              boxShadow: "0 8px 30px rgba(0,0,0,.25)",
+              padding: 24,
             }}
           >
             <div
               style={{
                 textAlign: "center",
-                marginBottom: 18,
+                borderBottom: "2px solid #1A73E8",
+                paddingBottom: 15,
+                marginBottom: 20,
               }}
             >
-              <b style={{ fontSize: 18 }}>
-                เอกสารยืนยันการต่ออายุสัญญา
-              </b>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#5F6368",
+                  marginBottom: 5,
+                }}
+              >
+                SciMap
+              </div>
+
+              <div
+                style={{
+                  fontSize: 20,
+                  fontWeight: 900,
+                  color: "#202124",
+                }}
+              >
+                แบบฟอร์มต่ออายุสัญญาบริการ
+              </div>
 
               <div
                 style={{
                   fontSize: 12,
                   color: "#5F6368",
-                  marginTop: 4,
+                  marginTop: 5,
                 }}
               >
-                เลขที่เอกสาร {renewDoc.docNo}
+                สำหรับดำเนินการโดยฝ่ายการตลาด
               </div>
             </div>
 
-            <div
+            <Card
               style={{
-                fontSize: 13,
-                lineHeight: 1.8,
+                background: "#F8F9FA",
+                boxShadow: "none",
               }}
             >
-              <div>
-                <b>สถาบัน:</b>{" "}
-                {renewDoc.institution}
-              </div>
-              <div>
-                <b>ประเภทการใช้งาน:</b>{" "}
-                {renewDoc.plan || "-"}
-              </div>
-              <div>
-                <b>วันสิ้นสุดเดิม:</b>{" "}
-                {renewDoc.oldEndDate || "-"}
-              </div>
-              <div>
-                <b>วันสิ้นสุดใหม่:</b>{" "}
-                {renewDoc.newEndDate}
-              </div>
-              <div>
-                <b>ดำเนินการโดย:</b>{" "}
-                {renewDoc.renewedBy}
-              </div>
-              <div>
-                <b>วันที่ดำเนินการ:</b>{" "}
-                {renewDoc.renewedAt}
-              </div>
-            </div>
+              <Field label="สถาบัน">
+                <Input value={renewing.institution || "-"} disabled />
+              </Field>
+
+              <Field label="ประเภทการใช้งาน">
+                <Input value={renewing.plan || "-"} disabled />
+              </Field>
+
+              <Field label="วันสิ้นสุดสัญญาปัจจุบัน">
+                <Input
+                  value={String(renewing.endDate || "").slice(0, 10)}
+                  disabled
+                />
+              </Field>
+            </Card>
+
+            <Field label="วันสิ้นสุดสัญญาใหม่">
+              <Input
+                type="date"
+                value={renewDate}
+                onChange={(e) => setRenewDate(e.target.value)}
+              />
+            </Field>
+
+            <Field label="หมายเหตุ">
+              <Textarea
+                value={renewNote}
+                onChange={(e) => setRenewNote(e.target.value)}
+                placeholder="ระบุรายละเอียดเพิ่มเติมเกี่ยวกับการต่ออายุสัญญา"
+              />
+            </Field>
 
             <div
               style={{
-                marginTop: 18,
-                padding: 10,
                 border: "1px solid #DADCE0",
                 borderRadius: 10,
-                background: "#F8F9FA",
-                fontSize: 12.5,
+                padding: 13,
+                marginBottom: 16,
+                background: "#fff",
               }}
             >
-              สถานะสัญญา: <b>ใช้งานอยู่</b>
-              <br />
-              สถานะสิทธิ์สถาบัน:{" "}
-              <b>เปิดใช้งาน</b>
+              <label
+                style={{
+                  display: "flex",
+                  gap: 9,
+                  alignItems: "flex-start",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  color: "#202124",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                  style={{
+                    marginTop: 3,
+                  }}
+                />
+
+                <span>
+                  ข้าพเจ้ายืนยันว่าต้องการต่ออายุสัญญาของสถาบันนี้
+                  และตรวจสอบวันสิ้นสุดสัญญาใหม่แล้ว
+                </span>
+              </label>
             </div>
 
             <div
               style={{
                 display: "flex",
                 justifyContent: "flex-end",
-                marginTop: 14,
+                gap: 10,
               }}
             >
-              <Btn
-                kind="ghost"
-                onClick={() => setRenewDoc(null)}
-              >
-                ปิดเอกสาร
+              <Btn kind="ghost" onClick={closeRenew} disabled={saving}>
+                ยกเลิก
+              </Btn>
+
+              <Btn onClick={confirmRenew} disabled={saving}>
+                {saving ? "กำลังบันทึก..." : "ยืนยันการต่ออายุ"}
               </Btn>
             </div>
-          </Card>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================
+          DOCUMENT : เอกสารยืนยันหลังต่ออายุ
+      ================================================= */}
+      {renewedDoc && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(32,33,36,.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 650,
+              background: "#fff",
+              borderRadius: 16,
+              boxShadow: "0 8px 30px rgba(0,0,0,.25)",
+              padding: 28,
+            }}
+          >
+            <div
+              style={{
+                textAlign: "center",
+                marginBottom: 22,
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  background: "#E6F4EA",
+                  color: "#188038",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 25,
+                  fontWeight: 900,
+                  marginBottom: 10,
+                }}
+              >
+                ✓
+              </div>
+
+              <div
+                style={{
+                  fontSize: 19,
+                  fontWeight: 900,
+                }}
+              >
+                ต่ออายุสัญญาสำเร็จ
+              </div>
+
+              <div
+                style={{
+                  color: "#5F6368",
+                  fontSize: 12,
+                  marginTop: 4,
+                }}
+              >
+                ระบบได้บันทึกข้อมูลการต่ออายุแล้ว
+              </div>
+            </div>
+
+            <div
+              style={{
+                border: "1px solid #DADCE0",
+                borderRadius: 12,
+                padding: 20,
+                background: "#fff",
+              }}
+            >
+              <div
+                style={{
+                  textAlign: "center",
+                  fontWeight: 900,
+                  fontSize: 16,
+                  marginBottom: 18,
+                  borderBottom: "1px solid #DADCE0",
+                  paddingBottom: 12,
+                }}
+              >
+                ใบยืนยันการต่ออายุสัญญาบริการ
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "170px 1fr",
+                  gap: "10px 15px",
+                  fontSize: 13,
+                }}
+              >
+                <b>เลขที่เอกสาร</b>
+                <span>{renewedDoc.docNo}</span>
+
+                <b>สถาบัน</b>
+                <span>{renewedDoc.institution || "-"}</span>
+
+                <b>ประเภทการใช้งาน</b>
+                <span>{renewedDoc.plan || "-"}</span>
+
+                <b>วันสิ้นสุดเดิม</b>
+                <span>{renewedDoc.oldEndDate}</span>
+
+                <b>วันสิ้นสุดใหม่</b>
+                <span
+                  style={{
+                    fontWeight: 900,
+                    color: "#188038",
+                  }}
+                >
+                  {renewedDoc.newEndDate}
+                </span>
+
+                <b>ผู้ดำเนินการ</b>
+                <span>{renewedDoc.renewedBy}</span>
+
+                <b>วันที่ดำเนินการ</b>
+                <span>{renewedDoc.renewedAt}</span>
+              </div>
+
+              {renewedDoc.note && (
+                <div
+                  style={{
+                    marginTop: 18,
+                    paddingTop: 15,
+                    borderTop: "1px solid #DADCE0",
+                  }}
+                >
+                  <b
+                    style={{
+                      fontSize: 13,
+                    }}
+                  >
+                    หมายเหตุ
+                  </b>
+
+                  <div
+                    style={{
+                      marginTop: 5,
+                      fontSize: 13,
+                      color: "#5F6368",
+                    }}
+                  >
+                    {renewedDoc.note}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: 18,
+              }}
+            >
+              <Btn onClick={() => setRenewedDoc(null)}>ปิดเอกสาร</Btn>
+            </div>
+          </div>
         </div>
       )}
 
@@ -613,9 +746,7 @@ function Contracts({ user }) {
               overflow: "auto",
             }}
           >
-            <b style={{ fontSize: 16 }}>
-              ยกเลิกสัญญา
-            </b>
+            <b style={{ fontSize: 16 }}>ยกเลิกสัญญา</b>
 
             <div
               style={{
@@ -630,9 +761,7 @@ function Contracts({ user }) {
             <Field label="เหตุผลในการยกเลิก">
               <Textarea
                 value={cancelReason}
-                onChange={(e) =>
-                  setCancelReason(e.target.value)
-                }
+                onChange={(e) => setCancelReason(e.target.value)}
                 placeholder="ระบุเหตุผลในการยกเลิกสัญญา"
               />
             </Field>
@@ -649,16 +778,10 @@ function Contracts({ user }) {
               <input
                 type="checkbox"
                 checked={cancelConfirmed}
-                onChange={(e) =>
-                  setCancelConfirmed(
-                    e.target.checked
-                  )
-                }
+                onChange={(e) => setCancelConfirmed(e.target.checked)}
               />
               <span>
-                ยืนยันการยกเลิกสัญญา
-                และระงับสิทธิ์การเข้าถึง
-                ของสถาบันนี้
+                ยืนยันการยกเลิกสัญญา และระงับสิทธิ์การเข้าถึงของสถาบันนี้
               </span>
             </label>
 
@@ -670,10 +793,7 @@ function Contracts({ user }) {
                 marginTop: 14,
               }}
             >
-              <Btn
-                kind="ghost"
-                onClick={() => setCanceling(null)}
-              >
+              <Btn kind="ghost" onClick={() => setCanceling(null)}>
                 ย้อนกลับ
               </Btn>
 
@@ -682,16 +802,14 @@ function Contracts({ user }) {
                 onClick={confirmCancel}
                 disabled={cancelSaving}
               >
-                {cancelSaving
-                  ? "กำลังยกเลิก..."
-                  : "ยืนยันยกเลิกสัญญา"}
+                {cancelSaving ? "กำลังยกเลิก..." : "ยืนยันยกเลิกสัญญา"}
               </Btn>
             </div>
           </Card>
         </div>
       )}
 
-      {/* เอกสารยกเลิกสัญญา */}
+      {/* เอกสารยืนยันการยกเลิกสัญญา */}
       {cancelDoc && (
         <div
           style={{
@@ -718,9 +836,7 @@ function Contracts({ user }) {
                 marginBottom: 18,
               }}
             >
-              <b style={{ fontSize: 18 }}>
-                เอกสารยืนยันการยกเลิกสัญญา
-              </b>
+              <b style={{ fontSize: 18 }}>เอกสารยืนยันการยกเลิกสัญญา</b>
 
               <div
                 style={{
@@ -740,28 +856,22 @@ function Contracts({ user }) {
               }}
             >
               <div>
-                <b>สถาบัน:</b>{" "}
-                {cancelDoc.institution}
+                <b>สถาบัน:</b> {cancelDoc.institution}
               </div>
               <div>
-                <b>ประเภทการใช้งาน:</b>{" "}
-                {cancelDoc.plan || "-"}
+                <b>ประเภทการใช้งาน:</b> {cancelDoc.plan || "-"}
               </div>
               <div>
-                <b>วันสิ้นสุดสัญญา:</b>{" "}
-                {cancelDoc.endDate || "-"}
+                <b>วันสิ้นสุดสัญญา:</b> {cancelDoc.endDate || "-"}
               </div>
               <div>
-                <b>เหตุผล:</b>{" "}
-                {cancelDoc.reason}
+                <b>เหตุผล:</b> {cancelDoc.reason}
               </div>
               <div>
-                <b>ดำเนินการโดย:</b>{" "}
-                {cancelDoc.cancelledBy}
+                <b>ดำเนินการโดย:</b> {cancelDoc.cancelledBy}
               </div>
               <div>
-                <b>วันที่ดำเนินการ:</b>{" "}
-                {cancelDoc.cancelledAt}
+                <b>วันที่ดำเนินการ:</b> {cancelDoc.cancelledAt}
               </div>
             </div>
 
@@ -777,8 +887,7 @@ function Contracts({ user }) {
             >
               สถานะสัญญา: <b>ยกเลิก</b>
               <br />
-              สถานะสิทธิ์สถาบัน:{" "}
-              <b>ระงับสิทธิ์</b>
+              สถานะสิทธิ์สถาบัน: <b>ระงับสิทธิ์</b>
             </div>
 
             <div
@@ -788,10 +897,7 @@ function Contracts({ user }) {
                 marginTop: 14,
               }}
             >
-              <Btn
-                kind="ghost"
-                onClick={() => setCancelDoc(null)}
-              >
+              <Btn kind="ghost" onClick={() => setCancelDoc(null)}>
                 ปิดเอกสาร
               </Btn>
             </div>
@@ -801,7 +907,6 @@ function Contracts({ user }) {
     </>
   );
 }
-
 /* =========================================================
    UC-5 : ส่งข้อความแจ้งเตือน
 ========================================================= */
