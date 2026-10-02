@@ -1,0 +1,150 @@
+[
+  {
+    "roleCode": "exec",
+    "useCaseKey": "overview"
+  },
+  {
+    "roleCode": "exec",
+    "useCaseKey": "feedback"
+  },
+  {
+    "roleCode": "exec",
+    "useCaseKey": "contracts"
+  },
+  {
+    "roleCode": "exec",
+    "useCaseKey": "audit"
+  },
+  {
+    "roleCode": "marketing",
+    "useCaseKey": "contracts"
+  },
+  {
+    "roleCode": "marketing",
+    "useCaseKey": "broadcast"
+  },
+  {
+    "roleCode": "marketing",
+    "useCaseKey": "access"
+  },
+  {
+    "roleCode": "gis",
+    "useCaseKey": "boundary"
+  },
+  {
+    "roleCode": "gis",
+    "useCaseKey": "assets"
+  },
+  {
+    "roleCode": "gis",
+    "useCaseKey": "save"
+  },
+  {
+    "roleCode": "admin",
+    "useCaseKey": "users"
+  },
+  {
+    "roleCode": "admin",
+    "useCaseKey": "requests"
+  },
+  {
+    "roleCode": "admin",
+    "useCaseKey": "roles"
+  },
+  {
+    "roleCode": "admin",
+    "useCaseKey": "status"
+  },
+  {
+    "roleCode": "pr",
+    "useCaseKey": "news"
+  },
+  {
+    "roleCode": "pr",
+    "useCaseKey": "events"
+  },
+  {
+    "roleCode": "pr",
+    "useCaseKey": "interest"
+  },
+  {
+    "roleCode": "pr",
+    "useCaseKey": "categories"
+  },
+  {
+    "roleCode": "registrar",
+    "useCaseKey": "rooms"
+  },
+  {
+    "roleCode": "user",
+    "useCaseKey": "search"
+  },
+  {
+    "roleCode": "user",
+    "useCaseKey": "route"
+  },
+  {
+    "roleCode": "user",
+    "useCaseKey": "feedback"
+  },
+  {
+    "roleCode": "user",
+    "useCaseKey": "events"
+  },
+  {
+    "roleCode": "exec",
+    "useCaseKey": "common_1"
+  },
+  {
+    "roleCode": "marketing",
+    "useCaseKey": "common_1"
+  },
+  {
+    "roleCode": "gis",
+    "useCaseKey": "common_1"
+  },
+  {
+    "roleCode": "admin",
+    "useCaseKey": "common_1"
+  },
+  {
+    "roleCode": "pr",
+    "useCaseKey": "common_1"
+  },
+  {
+    "roleCode": "registrar",
+    "useCaseKey": "common_1"
+  },
+  {
+    "roleCode": "user",
+    "useCaseKey": "common_1"
+  },
+  {
+    "roleCode": "exec",
+    "useCaseKey": "common_2"
+  },
+  {
+    "roleCode": "marketing",
+    "useCaseKey": "common_2"
+  },
+  {
+    "roleCode": "gis",
+    "useCaseKey": "common_2"
+  },
+  {
+    "roleCode": "admin",
+    "useCaseKey": "common_2"
+  },
+  {
+    "roleCode": "pr",
+    "useCaseKey": "common_2"
+  },
+  {
+    "roleCode": "registrar",
+    "useCaseKey": "common_2"
+  },
+  {
+    "roleCode": "user",
+    "useCaseKey": "common_2"
+  }
+]

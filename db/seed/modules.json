@@ -1,0 +1,18 @@
+[
+  {
+    "code": "map",
+    "name": "แผนที่"
+  },
+  {
+    "code": "events",
+    "name": "กิจกรรม"
+  },
+  {
+    "code": "rooms",
+    "name": "ข้อมูลห้อง"
+  },
+  {
+    "code": "reports",
+    "name": "รายงาน"
+  }
+]

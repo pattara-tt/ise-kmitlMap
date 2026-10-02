@@ -1,0 +1,34 @@
+[
+  {
+    "id": "IA-01",
+    "level": "full",
+    "seats": 5000,
+    "accessStatus": "active",
+    "updatedAt": "2026-07-01",
+    "institutionId": "INST-01"
+  },
+  {
+    "id": "IA-02",
+    "level": "standard",
+    "seats": 2000,
+    "accessStatus": "active",
+    "updatedAt": "2026-06-11",
+    "institutionId": "INST-02"
+  },
+  {
+    "id": "IA-03",
+    "level": "full",
+    "seats": 3500,
+    "accessStatus": "active",
+    "updatedAt": "2026-05-20",
+    "institutionId": "INST-03"
+  },
+  {
+    "id": "IA-04",
+    "level": "readonly",
+    "seats": 300,
+    "accessStatus": "active",
+    "updatedAt": "2026-05-01",
+    "institutionId": "INST-04"
+  }
+]

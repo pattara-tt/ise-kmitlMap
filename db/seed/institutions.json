@@ -1,0 +1,26 @@
+[
+  {
+    "id": "INST-01",
+    "name": "สจล. (KMITL)",
+    "shortName": "KMITL",
+    "contactEmail": null
+  },
+  {
+    "id": "INST-02",
+    "name": "มหาวิทยาลัย A",
+    "shortName": null,
+    "contactEmail": null
+  },
+  {
+    "id": "INST-03",
+    "name": "มหาวิทยาลัย B",
+    "shortName": null,
+    "contactEmail": null
+  },
+  {
+    "id": "INST-04",
+    "name": "มหาวิทยาลัย C",
+    "shortName": null,
+    "contactEmail": null
+  }
+]

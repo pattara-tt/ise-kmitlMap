@@ -1,0 +1,10 @@
+[
+  {
+    "id": "AH-001",
+    "accessId": "IA-04",
+    "actorId": "U002",
+    "beforeStatus": "active",
+    "afterStatus": "suspended",
+    "changedAt": "2026-08-20T10:00:00+07:00"
+  }
+]

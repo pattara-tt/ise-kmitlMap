@@ -1,0 +1,26 @@
+{
+  "name": "scimap-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "cd .next/standalone && node server.js",
+    "lint": "eslint app components lib",
+    "test:seed": "node scripts/check-seed.js",
+    "test:mock": "node scripts/test-mock.mjs",
+    "test:source": "node scripts/check-source.js && node scripts/check-exports.js",
+    "test:pg": "node scripts/verify-db.mjs",
+    "test:basemap": "node scripts/test-basemap.mjs"
+  },
+  "dependencies": {
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "eslint": "^9.36.0",
+    "eslint-config-next": "^16.2.10",
+    "prettier": "^3.6.2"
+  }
+}

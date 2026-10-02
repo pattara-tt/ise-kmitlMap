@@ -1,0 +1,29 @@
+[
+  {
+    "id": "MA-01",
+    "floorId": "FL-SC8-1",
+    "name": "ผังชั้น 1 อาคาร Sc8",
+    "kind": "floorplan",
+    "file": "/data/floorplans/Sc8/floor1.svg",
+    "status": "published",
+    "updatedAt": "2026-08-06"
+  },
+  {
+    "id": "MA-02",
+    "floorId": "FL-SC8-2",
+    "name": "ผังชั้น 2 อาคาร Sc8",
+    "kind": "floorplan",
+    "file": "/data/floorplans/Sc8/floor2.svg",
+    "status": "published",
+    "updatedAt": "2026-08-06"
+  },
+  {
+    "id": "MA-03",
+    "floorId": null,
+    "name": "ภาพอาคาร Sc8",
+    "kind": "image",
+    "file": "/data/places/sc8.png",
+    "status": "published",
+    "updatedAt": "2026-07-28"
+  }
+]

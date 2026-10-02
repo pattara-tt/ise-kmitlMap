@@ -1,0 +1,41 @@
+[
+  {
+    "id": "RQ-1001",
+    "userId": "U007",
+    "subject": "ขอแก้ไขข้อมูลห้อง 106",
+    "detail": "ขอเปลี่ยนประเภทห้อง 106 จากห้องเรียนเป็นห้องปฏิบัติการ",
+    "status": "pending",
+    "createdAt": "2026-08-24",
+    "note": "",
+    "roomId": "RM-01",
+    "nodeId": "ND-0010",
+    "before": "{\"name\":\"ห้อง 106\",\"type\":\"ห้องเรียน\",\"capacity\":45,\"teacher\":\"อ.ดร. ปรีชา วงศ์ทอง\"}",
+    "after": "{\"name\":\"ห้อง 106\",\"type\":\"ห้องปฏิบัติการ\",\"capacity\":45,\"teacher\":\"อ.ดร. ปรีชา วงศ์ทอง\"}"
+  },
+  {
+    "id": "RQ-1002",
+    "userId": "U007",
+    "subject": "แจ้งข้อมูลอาจารย์ประจำห้อง 107 ไม่ถูกต้อง",
+    "detail": "ชื่ออาจารย์ประจำห้อง 107 ไม่ตรงกับข้อมูลที่แสดงในระบบ",
+    "status": "pending",
+    "createdAt": "2026-08-24",
+    "note": "",
+    "roomId": "RM-02",
+    "nodeId": "ND-0009",
+    "before": "{\"name\":\"ห้อง 107\",\"type\":\"ห้องปฏิบัติการ\",\"capacity\":40,\"teacher\":\"อ.ดร. สุนิสา ภูผา\"}",
+    "after": "{\"name\":\"ห้อง 107\",\"type\":\"ห้องปฏิบัติการ\",\"capacity\":40,\"teacher\":\"อ.ดร. วิชัย ใจดี\"}"
+  },
+  {
+    "id": "RQ-1003",
+    "userId": "U008",
+    "subject": "แจ้งข้อมูลความจุ Coworking Space KDAI",
+    "detail": "ขอให้ตรวจสอบจำนวนที่นั่งของ Coworking Space KDAI",
+    "status": "pending",
+    "createdAt": "2026-08-24",
+    "note": "",
+    "roomId": "RM-03",
+    "nodeId": "ND-0007",
+    "before": "{\"name\":\"Coworking Space KDAI\",\"type\":\"พื้นที่ทำงานร่วม\",\"capacity\":60,\"teacher\":\"-\"}",
+    "after": "{\"name\":\"Coworking Space KDAI\",\"type\":\"พื้นที่ทำงานร่วม\",\"capacity\":70,\"teacher\":\"-\"}"
+  }
+]

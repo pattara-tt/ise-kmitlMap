@@ -1,0 +1,42 @@
+[
+  {
+    "accessId": "IA-01",
+    "moduleCode": "map"
+  },
+  {
+    "accessId": "IA-01",
+    "moduleCode": "events"
+  },
+  {
+    "accessId": "IA-01",
+    "moduleCode": "rooms"
+  },
+  {
+    "accessId": "IA-01",
+    "moduleCode": "reports"
+  },
+  {
+    "accessId": "IA-02",
+    "moduleCode": "map"
+  },
+  {
+    "accessId": "IA-02",
+    "moduleCode": "events"
+  },
+  {
+    "accessId": "IA-03",
+    "moduleCode": "map"
+  },
+  {
+    "accessId": "IA-03",
+    "moduleCode": "events"
+  },
+  {
+    "accessId": "IA-03",
+    "moduleCode": "rooms"
+  },
+  {
+    "accessId": "IA-04",
+    "moduleCode": "map"
+  }
+]

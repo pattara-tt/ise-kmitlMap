@@ -1,0 +1,74 @@
+[
+  {
+    "id": "FL-SC8-8",
+    "buildingId": "BLD-SC8",
+    "floorNo": "8",
+    "name": "ชั้น 8",
+    "svg": null,
+    "note": null,
+    "status": "published"
+  },
+  {
+    "id": "FL-SC8-7",
+    "buildingId": "BLD-SC8",
+    "floorNo": "7",
+    "name": "ชั้น 7",
+    "svg": null,
+    "note": null,
+    "status": "published"
+  },
+  {
+    "id": "FL-SC8-6",
+    "buildingId": "BLD-SC8",
+    "floorNo": "6",
+    "name": "ชั้น 6",
+    "svg": "/data/floorplans/Sc8/floor6.svg",
+    "note": null,
+    "status": "published"
+  },
+  {
+    "id": "FL-SC8-5",
+    "buildingId": "BLD-SC8",
+    "floorNo": "5",
+    "name": "ชั้น 5",
+    "svg": "/data/floorplans/Sc8/floor5.svg",
+    "note": null,
+    "status": "published"
+  },
+  {
+    "id": "FL-SC8-4",
+    "buildingId": "BLD-SC8",
+    "floorNo": "4",
+    "name": "ชั้น 4",
+    "svg": "/data/floorplans/Sc8/floor4.svg",
+    "note": null,
+    "status": "published"
+  },
+  {
+    "id": "FL-SC8-3",
+    "buildingId": "BLD-SC8",
+    "floorNo": "3",
+    "name": "ชั้น 3",
+    "svg": "/data/floorplans/Sc8/floor3.svg",
+    "note": null,
+    "status": "published"
+  },
+  {
+    "id": "FL-SC8-2",
+    "buildingId": "BLD-SC8",
+    "floorNo": "2",
+    "name": "ชั้น 2",
+    "svg": "/data/floorplans/Sc8/floor2.svg",
+    "note": null,
+    "status": "published"
+  },
+  {
+    "id": "FL-SC8-1",
+    "buildingId": "BLD-SC8",
+    "floorNo": "1",
+    "name": "ชั้น 1",
+    "svg": "/data/floorplans/Sc8/floor1.svg",
+    "note": null,
+    "status": "published"
+  }
+]
