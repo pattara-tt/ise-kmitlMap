@@ -23,6 +23,7 @@ import { useMapEffect16 } from "./map/hooks/useMapEffect16";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMapData } from "../lib/useMapData";
+import { dayKey, monthKey, todayKey } from "../lib/datetime";
 import { apiFetch } from "../lib/api";
 import PlaceInput from "./PlaceInput";
 import { Btn, Field, Input, Textarea, useCollection } from "./ui";
@@ -115,6 +116,19 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   const { items: requests, create: createRequest } = useCollection("requests");
   const { items: quotaItems } = useCollection("requestQuota");
   const requestQuota = quotaItems[0] || {};
+  // โควต้าคงเหลือของผู้ใช้ (นับเหมือน backend: ไม่รวมที่ยกเลิก, ตามเวลาไทย)
+  const reportQuota = useMemo(() => {
+    const dailyLimit = requestQuota.perUserPerDay ?? 3;
+    const monthlyLimit = requestQuota.perUserPerMonth ?? 20;
+    const today = todayKey();
+    const month = monthKey();
+    const mine = requests.filter((r) => r.userId === user?.id && r.status !== "cancelled");
+    const dailyLeft = Math.max(0, dailyLimit - mine.filter((r) => dayKey(r.createdAt) === today).length);
+    const monthlyLeft = Math.max(0, monthlyLimit - mine.filter((r) => monthKey(r.createdAt) === month).length);
+    return { dailyLeft, monthlyLeft, dailyLimit, monthlyLimit, canSubmit: dailyLeft > 0 && monthlyLeft > 0 };
+  }, [requests, requestQuota, user?.id]);
+
+
   // viewMode ถูกควบคุมจากปุ่มสลับ "มือถือ/คอม" ที่แถบบนของแอป (app/page.jsx)
   const mapEl = useRef(null);
   const mapRef = useRef(null);
@@ -435,6 +449,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     placeCard,
     reportForm,
     reportOpen,
+    reportQuota,
     reportSending,
     resolveLandmark,
     rooms,

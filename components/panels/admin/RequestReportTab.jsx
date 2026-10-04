@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Btn, Card, Field, Input, Select, Status, Table, useCollection } from "../../ui";
 import { FIELD_LABEL, formatAdminDateTime } from "./shared";
+import { dayKey, todayKey } from "../../../lib/datetime";
 
 // ── UC14 จัดทำสรุปคำร้อง ───────────────────────
 function RequestReport({
@@ -17,6 +18,10 @@ function RequestReport({
   const {
     items: rooms
   } = useCollection("rooms");
+  const {
+    items: editLogs
+  } = useCollection("editLogs");
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -32,8 +37,9 @@ function RequestReport({
     const requestUser = users.find(u => u.id === r.userId);
     const matchesSearch = !keyword || ((r.id || "") + (r.subject || "") + (r.detail || "") + (r.userId || "") + (requestUser?.email || "")).toLowerCase().includes(keyword);
     const matchesStatus = !statusFilter || r.status === statusFilter;
-    const matchesStartDate = !startDate || String(r.createdAt || "") >= startDate;
-    const matchesEndDate = !endDate || String(r.createdAt || "") <= endDate;
+    const created = dayKey(r.createdAt);
+    const matchesStartDate = !startDate || created >= startDate;
+    const matchesEndDate = !endDate || created <= endDate;
     return matchesSearch && matchesStatus && matchesStartDate && matchesEndDate;
   });
   function clearFilters() {
@@ -90,6 +96,12 @@ function RequestReport({
     key: "status",
     label: "สถานะ"
   }, {
+    key: "operator",
+    label: "ผู้ดำเนินการ"
+  }, {
+    key: "operatedAt",
+    label: "วันที่ดำเนินการ"
+  }, {
     key: "reviewer",
     label: "ผู้พิจารณา"
   }, {
@@ -113,6 +125,8 @@ function RequestReport({
     location: "สถานที่",
     createdAt: "วันที่ส่งคำร้อง",
     status: "สถานะ",
+    operator: "ผู้ดำเนินการ",
+    operatedAt: "วันที่ดำเนินการ",
     reviewer: "ผู้พิจารณา",
     reviewedAt: "วันที่พิจารณา",
     note: "เหตุผลประกอบการพิจารณา",
@@ -121,11 +135,93 @@ function RequestReport({
   };
   const STATUS_LABELS = {
     pending: "รอพิจารณา",
+    processing: "กำลังดำเนินการ",
     approved: "อนุมัติ",
     rejected: "ไม่อนุมัติ",
     cancelled: "ยกเลิกแล้ว"
   };
   const selectedRows = requests.filter(r => !!selectedRequests[r.id]);
+  const HIDE_IF_EMPTY = ["operator", "operatedAt", "reviewer", "reviewedAt"];
+
+  const emailOf = id => users.find(u => u.id === id)?.email || id || "";
+
+  const stagesByRequest = {};
+  editLogs.filter(l => l.requestId).sort((a, b) => String(a.editedAt).localeCompare(String(b.editedAt))).forEach(l => {
+    let status = null;
+    try {
+      const after = typeof l.after === "string" ? JSON.parse(l.after) : l.after;
+      status = after?.status || null;
+    } catch {}
+    if (!status) return;
+    if (!stagesByRequest[l.requestId]) stagesByRequest[l.requestId] = [];
+    stagesByRequest[l.requestId].push({
+      status,
+      userId: l.userId,
+      at: l.editedAt
+    });
+  });
+
+  function getStageInfo(request) {
+    const stages = stagesByRequest[request.id] || [];
+    const processing = stages.find(s => s.status === "processing");
+    const final = [...stages].reverse().find(s => s.status === "approved" || s.status === "rejected");
+    const empty = {
+      operator: "",
+      operatedAt: "",
+      reviewer: "",
+      reviewedAt: ""
+    };
+
+    // 1) ผ่านขั้น processing: Admin = ผู้ดำเนินการ, ฝ่ายทะเบียน = ผู้พิจารณา
+    if (processing) {
+      return {
+        operator: emailOf(processing.userId),
+        operatedAt: processing.at,
+        reviewer: final ? emailOf(final.userId) : "",
+        reviewedAt: final ? final.at : ""
+      };
+    }
+
+    // 2) ไม่อนุมัติทันที (pending → rejected): มีแต่ผู้ดำเนินการ ไม่มีผู้พิจารณา
+    if (final?.status === "rejected") {
+      return {
+        ...empty,
+        operator: emailOf(final.userId),
+        operatedAt: final.at
+      };
+    }
+
+    // 3) อนุมัติตรง ๆ โดยไม่ผ่าน processing (ข้อมูลจากระบบเดิม)
+    if (final) {
+      return {
+        ...empty,
+        reviewer: emailOf(final.userId),
+        reviewedAt: final.at
+      };
+    }
+
+    // 4) ไม่มี log (ข้อมูลเก่า/seed) → ใช้ค่าในแถวคำร้องแทน
+    if (request.reviewedBy || request.reviewedAt) {
+      const by = emailOf(request.reviewedBy);
+      const actorIsAdmin = users.find(u => u.id === request.reviewedBy)?.roleCode === "admin";
+      if (request.status === "processing" || request.status === "rejected" && actorIsAdmin) {
+        return {
+          ...empty,
+          operator: by,
+          operatedAt: request.reviewedAt || ""
+        };
+      }
+      if (request.status === "approved" || request.status === "rejected") {
+        return {
+          ...empty,
+          reviewer: by,
+          reviewedAt: request.reviewedAt || ""
+        };
+      }
+    }
+    return empty;
+  }
+
   function formatChangedDataHTML(data) {
     if (!data) return "";
     if (typeof data !== "object") {
@@ -155,6 +251,7 @@ function RequestReport({
       return `${label}: ${value}`;
     }).join(" | ");
   }
+
   function getExportValue(request, field) {
     const requestUser = users.find(u => u.id === request.userId);
     const room = rooms.find(room => room.id === request.roomId);
@@ -174,10 +271,18 @@ function RequestReport({
         return request.createdAt || "";
       case "status":
         return STATUS_LABELS[request.status] || request.status || "";
+      case "operator":
+        return getStageInfo(request).operator;
+      case "operatedAt": {
+        const v = getStageInfo(request).operatedAt;
+        return v ? formatAdminDateTime(v) : "";
+      }
       case "reviewer":
-        return reviewer?.email || request.reviewedBy || "";
-      case "reviewedAt":
-        return request.reviewedAt || "";
+        return getStageInfo(request).reviewer;
+      case "reviewedAt": {
+        const v = getStageInfo(request).reviewedAt;
+        return v ? formatAdminDateTime(v) : "";
+      }
       case "note":
         return request.note || "";
       case "before":
@@ -207,7 +312,7 @@ function RequestReport({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `request-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `request-report-${todayKey()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -218,7 +323,7 @@ function RequestReport({
           <section class="request">
             <h2>รายการที่ ${index + 1}</h2>
 
-            ${selectedFields.map(field => `
+                ${selectedFields.filter(field => !HIDE_IF_EMPTY.includes(field) || getExportValue(request, field)).map(field => `
                   <div class="field">
                     <div class="label">
                       ${escapeHtml(FIELD_LABELS[field])}
@@ -482,15 +587,18 @@ function RequestReport({
           return room?.name || r.roomId || "-";
         }
       }, {
-        key: "reviewedAt",
-        label: "วันที่อนุมัติ",
-        render: r => r.reviewedAt || "-"
-      }, {
-        key: "reviewedBy",
-        label: "อนุมัติโดย",
+        key: "operator",
+        label: "ผู้ดำเนินการ",
         render: r => {
-          const reviewer = users.find(u => u.id === r.reviewedBy);
-          return reviewer?.email || r.reviewedBy || "-";
+          const s = getStageInfo(r);
+          return s.operator ? <div>{s.operator}<div style={{ fontSize: 11, color: "#5F6368" }}>{formatAdminDateTime(s.operatedAt)}</div></div> : "-";
+        }
+      }, {
+        key: "reviewer",
+        label: "ผู้พิจารณา",
+        render: r => {
+          const s = getStageInfo(r);
+          return s.reviewer ? <div>{s.reviewer}<div style={{ fontSize: 11, color: "#5F6368" }}>{formatAdminDateTime(s.reviewedAt)}</div></div> : "-";
         }
       }, {
         key: "status",

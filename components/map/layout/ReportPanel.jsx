@@ -9,6 +9,7 @@ export default function ReportPanel({ view }) {
     placeCard,
     reportForm,
     reportOpen,
+    reportQuota,
     reportSending,
     setReportForm,
     setReportOpen,
@@ -23,14 +24,21 @@ export default function ReportPanel({ view }) {
   alignItems: "flex-end",
   justifyContent: "center"
 }}>
-          <div style={{
-    width: "min(480px, 100%)",
-    maxHeight: "82vh",
-    overflowY: "auto",
-    background: "#fff",
-    borderRadius: "18px 18px 0 0",
-    padding: "16px 18px calc(16px + env(safe-area-inset-bottom))"
-  }}>
+            <div style={{
+      width: "min(480px, 100%)",
+      maxHeight: "82vh",
+      background: "#fff",
+      borderRadius: "18px 18px 0 0",
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column"
+    }}>
+            <div style={{
+      overflowY: "auto",
+      scrollbarWidth: "thin",
+      minHeight: 0,
+      padding: "16px 18px calc(16px + env(safe-area-inset-bottom))"
+    }}>
             <div style={{
       display: "flex",
       justifyContent: "space-between",
@@ -58,6 +66,23 @@ export default function ReportPanel({ view }) {
       color: "#5F6368",
       marginBottom: 10
     }}>{placeCard?.name}</div>
+
+        <div style={{
+            display: "inline-block",
+            fontSize: 12,
+            fontWeight: 700,
+            padding: "4px 10px",
+            borderRadius: 999,
+            marginBottom: 12,
+            background: reportQuota.canSubmit ? "#E8F0FE" : "#FDE8E7",
+            color: reportQuota.canSubmit ? "#1A73E8" : "#D93025"
+          }}>
+          {reportQuota.canSubmit
+        ? `โควต้าคงเหลือ: วันนี้ ${reportQuota.dailyLeft}/${reportQuota.dailyLimit} ครั้ง · เดือนนี้ ${reportQuota.monthlyLeft}/${reportQuota.monthlyLimit} ครั้ง`
+        : reportQuota.dailyLeft === 0
+          ? `ส่งคำร้องครบ ${reportQuota.dailyLimit} ครั้งต่อวันแล้ว`
+          : `ส่งคำร้องครบ ${reportQuota.monthlyLimit} ครั้งต่อเดือนแล้ว`}
+            </div>
 
             {reportForm.roomId ? <>
                 {/* ข้อมูลปัจจุบันในระบบ (Original) */}
@@ -208,12 +233,13 @@ export default function ReportPanel({ view }) {
       }))} placeholder="อธิบายสิ่งที่ผิดหรือสิ่งที่ต้องการให้แก้ไข" />
             </Field>
 
-            <Btn onClick={submitReport} disabled={reportSending} style={{
-      width: "100%",
-      marginTop: 6
-    }}>
+            <Btn onClick={submitReport} disabled={reportSending || !reportQuota.canSubmit} style={{
+                width: "100%",
+                marginTop: 6
+              }}>
               {reportSending ? "กำลังส่ง…" : "ส่งคำร้อง"}
             </Btn>
+          </div>
           </div>
         </div> : null;
 }

@@ -2,6 +2,7 @@
 
 import { apiFetch } from "../lib/api";
 import { clearMapDataCache } from "../lib/useMapData";
+import { formatDateTime } from "../lib/datetime";
 
 import {
   useCallback,
@@ -142,6 +143,7 @@ const STATUS_STYLE = {
   approved: ["#188038", "#E6F4EA", "อนุมัติ"],
   rejected: ["#D93025", "#FCE8E6", "ไม่อนุมัติ"],
   cancelled: ["#5F6368", "#F1F3F4", "ยกเลิกแล้ว"],
+    processing: ["#1A73E8", "#E8F0FE", "กำลังดำเนินการ"],
   active: ["#188038", "#E6F4EA", "ใช้งาน"],
   suspended: ["#D93025", "#FCE8E6", "ระงับ"],
   expired: ["#D93025", "#FCE8E6", "หมดอายุ"],
@@ -353,3 +355,6 @@ export function Note({ children, tone = "info" }) {
     </div>
   );
 }
+
+// ───────── ฟอร์แมทเวลา ─────────
+export { formatDateTime };

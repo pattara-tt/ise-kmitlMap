@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Btn, Card, useCollection } from "../../ui";
 import { useRefData } from "../../../lib/useRefData";
 import AccountHistoryDetail from "./AccountHistoryDetail";
-import { StatBox, formatDate, getHistoryActionLabel } from "./shared";
+import { StatBox, formatAdminDateTime, getHistoryActionLabel } from "./shared";
 
 export default function UserDetail({
   user,
@@ -147,7 +147,7 @@ export default function UserDetail({
           }}>
               วันที่สมัคร
             </div>
-            <b>{formatDate(user.createdAt)}</b>
+            <b>{formatAdminDateTime(user.createdAt)}</b>
           </div>
         </div>
       </Card>
@@ -280,7 +280,7 @@ export default function UserDetail({
                     fontSize: 12,
                     color: "#5F6368"
                   }}>
-                            {formatDate(history.changedAt)}
+                            {formatAdminDateTime(history.changedAt)}
                             {" · "}
                             {users.find(u => u.id === history.changedBy)?.name || "-"}
                           </div>

@@ -5,21 +5,8 @@ export const isEventVisible = e => {
   return Number.isNaN(end) || end >= Date.now();
 };
 
-export const fmtEventTime = v => {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return v;
-  return d.toLocaleDateString("th-TH", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  }) + " " + d.toLocaleTimeString("th-TH", {
-    hour: "2-digit",
-    minute: "2-digit"
-  }) + " น.";
-};
-
-// ไอคอนในหมุดกิจกรรม — เรนเดอร์เป็นสีขาวผ่าน CSS mask ให้ตัดกับพื้นหมุด
+import { formatDateTime } from "../../lib/datetime";
+export { formatDateTime as fmtEventTime };
 
 // ไอคอนในหมุดกิจกรรม — เรนเดอร์เป็นสีขาวผ่าน CSS mask ให้ตัดกับพื้นหมุด
 export const EVENT_PIN_ICON = "/data/icon/ui/bullhorn.svg";

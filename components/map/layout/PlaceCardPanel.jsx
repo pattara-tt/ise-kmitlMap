@@ -67,6 +67,21 @@ export default function PlaceCardPanel({ view }) {
             color: "#5F6368"
           }}>ชั้น {placeCard.floor || KMITL_NODE_FLOOR[placeCard.nodeId] || "1"} · node: {placeCard.nodeId}</div> : null}
                 </div>
+                <button onClick={openReportForm} title="แจ้งปัญหา" aria-label="แจ้งปัญหาข้อมูลสถานที่" style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    border: 0,
+                    background: "#F1F3F4",
+                    color: "#5F6368",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z" /></svg>
+                  </button>
                 <button onClick={() => setPlaceCard(null)} aria-label="ปิด" style={{
           width: 32,
           height: 32,
@@ -101,20 +116,6 @@ export default function PlaceCardPanel({ view }) {
         cursor: "pointer"
       }}>
                 <CompassIcon size={16} color="#fff" /> เส้นทางไปที่นี่
-              </button>
-              <button onClick={openReportForm} style={{
-        width: "100%",
-        marginTop: 8,
-        padding: "11px 0",
-        border: "1px solid #DADCE0",
-        borderRadius: 12,
-        background: "#fff",
-        color: "#D93025",
-        fontWeight: 800,
-        fontSize: 14,
-        cursor: "pointer"
-      }}>
-                แจ้งปัญหา
               </button>
             </div>
           </div>

@@ -1,24 +1,6 @@
-export function formatDate(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleDateString("th-TH", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  });
-}
+import { formatDateTime } from "../../../lib/datetime";
 
 // Actor: ฝ่ายดูแลระบบ — UC10–UC16
-
-export function formatAdminDateTime(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("th-TH");
-}
-
 export function getHistoryActionLabel(action) {
   if (action === "ROLE_CHANGED") {
     return "เปลี่ยนสิทธิ์ผู้ใช้งาน";
@@ -70,5 +52,11 @@ export function StatBox({
       </div>
     </div>;
 }
+
+// ฝ่ายการตลาดอยู่นอกขอบเขตการจัดการของฝ่ายดูแลระบบ
+export const HIDDEN_ROLE = "marketing";
+export const isManageableUser = (u) => u.roleCode !== HIDDEN_ROLE;
+export const isManageableRole = (r) => r.code !== HIDDEN_ROLE;
+export { formatDateTime as formatAdminDateTime };
 
 // ── UC11 ค้นหาและเรียกดูข้อมูลคำร้อง ──────────────────────

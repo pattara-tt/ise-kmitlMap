@@ -1,20 +1,13 @@
 /* =========================================================
    UC-4 : ติดตามสัญญาบริการ
 ========================================================= */
-
-export const daysLeft = d => Math.ceil((new Date(d) - new Date()) / 86400000);
+import { dayKey, todayKey } from "../../../lib/datetime";
 
 // DATE columns arrive from PostgreSQL as YYYY-MM-DD or an ISO timestamp.
 // Compare their calendar date rather than the UTC midnight timestamp.
-export const datePart = value => {
-  const date = String(value ?? "").slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
-};
+export const datePart = value => (value == null || value === "" ? "" : dayKey(value));
 
-export const todayLocalISO = (now = new Date()) => {
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-};
+export const todayLocalISO = () => todayKey();
 
 export const contractDaysLeft = (endDate, today = todayLocalISO()) => {
   const end = datePart(endDate);

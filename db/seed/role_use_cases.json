@@ -76,6 +76,10 @@
     "useCaseKey": "rooms"
   },
   {
+    "roleCode": "registrar",
+    "useCaseKey": "requests"
+  },
+  {
     "roleCode": "user",
     "useCaseKey": "search"
   },

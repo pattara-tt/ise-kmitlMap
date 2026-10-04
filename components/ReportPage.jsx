@@ -3,15 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRefData } from "../lib/useRefData";
 import { apiFetch } from "../lib/api";
-
-
-function getToday() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+import { todayKey as getToday } from "../lib/datetime";
 
 function getAutoUserName() {
   if (typeof window === "undefined") return "";

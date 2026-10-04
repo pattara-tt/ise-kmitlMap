@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Field, SearchBar, Select, Status, Table, useCollection } from "../../ui";
+import { Btn, Field, SearchBar, Select, Status, Table, useCollection, formatDateTime } from "../../ui";
 import RequestDetail from "./RequestDetail";
 
 // ── UC11 ค้นหาและเรียกดูข้อมูลคำร้อง ──────────────────────
@@ -67,6 +67,7 @@ function Requests({
           <Select value={status} onChange={e => setStatus(e.target.value)}>
             <option value="">ทั้งหมด</option>
             <option value="pending">รอพิจารณา</option>
+            <option value="processing">กำลังดำเนินการ</option>
             <option value="approved">อนุมัติ</option>
             <option value="rejected">ไม่อนุมัติ</option>
             <option value="cancelled">ยกเลิกแล้ว</option>
@@ -129,7 +130,8 @@ function Requests({
       }
     }, {
       key: "createdAt",
-      label: "วันที่ส่งคำร้อง"
+      label: "วันที่ส่งคำร้อง",
+      render: r => formatDateTime(r.createdAt)
     }, {
       key: "status",
       label: "สถานะ",

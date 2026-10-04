@@ -63,6 +63,7 @@ INSERT INTO role_use_cases ("role_code", "use_case_key") VALUES
   ('pr', 'interest'),
   ('pr', 'categories'),
   ('registrar', 'rooms'),
+  ('registrar', 'requests'),
   ('user', 'search'),
   ('user', 'route'),
   ('user', 'feedback'),

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, Tiles, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, Tiles, UCHead, useCollection, formatDateTime } from "../../ui";
 import { contractDaysLeft, contractDisplayStatus, datePart, minRenewalDate, todayLocalISO } from "./shared";
+import { todayKey } from "../../../lib/datetime";
 
 export default function Contracts({
   user
@@ -167,21 +168,21 @@ export default function Contracts({
       if (access) {
         await patchAccess(access.id, {
           accessStatus: "active",
-          updatedAt: new Date().toISOString().slice(0, 10)
+          updatedAt: todayKey()
         }, user);
       }
 
       // สร้างเลขที่เอกสารสำหรับการยืนยัน
-      const docNo = "REN-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + String(renewing.id).replace(/[^a-zA-Z0-9]/g, "");
+      const docNo = "REN-" + todayKey().replace(/-/g, "") + "-" + String(renewing.id).replace(/[^a-zA-Z0-9]/g, "");
       setRenewedDoc({
         docNo,
         institution: renewing.institutionName || renewing.institutionId,
         plan: renewing.plan,
-        oldEndDate: String(renewing.endDate || "").slice(0, 10),
+        oldEndDate: datePart(renewing.endDate),
         newEndDate: renewDate,
         note: renewNote,
         renewedBy: user?.name || "ฝ่ายการตลาด",
-        renewedAt: new Date().toLocaleString("th-TH")
+        renewedAt: formatDateTime(new Date())
       });
       setRenewing(null);
       setRenewDate("");
@@ -223,13 +224,13 @@ export default function Contracts({
         }, user);
       }
       setCancelDoc({
-        docNo: "CAN-" + new Date().toISOString().slice(0, 10).replaceAll("-", "") + "-" + canceling.id,
+        docNo: "CAN-" + todayKey().replaceAll("-", "") + "-" + canceling.id,
         institution: canceling.institutionName || canceling.institutionId,
         plan: canceling.plan,
         endDate: canceling.endDate,
         reason: cancelReason.trim(),
         cancelledBy: user?.name || "ฝ่ายการตลาด",
-        cancelledAt: new Date().toLocaleString("th-TH"),
+        cancelledAt: formatDateTime(new Date()),
         accessKeptActive: hasOtherActiveContract
       });
       setCanceling(null);
@@ -271,7 +272,8 @@ export default function Contracts({
       label: "ประเภทการใช้งาน"
     }, {
       key: "endDate",
-      label: "วันสิ้นอายุสัญญา"
+      label: "วันสิ้นอายุสัญญา",
+      render: c => datePart(c.endDate) || "-"
     }, {
       key: "left",
       label: "ระยะคงเหลือสัญญา",
@@ -374,7 +376,7 @@ export default function Contracts({
               </Field>
 
               <Field label="วันสิ้นสุดสัญญาปัจจุบัน">
-                <Input value={String(renewing.endDate || "").slice(0, 10)} disabled />
+                <Input value={datePart(renewing.endDate)} disabled />
               </Field>
             </Card>
 
@@ -672,7 +674,7 @@ export default function Contracts({
                 <b>ประเภทการใช้งาน:</b> {cancelDoc.plan || "-"}
               </div>
               <div>
-                <b>วันสิ้นสุดสัญญา:</b> {cancelDoc.endDate || "-"}
+                <b>วันสิ้นสุดสัญญา:</b> {datePart(cancelDoc.endDate) || "-"}
               </div>
               <div>
                 <b>เหตุผล:</b> {cancelDoc.reason}

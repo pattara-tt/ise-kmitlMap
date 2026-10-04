@@ -1,45 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Card, Status, Textarea, useCollection } from "../../ui";
-import { FIELD_LABEL, formatDate } from "./shared";
+import { Btn, Card, Status, useCollection } from "../../ui";
+import { FIELD_LABEL, formatAdminDateTime } from "./shared";
 
 // Selected Request page
-function RequestDetail({
-  request,
-  onBack,
-  user
-}) {
+function RequestDetail({ request, onBack, user }) {
   const {
     patch: patchRequest
   } = useCollection("requests");
   const {
     items: users
   } = useCollection("users");
-  const {
-    patch: patchRoom
-  } = useCollection("rooms");
-  const [note, setNote] = useState(request.note || "");
+  
   const [currentStatus, setCurrentStatus] = useState(request.status);
-  const [currentReviewedBy, setCurrentReviewedBy] = useState(request.reviewedBy || "");
-  const [currentReviewedAt, setCurrentReviewedAt] = useState(request.reviewedAt || "");
+  const [reviewedBy, setReviewedBy] = useState(request.reviewedBy);
+  const [reviewedAt, setReviewedAt] = useState(request.reviewedAt);
+
   const requestUser = users.find(u => u.id === request.userId);
+  const emailOf = id => users.find(u => u.id === id)?.email || id || "-";
+  const isProcessing = currentStatus === "processing";
+
   async function decide(status) {
-    const reviewedBy = user?.id || "";
-    const reviewedAt = new Date().toISOString();
+    const at = new Date().toISOString();
+    const by = user?.id || "";
+
     await patchRequest(request.id, {
       status,
-      note,
-      reviewedBy,
-      reviewedAt
+      reviewedBy: by,
+      reviewedAt: at
     }, user);
-    if (status === "approved" && request.roomId && request.after) {
-      await patchRoom(request.roomId, request.after, user);
-    }
+
     setCurrentStatus(status);
-    setCurrentReviewedBy(reviewedBy);
-    setCurrentReviewedAt(reviewedAt);
+    setReviewedBy(by);
+    setReviewedAt(at);
   }
+
   return <>
       <div style={{
       display: "flex",
@@ -85,7 +81,7 @@ function RequestDetail({
         marginBottom: 12
       }}>
           <b>วันที่ส่งคำร้อง:</b>{" "}
-          {formatDate(request.createdAt)}
+          {formatAdminDateTime(request.createdAt)}
         </div>
 
         <div>
@@ -152,53 +148,40 @@ function RequestDetail({
       </Card>
 
       {/* การพิจารณา */}
-      {currentStatus === "pending" ? <Card>
-          <div style={{
-        fontWeight: 800,
-        fontSize: 14,
-        marginBottom: 12
-      }}>
-            การพิจารณา
-          </div>
-
-          <Textarea placeholder="เหตุผลประกอบการพิจารณา" value={note} onChange={e => setNote(e.target.value)} style={{
-        minHeight: 100
-      }} />
-
-          <div style={{
-        display: "flex",
-        gap: 8,
-        marginTop: 12
-      }}>
-            <Btn kind="danger" onClick={() => decide("rejected")}>
-              ไม่อนุมัติ
-            </Btn>
-
-            <Btn kind="ok" onClick={() => decide("approved")}>
-              อนุมัติ
-            </Btn>
-          </div>
-        </Card> : <Card>
-          <div style={{
-        marginTop: 10
-      }}>
+      {currentStatus === "pending" ? (
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <Btn kind="danger" onClick={() => decide("rejected")}>
+            ปฏิเสธ
+          </Btn>
+          <Btn kind="ok" onClick={() => decide("processing")}>
+            ดำเนินการต่อ
+          </Btn>
+        </div>
+      ) : (
+        <Card>
+          <div>
             <b>ผลการพิจารณา:</b>{" "}
             <Status value={currentStatus} />
           </div>
-          <div>
-            <b>เหตุผล:</b> {note || "-"}
+
+          {/* กำลังดำเนินการ = Admin ยังไม่ได้พิมพ์หมายเหตุ จึงไม่แสดง */}
+          {!isProcessing && (
+            <div style={{ marginTop: 10 }}>
+              <b>หมายเหตุ:</b> {request.note || "-"}
+            </div>
+          )}
+
+          <div style={{ marginTop: 10 }}>
+            <b>{isProcessing ? "ผู้ดำเนินการ" : "ผู้พิจารณา"}:</b>{" "}
+            {emailOf(reviewedBy)}
           </div>
-          <div style={{
-        marginTop: 10
-      }}>
-            <b>ผู้พิจารณา: </b>
-            {users.find(u => u.id === currentReviewedBy)?.email || currentReviewedBy || "-"}
+
+          <div style={{ marginTop: 10 }}>
+            <b>{isProcessing ? "วันที่ดำเนินการ" : "วันที่พิจารณา"}:</b>{" "}
+            {formatAdminDateTime(reviewedAt)}
           </div>
-          <div>
-            <b>วันที่พิจารณา: </b>
-            {formatDate(currentReviewedAt)}
-          </div>
-        </Card>}
+        </Card>
+      )}
     </>;
 }
 

@@ -14,6 +14,8 @@ const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
   ),
 });
 
+import RegistrarRequestsTab from "./registrar/RequestsTab";
+
 // รับ uc ("rooms" หรือ "floors") จาก app/page.jsx เพื่อกำหนด sub-flow ของ UC16
 // — ถ้าไม่ส่งมา (หรือค่าอื่น) fallback เป็น "rooms" เหมือนเดิม
 export default function RegistrarPanel({ uc, user }) {
@@ -33,6 +35,9 @@ export default function RegistrarPanel({ uc, user }) {
   // ใช้ดูว่าชั้นที่กำลังเปิดอยู่มีรายละเอียดชั้นบันทึกไว้หรือไม่ เพื่อโชว์ต่อท้ายหัวข้อแผงจัดการ
   const { items: floorItems } = useCollection("floors");
   const { buildings } = useRefData();
+
+  if (uc === "requests") { return <RegistrarRequestsTab user={user} />; }
+
   const selectedBuilding = buildings.find((b) => b.name === selected.building || b.code === selected.building || b.id === selected.building);
   const currentFloorData = floorItems.find((f) => f.buildingId === selectedBuilding?.id && String(f.floorNo) === String(selected.floor));
 

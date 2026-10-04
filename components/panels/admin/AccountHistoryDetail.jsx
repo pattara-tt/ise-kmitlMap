@@ -2,7 +2,7 @@
 
 import { Btn, Card, useCollection } from "../../ui";
 import { useRefData } from "../../../lib/useRefData";
-import { formatDate, getHistoryActionLabel } from "./shared";
+import { formatAdminDateTime, getHistoryActionLabel } from "./shared";
 
 export default function AccountHistoryDetail({
   historyId,
@@ -161,7 +161,7 @@ export default function AccountHistoryDetail({
             </div>
 
             <div>
-              {formatDate(history.changedAt)}
+              {formatAdminDateTime(history.changedAt)}
             </div>
           </div>
         </div>

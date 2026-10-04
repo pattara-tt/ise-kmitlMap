@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Card, Field, Input, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, useCollection, formatDateTime } from "../../ui";
 
 // ── UC15 กำหนดจำนวนการส่งคำร้อง ──────────────────────────
 function Quota({
@@ -23,7 +23,7 @@ function Quota({
     const payload = {
       perUserPerDay: Number(cur.perUserPerDay),
       perUserPerMonth: Number(cur.perUserPerMonth),
-      updatedAt: new Date().toISOString().slice(0, 10),
+      updatedAt: new Date().toISOString(),
       updatedBy: user.id
     };
     if (q?.id) await patch(q.id, payload, user);else await create(payload, user);
@@ -56,7 +56,7 @@ function Quota({
         fontSize: 11.5,
         color: "#5F6368",
         marginTop: 9
-      }}>แก้ไขล่าสุด {q.updatedAt}</div> : null}
+      }}>แก้ไขล่าสุด {formatDateTime(q.updatedAt)}</div> : null}
       </Card>
     </>;
 }

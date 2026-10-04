@@ -1,6 +1,7 @@
 // 🧭 ตรรกะเส้นทาง/ภูมิศาสตร์: โหลด Leaflet, คำนวณระยะ/ทิศทาง, ดึงข้อมูล OSM,
 // Dijkstra หาเส้นทางในตึก/ทางเท้า (นำทางปกติ ไม่มีคะแนนร่ม/แสงสว่าง/เวลากลางวัน-กลางคืน), ค้นหา/geocode สถานที่
 import { CAT, KMITL_FLOOR1_NODES, KMITL_FLOOR1_EDGES, BUILDING_GRAPHS, OVERPASS_MIRRORS } from "./mapConfig";
+import { formatDateTime } from "../lib/datetime";
 
 // Dijkstra ธรรมดาบนกราฟเล็ก (ไม่กี่สิบโหนด) — ระยะทางจริงด้วย haversine ระหว่างโหนดที่เชื่อมกัน
 // ใช้ได้กับกราฟชั้นไหนก็ได้ ส่ง nodes/edges ของชั้นนั้นเข้ามา
@@ -286,7 +287,7 @@ export function routeSegments(coords, nodeKeys, bIdx) {
 export const SEGMENT_COLORS = { indoor: "#1A73E8", outdoor: "#34A853" };
 export function popupHtml(p) {
   const photo = p.photo ? `<img src="${p.photo}" alt="" style="width:100%;max-width:240px;border-radius:8px;margin-top:6px"/>` : "";
-  const date = (p.timestamp || "").slice(0, 16); const lbl = CAT[p.cat]?.label || p.type || "ปัญหา";
+  const date = formatDateTime(p.timestamp); const lbl = CAT[p.cat]?.label || p.type || "ปัญหา";
   return `<div style="max-width:240px;font-family:system-ui"><div style="font-weight:700;color:${catColor(p.cat)}">${lbl}</div><div style="font-size:13px;margin:4px 0;white-space:pre-wrap">${(p.comment || "").slice(0, 240)}</div><div style="font-size:12px;color:#555">สถานะ: <b>${p.state || "-"}</b></div><div style="font-size:11px;color:#888">${date}</div>${photo}</div>`;
 }
 function catColor(c) { return CAT[c]?.color || "#888"; }

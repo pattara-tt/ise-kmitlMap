@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMapData } from "../../../lib/useMapData";
-import { Btn, Card, Field, Input, Pill, Select, Status, Table, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Pill, Select, Status, Table, UCHead, useCollection, formatDateTime } from "../../ui";
 import BoundaryPointEditor from "./BoundaryPointEditor";
 
 /* =========================================================
@@ -191,7 +191,8 @@ function Boundary({
       }
     }, {
       key: "updatedAt",
-      label: "แก้ไขล่าสุด"
+      label: "แก้ไขล่าสุด",
+      render: r => formatDateTime(r.updatedAt)
     }, {
       key: "status",
       label: "สถานะ",

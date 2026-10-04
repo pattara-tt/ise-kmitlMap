@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Card, Field, Input, Select, Textarea, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Select, Textarea, UCHead, useCollection, formatDateTime } from "../../ui";
 
 /* =========================================================
    UC-5 : ส่งข้อความแจ้งเตือน
@@ -40,7 +40,7 @@ function Broadcast({
       await create({
         ...form,
         // ใช้ sendAt ให้ตรงกับ backend
-        sendAt: new Date().toISOString().slice(0, 19).replace("T", " "),
+        sendAt: new Date().toISOString(),
         sentBy: user?.id || null
       }, user);
       setForm({
@@ -120,7 +120,7 @@ function Broadcast({
         marginTop: 8
       }}>
               ถึง {b.audience} ·{" "}
-              {b.sendAt || b.sentAt || b.createdAt || "-"}{" "}
+              {formatDateTime(b.sendAt || b.sentAt || b.createdAt)}{" "}
               · โดย{" "}
               {b.senderName || b.sentBy || "-"}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AuthPage from "../components/AuthPage";
 import UserApp from "../components/UserApp";
 import ExecPanel from "../components/panels/ExecPanel";
@@ -19,7 +19,7 @@ const USER_TABS = [
   { id: "map", label: "แผนที่", icon: "svg:map" },
   { id: "events", label: "กิจกรรม", icon: "svg:bullhorn" },
   { id: "notifications", label: "แจ้งเตือน", icon: "svg:notification" },
-  { id: "requests", label: "คำร้องของฉัน", icon: "📋", code: "UC11" }
+  { id: "requests", label: "คำร้องของฉัน", icon: "📋" }
 ];
 
 // ความกว้างที่ถือว่าเป็นจอคอม (ใช้เฉพาะตอนอยู่โหมด auto)
@@ -33,6 +33,7 @@ export default function Page() {
   const [view, setView] = useState("auto");     // auto | mobile | desktop (ผู้ใช้กดเลือกเองได้)
   const [wide, setWide] = useState(false);      // ขนาดจอจริงตอนนี้กว้างพอเป็นจอคอมไหม
   const { useCases, roleLabels } = useRefData(!!user);
+  const sessionHandledRef = useRef(false);
 
   // ── ติดตามขนาดหน้าจอจริง เพื่อให้โหมด auto ปรับตามความกว้าง/สูงเอง ──
   useEffect(() => {
@@ -103,6 +104,7 @@ export default function Page() {
   }
 
   function applyLogin(u, sessionId, persist = true) {
+    sessionHandledRef.current = false;
     setUser(u);
 
     setUc(null);
@@ -133,33 +135,72 @@ export default function Page() {
     setMenuOpen(false);
   }
 
-  useEffect(() => {
+    useEffect(() => {
     function handleSessionInvalid(event) {
-      const code = event.detail?.code;
-      const message =
-        event.detail?.message ||
-        "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่";
+      const { code, message, sessionId } = event.detail || {};
+
+      // 401 ของ request เก่าที่ตอบกลับมาหลัง login ใหม่แล้ว ไม่เกี่ยวกับ session ปัจจุบัน
+      let current = null;
+      try { current = localStorage.getItem("kmitlmap:session"); } catch (e) {}
+      if (sessionId && current && sessionId !== current) return;
+
+      // แจ้งครั้งเดียวต่อรอบ (รวมถึง NO_SESSION ที่ตามมาหลัง logout)
+      if (sessionHandledRef.current) return;
+      sessionHandledRef.current = true;
 
       logout();
 
-      if (
-        code === "ROLE_CHANGED" ||
-        code === "ACCOUNT_SUSPENDED"
-      ) {
-        alert(message);
-        window.location.reload();
-        return;
-      }
+      // NO_SESSION = ไม่มี session อยู่แล้ว (เช่น logout จากอีกแท็บ) กลับหน้า login เฉย ๆ
+      if (code === "NO_SESSION") return;
 
-      alert(message);
+      alert(message || "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่");
+      window.location.reload(); // ล้าง state/cache ค้างทุกกรณี ก่อน login ใหม่
     }
 
     window.addEventListener("session-invalid", handleSessionInvalid);
-
-    return () => {
-      window.removeEventListener("session-invalid", handleSessionInvalid);
-    };
+    return () => window.removeEventListener("session-invalid", handleSessionInvalid);
   }, []);
+
+  // กลับมาที่แท็บ/หน้าต่าง → เช็ก session ทันที ไม่ต้องรอให้กดอะไรก่อน
+  useEffect(() => {
+    if (!user) return;
+    let last = 0;
+
+    async function check() {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - last < 3000) return; // visibilitychange + focus อาจยิงคู่กัน
+      last = now;
+
+      let sessionId = null;
+      try { sessionId = localStorage.getItem("kmitlmap:session"); } catch (e) {}
+      if (!sessionId) return;
+
+      try {
+        const res = await fetch("/api/auth/session", {
+          headers: { "x-session-id": sessionId },
+        });
+        if (res.status !== 401) return;
+        const data = await res.json().catch(() => ({}));
+        window.dispatchEvent(new CustomEvent("session-invalid", {
+          detail: {
+            code: data?.code || "SESSION_EXPIRED",
+            message: data?.error,
+            sessionId,
+          },
+        }));
+      } catch (e) {
+        // เน็ตหลุดชั่วคราว ไม่ทำอะไร
+      }
+    }
+
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => {
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
+  }, [user]);
 
 
   // โหมดที่ใช้จริง = ที่ผู้ใช้เลือก หรือถ้า auto ก็ตัดสินจากความกว้างจอ

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Btn, Card, Field, Icon, Input, Pill, Status, Textarea, UCHead, useCollection } from "./ui";
-import { EVENT_STATE_LABEL, eventState, fmt } from "../lib/schedule";
-import { newsState } from "../lib/schedule";
+import { Btn, Card, Field, Icon, Input, Pill, Status, Textarea, UCHead, useCollection, formatDateTime } from "./ui";
+import { EVENT_STATE_LABEL, eventState, fmt, newsState } from "../lib/schedule";
+import { dayKey, monthKey, todayKey } from "../lib/datetime";
 
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
@@ -244,64 +244,222 @@ function NotificationsPage({ user }) {
 }
 
 // ── รายการคำร้องที่ส่งไป ───────────
-function MyRequests({ user }) {
-  const { items: requests } = useCollection("requests");
+const REQUEST_FIELD_LABEL = {
+  name: "ชื่อสถานที่",
+  type: "ประเภท",
+  capacity: "ความจุ (คน)",
+  teacher: "อาจารย์ประจำห้อง",
+};
 
-  const mine = requests.filter((r) => r.userId === user.id);
+function parseJson(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try { return JSON.parse(value); } catch { return {}; }
+}
+
+// ขั้นตอนที่ผู้ใช้เห็น (ไม่เปิดเผยว่าใครเป็นผู้ดำเนินการ)
+function requestSteps(status) {
+  const decided = status === "approved" || status === "rejected";
+  const inProgress = status === "pending" || status === "processing";
+  const failed = status === "rejected" || status === "cancelled";
+  return [
+    { label: "ส่งคำร้องแล้ว", state: "done" },
+    {
+      label: status === "processing" ? "รับเรื่องแล้ว กำลังดำเนินการ" : "รอการตรวจสอบ",
+      state: decided ? "done" : inProgress ? "active" : "idle",
+    },
+    {
+      label: status === "approved" ? "อนุมัติ" : status === "rejected" ? "ไม่อนุมัติ" : status === "cancelled" ? "ยกเลิกแล้ว" : "ผลการพิจารณา",
+      state: decided || status === "cancelled" ? (failed ? "fail" : "done") : "idle",
+    },
+  ];
+}
+
+function RequestProgress({ status }) {
+  const COLORS = { done: "#188038", active: "#1A73E8", fail: "#D93025", idle: "#BDC1C6" };
+  const MARK = { done: "✓", active: "●", fail: "✕", idle: "" };
+  const steps = requestSteps(status);
+  return (
+    <div>
+      {steps.map((s, i) => (
+        <div key={i} style={{ display: "flex", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: "50%", boxSizing: "border-box",
+              background: s.state === "idle" ? "#fff" : COLORS[s.state],
+              border: `2px solid ${COLORS[s.state]}`,
+              color: "#fff", fontSize: 11, fontWeight: 800,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>{MARK[s.state]}</div>
+            {i < steps.length - 1 && (
+              <div style={{ width: 2, flex: 1, minHeight: 16, background: s.state === "done" ? COLORS.done : "#E8EAED" }} />
+            )}
+          </div>
+          <div style={{
+            paddingBottom: 14, fontSize: 13.5,
+            fontWeight: s.state === "active" ? 800 : 600,
+            color: s.state === "idle" ? "#80868B" : "#202124",
+          }}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MyRequestDetail({ request, roomName, onBack }) {
+  const before = parseJson(request.before);
+  const after = parseJson(request.after);
+  const approved = request.status === "approved";
+  const decided = approved || request.status === "rejected";
+
+  // แสดงเฉพาะช่องที่ขอแก้และค่าต่างจากของเดิม
+  const changes = Object.keys(REQUEST_FIELD_LABEL).filter((k) =>
+    after[k] !== undefined && after[k] !== null && String(after[k]) !== "" &&
+    String(after[k]) !== String(before[k] ?? "")
+  );
 
   return (
     <div className="bdi-page">
       <div className="bdi-page-inner">
-        <UCHead
-          code="UC11"
-          title="คำร้องของฉัน"
-          desc="ตรวจสอบสถานะและรายละเอียดคำร้องที่คุณส่ง"
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <Btn kind="ghost" onClick={onBack}>กลับ</Btn>
+          <h2 style={{ margin: 0, fontSize: 18 }}>รายละเอียดคำร้อง</h2>
+        </div>
+
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <b style={{ fontSize: 15 }}>{request.subject || request.type}</b>
+            <Status value={request.status} />
+          </div>
+          <div style={{ fontSize: 12, color: "#5F6368", marginTop: 6 }}>
+            {request.id} · ส่งเมื่อ {formatDateTime(request.createdAt)}
+          </div>
+          {roomName ? (
+            <div style={{ fontSize: 13, marginTop: 8 }}><b>สถานที่:</b> {roomName}</div>
+          ) : null}
+          {request.detail ? (
+            <div style={{ fontSize: 13, marginTop: 8 }}><b>รายละเอียดที่แจ้ง:</b> {request.detail}</div>
+          ) : null}
+        </Card>
+
+        <Card>
+          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12 }}>ความคืบหน้า</div>
+          <RequestProgress status={request.status} />
+          {decided && request.reviewedAt ? (
+            <div style={{ fontSize: 12, color: "#5F6368" }}>พิจารณาเมื่อ {formatDateTime(request.reviewedAt)}</div>
+          ) : null}
+          {decided && request.note ? (
+            <div style={{ fontSize: 13, color: "#3C4043", marginTop: 8 }}>
+              <b>เหตุผลจากผู้พิจารณา:</b> {request.note}
+            </div>
+          ) : null}
+        </Card>
+
+        {changes.length > 0 && (
+          <Card>
+            <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12 }}>
+              {approved ? "ข้อมูลที่ได้รับการแก้ไข" : "ข้อมูลที่คุณขอแก้ไข"}
+            </div>
+            <div style={{ border: "1px solid #DADCE0", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", background: "#F8F9FA", fontWeight: 800 }}>
+                <div style={{ padding: 10 }}>หัวข้อ</div>
+                <div style={{ padding: 10 }}>ข้อมูลเดิม</div>
+                <div style={{ padding: 10 }}>{approved ? "ข้อมูลใหม่" : "ที่ขอแก้ไข"}</div>
+              </div>
+              {changes.map((k) => (
+                <div key={k} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: "1px solid #E8EAED" }}>
+                  <div style={{ padding: 10, color: "#5F6368" }}>{REQUEST_FIELD_LABEL[k]}</div>
+                  <div style={{ padding: 10 }}>{String(before[k] ?? "") || "-"}</div>
+                  <div style={{ padding: 10, fontWeight: 700 }}>{String(after[k])}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MyRequests({ user }) {
+  const { items: requests } = useCollection("requests");
+  const { items: rooms } = useCollection("rooms");
+  const { items: quotaItems } = useCollection("requestQuota");
+  const [selectedId, setSelectedId] = useState(null);
+
+  const mine = requests
+    .filter((r) => r.userId === user.id)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+
+    // โควต้าคงเหลือ (นับเหมือน backend: ไม่รวมที่ยกเลิก, ตามเวลาไทย)
+  const dailyLimit = quotaItems[0]?.perUserPerDay ?? 3;
+  const monthlyLimit = quotaItems[0]?.perUserPerMonth ?? 20;
+  const counted = mine.filter((r) => r.status !== "cancelled");
+  const dailyLeft = Math.max(0, dailyLimit - counted.filter((r) => dayKey(r.createdAt) === todayKey()).length);
+  const monthlyLeft = Math.max(0, monthlyLimit - counted.filter((r) => monthKey(r.createdAt) === monthKey()).length);
+
+  const selected = mine.find((r) => r.id === selectedId);
+  if (selected) {
+    const room = rooms.find((x) => x.id === selected.roomId);
+    return (
+      <MyRequestDetail
+        request={selected}
+        roomName={room?.name || ""}
+        onBack={() => setSelectedId(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="bdi-page">
+      <div className="bdi-page-inner">
+      <UCHead title="คำร้องของฉัน" desc="ตรวจสอบสถานะและรายละเอียดคำร้องที่คุณส่ง" />
+        <div style={{
+          display: "inline-block",
+          fontSize: 12,
+          fontWeight: 700,
+          padding: "4px 10px",
+          borderRadius: 999,
+          margin: "-4px 0 12px",
+          background: dailyLeft > 0 && monthlyLeft > 0 ? "#E8F0FE" : "#FDE8E7",
+          color: dailyLeft > 0 && monthlyLeft > 0 ? "#1A73E8" : "#D93025"
+        }}>
+          {dailyLeft > 0 && monthlyLeft > 0
+            ? `โควต้าคงเหลือ: วันนี้ ${dailyLeft}/${dailyLimit} ครั้ง · เดือนนี้ ${monthlyLeft}/${monthlyLimit} ครั้ง`
+            : dailyLeft === 0
+              ? `ส่งคำร้องครบ ${dailyLimit} ครั้งต่อวันแล้ว`
+              : `ส่งคำร้องครบ ${monthlyLimit} ครั้งต่อเดือนแล้ว`}
+        </div>
 
         {mine.length === 0 ? (
-          <div style={{ fontSize: 13, color: "#5F6368" }}>
-            ยังไม่มีคำร้อง
-          </div>
+          <div style={{ fontSize: 13, color: "#5F6368" }}>ยังไม่มีคำร้อง</div>
         ) : (
           mine.map((r) => (
-            <Card key={r.id}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 8,
-                }}
-              >
-                <b style={{ fontSize: 14 }}>{r.subject || r.type}</b>
-                <Status value={r.status} />
-              </div>
-
-              <div style={{ fontSize: 13, marginTop: 6 }}>
-                {r.detail}
-              </div>
-
-              <div
-                style={{
-                  fontSize: 11.5,
-                  color: "#5F6368",
-                  marginTop: 7,
-                }}
-              >
-                {r.createdAt} · {r.id}
-              </div>
-
-              {r.note ? (
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: "#3C4043",
-                    marginTop: 8,
-                  }}
-                >
-                  เหตุผลจากผู้พิจารณา: {r.note}
+            <div
+              key={r.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedId(r.id)}
+              onKeyDown={(e) => { if (e.key === "Enter") setSelectedId(r.id); }}
+              style={{ cursor: "pointer" }}
+            >
+              <Card>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <b style={{ fontSize: 14 }}>{r.subject || r.type}</b>
+                  <Status value={r.status} />
                 </div>
-              ) : null}
-            </Card>
+
+                <div style={{ fontSize: 13, marginTop: 6 }}>{r.detail}</div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7 }}>
+                  <span style={{ fontSize: 11.5, color: "#5F6368" }}>
+                    {formatDateTime(r.createdAt)} · {r.id}
+                  </span>
+                  <span style={{ fontSize: 12, color: "#1A73E8", fontWeight: 700 }}>ดูรายละเอียด ›</span>
+                </div>
+              </Card>
+            </div>
           ))
         )}
       </div>
@@ -316,7 +474,7 @@ function FeedbackPage({ user }) {
   const [form, setForm] = useState({ topic: "การใช้งานแผนที่", detail: "" });
   const mine = items.filter((f) => f.userId === user.id);
   const limit = quota[0]?.perUserPerDay ?? 3;
-  const todayCount = mine.filter((f) => f.createdAt === new Date().toISOString().slice(0, 10)).length;
+  const todayCount = mine.filter((f) => dayKey(f.createdAt) === todayKey()).length;
 
   async function send() {
     if (!form.detail.trim()) return alert("กรุณากรอกรายละเอียด");
@@ -350,7 +508,7 @@ function FeedbackPage({ user }) {
           </div>
           <div style={{ fontSize: 13, color: "#3C4043", marginTop: 4 }}>{f.detail}</div>
           {f.reply ? <div style={{ fontSize: 12.5, color: "#188038", marginTop: 6 }}>ตอบกลับ: {f.reply}</div> : null}
-          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 6 }}>{f.createdAt} · {f.id}</div>
+          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 6 }}>{formatDateTime(f.createdAt)} · {f.id}</div>
         </Card>
       ))}
     </div>

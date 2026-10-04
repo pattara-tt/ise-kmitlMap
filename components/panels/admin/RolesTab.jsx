@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { Card, SearchBar, Select, useCollection } from "../../ui";
 import { useRefData } from "../../../lib/useRefData";
+import { isManageableUser, isManageableRole } from "./shared";
 
 // ── UC12 จัดการแก้ไขสิทธิ์ผู้ใช้งาน ───────────────────────
-function Roles({
-  user
-}) {
+function Roles({ user }) {
   const {
     roleLabels,
     roles
@@ -16,8 +15,10 @@ function Roles({
     items,
     patch
   } = useCollection("users");
+
   const [q, setQ] = useState("");
-  const rows = items.filter(u => ((u.id || "") + (u.name || "") + (u.email || "")).toLowerCase().includes(q.toLowerCase()));
+  const rows = items.filter(isManageableUser).filter(u => ((u.id || "") + (u.name || "") + (u.email || "")).toLowerCase().includes(q.toLowerCase()));
+
   return <>
       <h3>จัดการแก้ไขสิทธิ์ผู้ใช้งาน</h3>
       <SearchBar value={q} onChange={setQ} placeholder="ค้นหาด้วยรหัส ชื่อ หรืออีเมล" />
@@ -57,7 +58,7 @@ function Roles({
                   ถูกระงับการใช้งาน
                 </div>}
             </div>
-            <Select value={u.roleCode} onChange={async e => {
+            <Select value={u.roleCode} disabled={u.status === "suspended"} title={u.status === "suspended" ? "บัญชีถูกระงับ ไม่สามารถเปลี่ยนสิทธิ์ได้" : undefined} onChange={async e => {
           const newRole = e.target.value;
           try {
             await patch(u.id, {
@@ -70,7 +71,7 @@ function Roles({
         }} style={{
           width: 210
         }}>
-              {roles.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
+            {roles.filter(isManageableRole).map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
             </Select>
           </div>
         </Card>)}

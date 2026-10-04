@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRefData } from "../../../lib/useRefData";
-import { Btn, Card, Field, Input, Pill, SearchBar, Select, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Pill, SearchBar, Select, UCHead, useCollection, formatDateTime } from "../../ui";
 import { ACCESS_STATUS, LEVELS } from "./shared";
 
 export default function Access({
@@ -72,7 +72,7 @@ export default function Access({
     try {
       const updated = await patch(row.id, {
         accessStatus,
-        updatedAt: new Date().toISOString().slice(0, 10)
+        updatedAt: new Date().toISOString()
       }, user);
 
       // ใช้ค่าที่ backend ยืนยัน
@@ -178,7 +178,7 @@ export default function Access({
               try {
                 await patch(row.id, {
                   level: e.target.value,
-                  updatedAt: new Date().toISOString().slice(0, 10)
+                  uupdatedAt: new Date().toISOString()
                 }, user);
               } catch (error) {
                 alert(error?.message || "อัปเดตระดับสิทธิ์ไม่สำเร็จ");
@@ -198,7 +198,7 @@ export default function Access({
               try {
                 await patch(row.id, {
                   seats: Math.max(0, Number(e.target.value) || 0),
-                  updatedAt: new Date().toISOString().slice(0, 10)
+                  updatedAt: new Date().toISOString()
                 }, user);
               } catch (error) {
                 alert(error?.message || "อัปเดตจำนวนบัญชีไม่สำเร็จ");
@@ -253,7 +253,7 @@ export default function Access({
           marginTop: 9
         }}>
                 อัปเดตล่าสุด{" "}
-                {row.updatedAt || "-"}
+                {formatDateTime(row.updatedAt)}
               </div>
 
               {/* ปุ่มเปลี่ยนสถานะ */}
@@ -304,7 +304,7 @@ export default function Access({
         color: "#5F6368",
         marginTop: 5
       }}>
-                {h.changedAt || h.createdAt || "-"}{" "}
+                {formatDateTime(h.changedAt || h.createdAt)}{" "}
                 · โดย{" "}
                 {h.actorName || "ระบบ"}
               </div>

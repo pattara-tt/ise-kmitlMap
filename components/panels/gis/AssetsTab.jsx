@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useMapData } from "../../../lib/useMapData";
 import { MAX_SVG_BYTES } from "../../../lib/constants";
 import { SC8_CENTER } from "../../mapConfig";
-import { Btn, Card, Field, Input, Pill, Select, Status, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Pill, Select, Status, UCHead, useCollection, formatDateTime } from "../../ui";
 import FloorplanEditor from "./FloorplanEditor";
-import { DEFAULT_PLACEMENT, todayStr } from "./shared";
+import { DEFAULT_PLACEMENT } from "./shared";
 
 export default function Assets({
   user
@@ -402,7 +402,7 @@ export default function Assets({
             }
             await create({
               ...form,
-              updatedAt: todayStr(),
+              updatedAt: new Date().toISOString(),
               status: "draft"
             }, user);
             setForm({
@@ -499,7 +499,7 @@ export default function Assets({
               color: "#5F6368"
             }}>
                   อัปเดต{" "}
-                  {a.updatedAt}
+                  {formatDateTime(a.updatedAt)}
                 </span>
               </div>
 

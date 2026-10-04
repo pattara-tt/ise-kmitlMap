@@ -157,7 +157,7 @@ CREATE TABLE requests (
   detail      TEXT,
   before      TEXT,
   after       TEXT,
-  status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
+  status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','approved','rejected','cancelled')),
   note        TEXT,
   reviewed_at TIMESTAMPTZ,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()

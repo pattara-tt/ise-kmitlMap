@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart, Card, Pill, SearchBar, Status, Table, Tiles, UCHead, useCollection, useStats } from "../ui";
+import { BarChart, Card, Pill, SearchBar, Status, Table, Tiles, UCHead, useCollection, useStats, formatDateTime } from "../ui";
+import { contractDaysLeft, datePart } from "./marketing/shared";
 
 // Actor: บริหาร — สถิติภาพรวม · ข้อเสนอแนะจากผู้ใช้ · ตรวจสอบสัญญาบริการ · ประวัติแก้ไขข้อมูลแผนที่
 export default function ExecPanel({ uc, user }) {
@@ -90,7 +91,7 @@ function Feedback() {
             <Status value={f.status} />
           </div>
           <div style={{ fontSize: 13, color: "#3C4043", marginTop: 6 }}>{f.detail}</div>
-          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 8 }}>โดย {f.userName} · {f.createdAt} · {f.id}</div>
+          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 8 }}>โดย {f.userName} · {formatDateTime(f.createdAt)} · {f.id}</div>
           {f.reply ? <div style={{ fontSize: 12.5, color: "#188038", marginTop: 6 }}>ผลการพิจารณา: {f.reply}</div> : null}
         </Card>
       ))}
@@ -98,17 +99,13 @@ function Feedback() {
   );
 }
 
-// ── ตรวจสอบสัญญาที่ฝ่ายการตลาดทำกับฝ่ายการตลาด (ดูเฉพาะมหาวิทยาลัยตนเอง) ──
-const daysLeft = (d) => Math.ceil((new Date(d) - new Date()) / 86400000);
-
-
 function Contracts({ user }) {
   const { items } = useCollection("contracts");
 
   const rows = items
     .filter((c) => c.institutionId === user?.institutionId)
-    .map((c) => ({ ...c, left: daysLeft(c.endDate) }))
-    .sort((a, b) => a.left - b.left);
+    .map((c) => ({ ...c, left: contractDaysLeft(c.endDate) }))
+    .sort((a, b) => (a.left ?? Infinity) - (b.left ?? Infinity));
 
   return (
     <>
@@ -119,14 +116,16 @@ function Contracts({ user }) {
       <Table
         columns={[
           { key: "plan", label: "ประเภทการใช้งาน" },
-          { key: "endDate", label: "วันสิ้นอายุสัญญา" },
+          { key: "endDate", label: "วันสิ้นอายุสัญญา", render: (c) => datePart(c.endDate) || "-" },
           {
             key: "left", label: "ระยะคงเหลือสัญญา",
-            render: (c) => c.left < 0
-              ? <Pill color="#D93025" bg="#FCE8E6">หมดอายุ {Math.abs(c.left)} วัน</Pill>
-              : c.left <= 30
-                ? <Pill color="#B06000" bg="#FEF7E0">เหลือ {c.left} วัน</Pill>
-                : <Pill color="#188038" bg="#E6F4EA">เหลือ {c.left} วัน</Pill>,
+            render: (c) => c.left === null
+              ? <Pill>ไม่ระบุวันสิ้นสุด</Pill>
+              : c.left < 0
+                ? <Pill color="#D93025" bg="#FCE8E6">หมดอายุ {Math.abs(c.left)} วัน</Pill>
+                : c.left <= 30
+                  ? <Pill color="#B06000" bg="#FEF7E0">เหลือ {c.left} วัน</Pill>
+                  : <Pill color="#188038" bg="#E6F4EA">เหลือ {c.left} วัน</Pill>,
           },
           { key: "status", label: "สถานะ", render: (c) => <Status value={c.status} /> },
         ]}
@@ -155,7 +154,7 @@ function Audit() {
       <Table
         columns={[
           { key: "id", label: "ID" },
-          { key: "editedAt", label: "เวลา" },
+          { key: "editedAt", label: "เวลา", render: (r) => formatDateTime(r.editedAt) },
           { key: "userName", label: "ผู้แก้ไข" },
           { key: "action", label: "การกระทำ" },
           { key: "targetLabel", label: "รายการ" },

@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { list, insert, update, remove, logEdit, withTransaction, getRequestQuota, EDIT_TARGET_FK, USE_PG } from "./store.js";
 import { osmHandler, walknetHandler } from "./overpass.js";
 import { cancelPendingRequestsByUser } from "./account.js";
-import { createSession, invalidateSession, getSession, getRevokedReason } from "./auth.js";
+import { createSession, invalidateSession, clearRevokedForUser, getSession, getRevokedReason } from "./auth.js";
 import { ROLE, MARKETING_COLLECTIONS as MARKETING_COLLECTION_LIST, ACCESS_STATUS as ACCESS_STATUS_LIST } from "./constants.js";
 
 const app = express();
@@ -183,7 +183,12 @@ app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
     return res.status(403).json({ ok: false, error: "ไม่มีสิทธิ์แก้ไขโครงข่ายแผนที่" });
   if (name === "institutionAccess" && patch.accessStatus && !ACCESS_STATUS.has(patch.accessStatus))
     return res.status(400).json({ ok: false, error: "สถานะสิทธิ์ไม่ถูกต้อง" });
-
+  if (name === "users" && patch.roleCode) {
+    const current = (await list("users")).find((u) => sameId(u.id, id));
+    if (current && current.status === "suspended" && patch.status !== "active" && patch.roleCode !== current.roleCode)
+      return res.status(409).json({ ok: false, error: "บัญชีนี้ถูกระงับการใช้งาน ไม่สามารถเปลี่ยนสิทธิ์ได้" });
+  }
+  
   const result = await withTransaction(async () => {
     const before = (await list(name)).find((r) => sameId(rowId(name, r), id)) || null;
     if (!before) return null;
@@ -219,13 +224,22 @@ app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
       await insert("accessHistory", { accessId: row.id, actorId: req.session.userId,
         beforeStatus: before.accessStatus || "active", afterStatus: row.accessStatus,
         changedAt: new Date().toISOString() });
+
+    if (name === "users" && req.session.role === ROLE.ADMIN) {
+      const target = (await list("users")).find((u) => sameId(u.id, id));
+      if (target?.roleCode === ROLE.MARKETING || patch.roleCode === ROLE.MARKETING)
+        return res.status(403).json({ ok: false, error: "ฝ่ายดูแลระบบไม่มีสิทธิ์จัดการบัญชีฝ่ายการตลาด" });
+    }
+
     if (name === "institutionAccessModules") await logAccessModuleChange(row.accessId, req.session.userId);
+    
     if (LOGGED_COLLECTIONS.has(name)) await logEdit({ userId: req.session.userId,
       action: `UPDATE_${name}`, target: { type: name, id: rowId(name, row), label: labelOf(row) }, before, after: row });
     return { row, revokeReason };
   });
   if (!result) return res.status(404).json({ ok: false, error: "ไม่พบรายการ" });
   if (result.revokeReason) invalidateSession(id, result.revokeReason); // only after COMMIT
+  if (name === "users" && patch.status === "active") clearRevokedForUser(id);
   res.json({ ok: true, item: name === "users" ? safeUser(result.row) : result.row });
 }));
 

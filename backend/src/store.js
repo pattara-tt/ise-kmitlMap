@@ -7,6 +7,13 @@ import bcrypt from "bcryptjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_DIR = path.resolve(__dirname, "../../db/seed");
 const today = () => new Date().toISOString().slice(0, 10);
+// โควต้านับวัน/เดือนตามเวลาท้องถิ่น (ตั้งค่าได้ด้วย env QUOTA_TIMEZONE)
+const QUOTA_TZ = process.env.QUOTA_TIMEZONE || "Asia/Bangkok";
+const quotaDayKey = (v) => {
+  if (v == null || v === "") return "";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-CA", { timeZone: QUOTA_TZ }); // YYYY-MM-DD
+};
 const uid = (p = "ID") => `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 export const USE_PG = !!(process.env.DATABASE_URL || process.env.INSTANCE_UNIX_SOCKET);
@@ -225,11 +232,11 @@ export async function getRequestQuota(userId) {
 }
 
 function computeQuota(quota = {}, requests, userId) {
-  const d = today();
+  const d = quotaDayKey(Date.now());
   const m = d.slice(0, 7);
   const active = requests.filter((r) => r.userId === userId && r.status !== "cancelled");
-  const dailyCount = active.filter((r) => String(r.createdAt || "").slice(0, 10) === d).length;
-  const monthlyCount = active.filter((r) => String(r.createdAt || "").slice(0, 7) === m).length;
+  const dailyCount = active.filter((r) => quotaDayKey(r.createdAt) === d).length;
+  const monthlyCount = active.filter((r) => quotaDayKey(r.createdAt).slice(0, 7) === m).length;
   const dailyLimit = quota.perUserPerDay ?? 3;
   const monthlyLimit = quota.perUserPerMonth ?? 20;
   return { dailyCount, monthlyCount, dailyLimit, monthlyLimit, canSubmit: dailyCount < dailyLimit && monthlyCount < monthlyLimit };

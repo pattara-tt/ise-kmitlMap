@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Btn, Card, Field, Pill, SearchBar, Status, Table, Textarea, useCollection } from "../../ui";
 import { useRefData } from "../../../lib/useRefData";
+import { isManageableUser } from "./shared";
 
 // ── UC16 จัดการสถานะบัญชีของผู้ใช้งาน ────────────────────
 function AccountStatus({
@@ -16,12 +17,14 @@ function AccountStatus({
     items,
     patch
   } = useCollection("users");
+
   const [q, setQ] = useState("");
   const [suspending, setSuspending] = useState(null); // user object ที่กำลังจะระงับ
   const [reason, setReason] = useState("");
   const [restoring, setRestoring] = useState(null);
   const [restoreReason, setRestoreReason] = useState("");
-  const rows = items.filter(u => (u.name + u.email).toLowerCase().includes(q.toLowerCase()));
+  const rows = items.filter(isManageableUser).filter(u => (u.name + u.email).toLowerCase().includes(q.toLowerCase()));
+  
   async function confirmSuspend() {
     if (!reason.trim()) {
       return alert("กรุณาระบุเหตุผลการระงับบัญชี");
@@ -40,6 +43,7 @@ function AccountStatus({
       alert(`ระงับบัญชีไม่สำเร็จ: ${error.message}`);
     }
   }
+
   async function confirmRestore() {
     if (!restoreReason.trim()) {
       return alert("กรุณาระบุเหตุผลการคืนสิทธิ์");
@@ -57,6 +61,7 @@ function AccountStatus({
       alert(`คืนสิทธิ์ไม่สำเร็จ: ${error.message}`);
     }
   }
+
   return <>
       <h3>จัดการสถานะบัญชีของผู้ใช้งาน</h3>
       <SearchBar value={q} onChange={setQ} placeholder="ค้นหาบัญชีผู้ใช้" />
@@ -64,7 +69,7 @@ function AccountStatus({
       {suspending ? <Card style={{
       border: "1px solid #F5C2C0"
     }}>
-          <b style={{
+        <b style={{
         fontSize: 13.5,
         color: "#D93025"
       }}>ระงับบัญชี: {suspending.name}</b>

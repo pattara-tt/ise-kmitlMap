@@ -73,22 +73,9 @@ export function useReportActions({
         return;
       }
     }
-    const dailyLimit = Number(requestQuota?.perUserPerDay ?? 3);
-    const monthlyLimit = Number(requestQuota?.perUserPerMonth ?? 20);
-    const today = new Date().toISOString().slice(0, 10);
-    const currentMonth = today.slice(0, 7);
-    const userRequests = requests.filter(r => r.userId === user.id && r.status !== "cancelled");
-    const todayCount = userRequests.filter(r => String(r.createdAt || "").slice(0, 10) === today).length;
-    const monthlyCount = userRequests.filter(r => String(r.createdAt || "").slice(0, 7) === currentMonth).length;
-    if (todayCount >= dailyLimit) {
-      alert(`ส่งคำร้องได้สูงสุด ${dailyLimit} เรื่องต่อวัน`);
-      return;
-    }
-    if (monthlyCount >= monthlyLimit) {
-      alert(`ส่งคำร้องได้สูงสุด ${monthlyLimit} เรื่องต่อเดือน`);
-      return;
-    }
+
     setReportSending(true);
+    
     const after = reportForm.roomId != null ? {
       name: String(reportForm.name ?? "").trim(),
       type: String(reportForm.type ?? "").trim(),

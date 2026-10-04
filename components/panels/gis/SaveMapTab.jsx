@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { useMapData } from "../../../lib/useMapData";
-import { Btn, Card, Field, Input, Status, Textarea, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Status, Textarea, UCHead, useCollection, formatDateTime } from "../../ui";
 import NodeEdgeTab from "./NodeEdgeTab";
-import { todayStr } from "./shared";
 
 /* =========================================================
    UC9 : บันทึกข้อมูลแผนที่
@@ -49,7 +48,7 @@ function SaveMap({
         try {
           await patchAsset(asset.id, {
             status: "published",
-            updatedAt: todayStr()
+            updatedAt: new Date().toISOString()
           }, user);
         } catch (e) {
           console.warn(`Publish asset ${asset.id} failed:`, e);
@@ -59,7 +58,7 @@ function SaveMap({
         try {
           await patchBoundary(boundary.id, {
             status: "published",
-            updatedAt: todayStr()
+            updatedAt: new Date().toISOString()
           }, user);
         } catch (e) {
           console.warn(`Publish boundary ${boundary.id} failed:`, e);
@@ -215,7 +214,7 @@ function SaveMap({
         marginTop: 7
       }}>
             บันทึกเมื่อ{" "}
-            {d.savedAt}{" "}
+            {formatDateTime(d.savedAt)}{" "}
             โดย{" "}
             {d.savedByName || d.savedBy || "-"}
           </div>
