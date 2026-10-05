@@ -29,7 +29,7 @@ export default function EventCardPanel({ view }) {
       <div style={{padding:"7px 16px 16px",overflowY:expanded?"auto":"visible",height:expanded?"calc(100% - 21px)":"auto"}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
           <span style={{width:40,height:40,flex:"none",borderRadius:"50%",background:on?"#1A73E8":"#D93025",display:"grid",placeItems:"center"}}><span style={{width:21,height:21,background:"#fff",WebkitMask:`url('${EVENT_PIN_ICON}') center/contain no-repeat`,mask:`url('${EVENT_PIN_ICON}') center/contain no-repeat`}} /></span>
-          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:800,fontSize:18,color:"#202124"}}>{eventCard.name}</div>{!expanded && <div style={{marginTop:3,fontSize:12,color:"#5F6368"}}>{category?.name || "กิจกรรม"}</div>}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:800,fontSize:18,color:"#202124"}}>{eventCard.name}</div><div style={{marginTop:3,fontSize:12,color:"#5F6368"}}>{category?.name || "กิจกรรม"}</div></div>
           <button onClick={()=>setEventCard(null)} aria-label="ปิด" style={{width:32,height:32,borderRadius:"50%",border:0,background:"#F1F3F4",color:"#5F6368",cursor:"pointer"}}>✕</button>
         </div>
 

@@ -308,7 +308,7 @@ export default function Page() {
         ) : null}
 
         {isUser ? (
-          <UserApp user={user} tab={tab} viewMode={view === "auto" ? "auto" : desktop ? "desktop" : "mobile"} />
+          <UserApp user={user} tab={tab} onTabChange={setTab} viewMode={view === "auto" ? "auto" : desktop ? "desktop" : "mobile"} />
         ) : (
           <div className="bdi-page">
             <div className="bdi-page-inner"><Panel uc={current?.key} user={user} /></div>

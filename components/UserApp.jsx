@@ -12,7 +12,7 @@ const MapView = dynamic(() => import("./MapView"), {
 });
 
 // Actor: ผู้ใช้งานทั่วไป — แผนที่/นำทาง · กิจกรรม · แจ้งเตือน · แจ้งปัญหา
-export default function UserApp({ user, tab, viewMode = "auto" }) {
+export default function UserApp({ user, tab, onTabChange, viewMode = "auto" }) {
   const mapApi = useRef(null);
   const { items: accessRows, loading: accessLoading } = useCollection("institutionAccess");
   const access = accessRows.find((x) => x.institutionId === user.institutionId);
@@ -36,7 +36,7 @@ export default function UserApp({ user, tab, viewMode = "auto" }) {
       <div style={{ position: "absolute", inset: 0, visibility: tab === "map" ? "visible" : "hidden" }}>
         <MapView apiRef={mapApi} viewMode={viewMode} user={user} />
       </div>
-      {tab === "events" ? <EventsPage user={user} /> : null}
+      {tab === "events" ? <EventsPage user={user} mapApi={mapApi} onOpenMap={() => onTabChange?.("map")} /> : null}
       {tab === "notifications" ? <NotificationsPage user={user} /> : null}
       {tab === "feedback" ? <FeedbackPage user={user} /> : null}
       {tab === "requests" ? <MyRequests user={user} /> : null}
@@ -45,7 +45,7 @@ export default function UserApp({ user, tab, viewMode = "auto" }) {
 }
 
 // ── กิจกรรมที่สนใจเข้าร่วม ─────────────────────
-function EventsPage({ user }) {
+function EventsPage({ user, mapApi, onOpenMap }) {
   const { items: events } = useCollection("events");
   const { items: cats } = useCollection("categories");
   const { items: news } = useCollection("news");
@@ -55,6 +55,12 @@ function EventsPage({ user }) {
   const mine = interest.filter((i) => i.userId === user.id);
   const isInterested = (id) => mine.find((i) => i.eventId === id);
   const liveNews = news.filter((n) => newsState(n) === "live");
+
+  const openEventOnMap = (ev) => {
+    onOpenMap?.();
+    // MapView remains mounted while tabs change; wait one frame so Leaflet becomes visible before focusing.
+    setTimeout(() => mapApi?.current?.openEvent?.(ev), 80);
+  };
 
   return (
     <div className="bdi-page">
@@ -84,7 +90,7 @@ function EventsPage({ user }) {
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
               <div>
                 <b style={{ fontSize: 14, color: "#188038" }}>{ev.name}</b>
-                <div style={{ fontSize: 11.5, color: "#5F6368" }}>{fmt(ev.startAt)} · {ev.placeName}</div>
+                <button type="button" onClick={() => openEventOnMap(ev)} title="เปิดตำแหน่งกิจกรรมบนแผนที่" style={{ display: "block", marginTop: 3, padding: 0, border: 0, background: "transparent", color: "#1A73E8", fontSize: 11.5, cursor: "pointer", textAlign: "left", textDecoration: "underline" }}>{fmt(ev.startAt)} · 📍 {ev.placeName}</button>
               </div>
               <Btn kind="danger" onClick={() => destroy({ userId: i.userId, eventId: i.eventId }, user)}>ยกเลิก</Btn>
             </div>
@@ -109,12 +115,13 @@ function EventsPage({ user }) {
               <Pill>{EVENT_STATE_LABEL[eventState(ev)]}</Pill>
             </div>
             <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 7, lineHeight: 1.7 }}>
-              {fmt(ev.startAt)} — {fmt(ev.endAt)}<br />📍 {ev.placeName}
+              {fmt(ev.startAt)} — {fmt(ev.endAt)}<br />
+              <button type="button" onClick={() => openEventOnMap(ev)} title="เปิดตำแหน่งกิจกรรมบนแผนที่" style={{ padding: 0, border: 0, background: "transparent", color: "#1A73E8", fontSize: "inherit", cursor: "pointer", textAlign: "left", textDecoration: "underline" }}>📍 {ev.placeName || "ไม่ระบุสถานที่"}</button>
             </div>
             <div style={{ marginTop: 10 }}>
               {on
                 ? <Btn kind="ghost" onClick={() => destroy({ userId: on.userId, eventId: on.eventId }, user)}>✓ บันทึกแล้ว — กดเพื่อยกเลิก</Btn>
-                : <Btn kind="ok" onClick={() => create({ eventId: ev.id, userId: user.id }, user)}>สนใจเข้าร่วม</Btn>}
+                : <Btn kind="primary" onClick={() => create({ eventId: ev.id, userId: user.id }, user)}>สนใจเข้าร่วม</Btn>}
             </div>
           </Card>
         );

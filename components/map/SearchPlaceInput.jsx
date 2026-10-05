@@ -13,6 +13,8 @@ export default function SearchPlaceInput({
   onChange,
   onPick,
   placeholder,
+  events = [],
+  categories = [],
   rooms = [],
   searchNodes = []
 }) {
@@ -23,7 +25,8 @@ export default function SearchPlaceInput({
     const q = normalizeSearch(text);
     if (q.length < 1) return [];
     const roomByNodeId = new Map(rooms.map(room => [room.nodeId, room]));
-    return searchNodes.flatMap(entry => {
+    const categoryById = new Map(categories.map(category => [category.id, category]));
+    const nodeItems = searchNodes.flatMap(entry => {
       const room = roomByNodeId.get(entry.internalId || entry.id);
       const displayName = room?.name || entry.name;
       // node ที่ใช้คำนวณเส้นทาง เช่น จุดหน้าประตู
@@ -34,7 +37,8 @@ export default function SearchPlaceInput({
       if (!routeNode || !markerNode || !Number.isFinite(routeNode.lat) || !Number.isFinite(routeNode.lon) || !Number.isFinite(markerNode.lat) || !Number.isFinite(markerNode.lon)) {
         return [];
       }
-      const words = [displayName, entry.name, entry.id, routeNode.label, markerNode.label, ...(entry.aliases || [])].filter(Boolean);
+      // ห้องใช้ rooms.type เป็น source of truth; categories เป็นของกิจกรรม/สถานที่ชั่วคราว ไม่ใช้จัดประเภทห้อง
+      const words = [displayName, entry.name, entry.id, routeNode.label, markerNode.label, room?.code, room?.type, ...(entry.aliases || [])].filter(Boolean);
       const matched = words.some(word => {
         const normalizedWord = normalizeSearch(word);
         return normalizedWord.includes(q) || q.includes(normalizedWord);
@@ -52,9 +56,31 @@ export default function SearchPlaceInput({
         markerNodeId: entry.markerId || entry.id,
         floor: KMITL_NODE_FLOOR[entry.id] || "1",
         extract: entry.extract,
-        icon: entry.icon
+        icon: entry.icon,
+        subtitle: room?.type || ""
       }];
     });
+
+    const eventItems = events.flatMap(event => {
+      const category = event.categoryId ? categoryById.get(event.categoryId) : null;
+      const words = [event.name, event.detail, event.placeName, category?.name].filter(Boolean);
+      const matched = words.some(word => {
+        const normalizedWord = normalizeSearch(word);
+        return normalizedWord.includes(q) || q.includes(normalizedWord);
+      });
+      const lat = Number(event.lat), lon = Number(event.lon);
+      if (!matched || !Number.isFinite(lat) || !Number.isFinite(lon)) return [];
+      return [{
+        name: event.name,
+        coord: [lon, lat],
+        src: "event",
+        event,
+        icon: "🎪",
+        subtitle: [category?.name, event.placeName].filter(Boolean).join(" · ")
+      }];
+    });
+
+    return [...eventItems, ...nodeItems].slice(0, 8);
   };
   const handleChange = next => {
     onChange(next);
@@ -140,7 +166,7 @@ export default function SearchPlaceInput({
             color: "#5F6368",
             fontSize: 11.5,
             marginTop: 2
-          }}>{item.src === "event" ? `กิจกรรม · ${item.subtitle || ""}` : item.nodeId ? `ชั้น ${item.floor} · ${item.nodeId}` : item.src === "osm" ? "OSM" : "สถานที่"}</span>
+          }}>{item.src === "event" ? `กิจกรรม · ${item.subtitle || ""}` : item.nodeId ? `ชั้น ${item.floor}${item.subtitle ? ` · ${item.subtitle}` : ""}` : item.src === "osm" ? "OSM" : "สถานที่"}</span>
               </span>
             </button>)}
         </div> : null}

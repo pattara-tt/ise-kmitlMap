@@ -221,6 +221,8 @@ CREATE TABLE events (
   author_id              TEXT REFERENCES users(id) ON DELETE SET NULL,
   category_id            TEXT REFERENCES categories(id),
   temp_place_category_id TEXT REFERENCES categories(id),
+  room_id                TEXT REFERENCES rooms(id) ON DELETE SET NULL,
+  temporary_room_type    TEXT,
   replaced_from          TEXT REFERENCES events(id) ON DELETE SET NULL,
   name                   TEXT NOT NULL,
   detail                 TEXT,

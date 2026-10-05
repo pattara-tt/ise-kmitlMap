@@ -16,6 +16,7 @@ export function useMapEffect16({
   haversine,
   kmitlFloorRef,
   mapRef,
+  openEventCard,
   pickRoutes,
   queuedReverse,
   resolvePlace,
@@ -197,7 +198,8 @@ export function useMapEffect16({
         })();
         return c.scored;
       },
+      openEvent: (event) => openEventCard?.(event),
       getRoutes: () => ctx.current.scored,
     };
-  }, [apiRef]);
+  }, [apiRef, openEventCard]);
 }

@@ -11,7 +11,9 @@ export function useMapEffect07({
   mapRef,
   nodeIdByKey,
   openPlaceCard,
-  rooms
+  rooms,
+  chips,
+  CHIP_NODE_TYPES
  }) {
   useEffect(() => {
     const c = ctx.current, L = c.L, m = mapRef.current;
@@ -21,10 +23,12 @@ export function useMapEffect07({
     for (const entry of indoorSearchNodes) {
       const room = rooms.find((r) => r.nodeId === (entry.internalId || nodeIdByKey[entry.id]));
       const displayName = room?.name || entry.name;
+      const routeNode = KMITL_ALL_NODES[entry.id];
+      const chipKey = Object.keys(CHIP_NODE_TYPES || {}).find((k) => CHIP_NODE_TYPES[k].includes(routeNode?.type));
+      if (chipKey && !chips?.[chipKey]) continue;
   
       if (!entry.markerId) continue; // ยังไม่มีจุดกลางจริง (เช่นห้องน้ำตอนนี้) — ข้ามไปก่อน จนกว่าจะมีพิกัด
       const center = KMITL_ALL_NODES[entry.markerId];
-      const routeNode = KMITL_ALL_NODES[entry.id];
       if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lon)) continue;
       const src = iconFor(routeNode?.type);
       L.marker([center.lat, center.lon], {
@@ -47,5 +51,5 @@ export function useMapEffect07({
         .addTo(layer);
     }
     return () => m.removeLayer(layer);
-  }, [mapReady, rooms, indoorSearchNodes, nodeIdByKey]);
+  }, [mapReady, rooms, indoorSearchNodes, nodeIdByKey, chips, CHIP_NODE_TYPES]);
 }

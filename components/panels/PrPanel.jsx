@@ -167,7 +167,7 @@ function NewsForm({ mode, initial, onSubmit }) {
 }
 
 function NewsEditModal({ item, onClose, onSave }) {
-  const wasPublished = newsState(item) === "live";
+  const wasPublished = Boolean(item.published);
   const [form, setForm] = useState({ title: item.title, body: item.body, publishAt: item.publishAt || "", expireAt: item.expireAt || "" });
   const [confirmOpen, setConfirmOpen] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -188,7 +188,7 @@ function NewsEditModal({ item, onClose, onSave }) {
         footer={<>
           <Btn kind="ghost" onClick={onClose}>ยกเลิก</Btn>
           <Btn kind="ok" onClick={() => attemptSave(true)}>บันทึกและเผยแพร่ทันที</Btn>
-          <Btn onClick={() => attemptSave(false)}>บันทึกการแก้ไข</Btn>
+          {!wasPublished ? <Btn onClick={() => attemptSave(false)}>บันทึกการแก้ไข</Btn> : null}
         </>}>
         <div style={{ marginBottom: 10 }}><Status value={newsState(item)} /></div>
         {wasPublished ? <Note tone="warn">ข่าวนี้กำลังเผยแพร่อยู่ การแก้ไขจะเป็นการถอนฉบับเดิมออกและเผยแพร่ฉบับใหม่ตามกำหนดการที่ระบุ</Note> : null}
@@ -218,7 +218,7 @@ function NewsEditModal({ item, onClose, onSave }) {
 const emptyEvent = () => ({
   name: "", detail: "", categoryId: "",
   startAt: localNow(true), endAt: "",
-  placeName: "", lat: "", lon: "", tempPlaceCategoryId: "",
+  placeName: "", lat: "", lon: "", roomId: null, roomType: null, temporaryRoomType: "", tempPlaceCategoryId: "",
 });
 
 function EventModule({ user }) {
@@ -363,18 +363,35 @@ function EventFields({ form, setForm, cats }) {
       <div style={{ fontSize: 12, fontWeight: 800, color: "#5F6368", margin: "14px 0 6px" }}>สถานที่จัดกิจกรรม</div>
       <MapPicker
         value={{ placeName: form.placeName, lat: form.lat, lon: form.lon }}
-        onChange={(v) => setForm((f) => ({ ...f, ...v }))}
+        onChange={(v) => setForm((f) => ({ ...f, ...v, temporaryRoomType: v.roomId === f.roomId ? f.temporaryRoomType : "" }))}
       />
 
       {hasPlace ? (
         <div style={{ marginTop: 14 }}>
-          <Field label="หมวดหมู่สถานที่ชั่วคราว (ระหว่างจัดกิจกรรม)">
-            <Select value={form.tempPlaceCategoryId || ""} onChange={set("tempPlaceCategoryId")}>
-              <option value="">— ไม่เปลี่ยนหมวดหมู่ —</option>
-              {placeCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
-          </Field>
-          <Note tone="warn">เมื่อสิ้นสุดการจัดกิจกรรม สถานที่นั้นจะกลับไปเป็นหมวดหมู่เดิมโดยอัตโนมัติ</Note>
+          {form.roomId && form.roomType ? (
+            <>
+              <Field label="ประเภทห้องเดิม (rooms.type)">
+                <Input value={form.roomType} readOnly />
+              </Field>
+              <Field label="ประเภทห้องชั่วคราวระหว่างจัดกิจกรรม">
+                <Input
+                  value={form.temporaryRoomType || ""}
+                  onChange={set("temporaryRoomType")}
+                  placeholder={`เช่น ห้องจัดกิจกรรม (เดิม: ${form.roomType})`}
+                />
+              </Field>
+              <Note tone="warn">หากระบุ ระบบจะแสดง rooms.type เป็นค่านี้เฉพาะช่วงที่กิจกรรมเผยแพร่และกำลังจัดอยู่ เมื่อสิ้นสุดกิจกรรมจะกลับเป็นค่าเดิม “{form.roomType}” อัตโนมัติ โดยไม่เขียนทับค่าเดิมในห้อง</Note>
+            </>
+          ) : (
+            <>
+              <Field label="หมวดหมู่สถานที่ชั่วคราว (ระหว่างจัดกิจกรรม)">
+                <Select value={form.tempPlaceCategoryId || ""} onChange={set("tempPlaceCategoryId")}>
+                  <option value="">— ไม่เปลี่ยนหมวดหมู่ —</option>
+                  {placeCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              </Field>
+            </>
+          )}
         </div>
       ) : null}
     </>
@@ -412,7 +429,7 @@ function EventForm({ cats, onSubmit }) {
 }
 
 function EventEditModal({ item, cats, onClose, onSave }) {
-  const wasPublished = item.published && eventState(item) !== "ended";
+  const wasPublished = Boolean(item.published);
   const [form, setForm] = useState({ ...item });
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -430,7 +447,7 @@ function EventEditModal({ item, cats, onClose, onSave }) {
         footer={<>
           <Btn kind="ghost" onClick={onClose}>ยกเลิก</Btn>
           <Btn kind="ok" onClick={() => attemptSave(true)}>บันทึกและเผยแพร่ทันที</Btn>
-          <Btn onClick={() => attemptSave(false)}>บันทึกการแก้ไข</Btn>
+          {!wasPublished ? <Btn onClick={() => attemptSave(false)}>บันทึกการแก้ไข</Btn> : null}
         </>}>
         <div style={{ marginBottom: 10 }}><Status value={eventState(item)} /></div>
         {wasPublished ? <Note tone="warn">กิจกรรมนี้เผยแพร่อยู่ การแก้ไขจะเป็นการถอนฉบับเดิมออกและเผยแพร่ฉบับใหม่ตามกำหนดการที่ระบุ</Note> : null}
@@ -498,7 +515,6 @@ function InterestModule() {
 function CategoryModule({ user }) {
   const { items, create, patch, destroy } = useCollection("categories");
   const { items: events } = useCollection("events");
-  const { items: rooms } = useCollection("rooms");
   const [sub, setSub] = useState("overview");
   const [editing, setEditing] = useState(null);
   const [q, setQ] = useState("");
@@ -509,10 +525,11 @@ function CategoryModule({ user }) {
   const counted = useMemo(() => items.map((c) => {
     const byEvent = events.filter((e) => e.categoryId === c.id).length;
     const byTempPlace = events.filter((e) => e.tempPlaceCategoryId === c.id).length;
-    const byRoom = rooms.filter((r) => r.categoryId === c.id).length;
-    const count = c.kind === "event" ? byEvent : byRoom + byTempPlace;
-    return { ...c, count, byEvent, byRoom, byTempPlace };
-  }), [items, events, rooms]);
+    // PR place categories are used by event locations (tempPlaceCategoryId).
+    // Room classification belongs to room/registrar data and must not lock PR place-category CRUD.
+    const count = c.kind === "event" ? byEvent : byTempPlace;
+    return { ...c, count, byEvent, byTempPlace };
+  }), [items, events]);
 
   const rows = counted.filter((c) =>
     c.name.toLowerCase().includes(q.toLowerCase()) &&

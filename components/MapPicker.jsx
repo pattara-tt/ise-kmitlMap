@@ -8,7 +8,7 @@ import {
   CENTER, KMITL_ALL_NODES, KMITL_BOUNDS, KMITL_FLOORS, KMITL_NODE_FLOOR,
   KMITL_OUTLINE, WALKWAY_NODE_TYPES, getNodeType,
 } from "./mapConfig";
-import { Btn, Input, Pill } from "./ui";
+import { Btn, Input, Pill, useCollection } from "./ui";
 
 // กล่องแผนที่สำหรับเลือกสถานที่จัดกิจกรรม
 // ใช้ชั้นข้อมูลชุดเดียวกับแผนที่ของผู้ใช้งานทั่วไป — ขอบเขตอาคาร ผังชั้น (SVG)
@@ -21,7 +21,14 @@ const isWalkway = (type) => WALKWAY_NODE_TYPES.includes(String(type || "").toLow
 
 export default function MapPicker({ value, onChange, height = 300 }) {
   const mapData = useMapData();
+  const { items: rooms } = useCollection("rooms");
   const { placeName = "", lat = "", lon = "" } = value || {};
+  const roomByNodeId = new Map(rooms.map((room) => [room.nodeId, room]));
+  const nodeByKey = new Map((mapData.data?.nodes || []).map((node) => [node.nodeKey, node]));
+  const roomForNodeKey = (nodeKey) => {
+    const node = nodeByKey.get(nodeKey);
+    return node ? roomByNodeId.get(node.id) : null;
+  };
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const ctx = useRef({});
@@ -62,15 +69,13 @@ export default function MapPicker({ value, onChange, height = 300 }) {
         map.getPane("pickFloorPane").style.pointerEvents = "none";
       }
 
-      // ขอบเขตอาคาร (ชุดเดียวกับแผนที่ผู้ใช้)
-      L.polygon(KMITL_OUTLINE, {
-        color: "#1A73E8", weight: 2, fillColor: "#1A73E8", fillOpacity: 0.06,
-      }).addTo(map);
-
       ctx.current = { L, map, floorOverlay: null, nodeLayer: null, marker: null };
       mapRef.current = map;
 
-      map.on("click", (e) => setPin(e.latlng.lat, e.latlng.lng, true));
+      map.on("click", (e) => {
+        emit({ roomId: null, roomType: null, tempPlaceCategoryId: "" });
+        setPin(e.latlng.lat, e.latlng.lng, true);
+      });
       setTimeout(() => map.invalidateSize(), 150);
 
       const v = valueRef.current || {};
@@ -112,14 +117,20 @@ export default function MapPicker({ value, onChange, height = 300 }) {
         .addTo(group)
         .on("click", (ev) => {
           ev.originalEvent?.stopPropagation?.();
-          setQ(n.label);
-          emit({ placeName: n.label });
+          const room = roomForNodeKey(id);
+          setQ(room?.name || n.label);
+          emit({
+            placeName: room?.name || n.label,
+            roomId: room?.id || null,
+            roomType: room?.type || null,
+            tempPlaceCategoryId: "",
+          });
           setPin(n.lat, n.lon, false);
         });
     }
     ctx.current.nodeLayer = group;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indoor, floor]);
+  }, [indoor, floor, rooms, mapData.data]);
 
   function setPin(la, lo, reverse) {
     const { L, map } = ctx.current;
@@ -153,14 +164,15 @@ export default function MapPicker({ value, onChange, height = 300 }) {
     const out = [];
     for (const [id, n] of Object.entries(KMITL_ALL_NODES)) {
       if (!n.label || !n.label.toLowerCase().includes(k)) continue;
-      out.push({ name: n.label, coord: [n.lon, n.lat], src: "indoor", floor: KMITL_NODE_FLOOR[id] || "1" });
+      const room = roomForNodeKey(id);
+      out.push({ name: room?.name || n.label, coord: [n.lon, n.lat], src: "indoor", floor: KMITL_NODE_FLOOR[id] || "1", roomId: room?.id || null, roomType: room?.type || null });
     }
     return out.slice(0, 5);
   }
 
   function onType(text) {
     setQ(text);
-    emit({ placeName: text });   // ข้อความที่พิมพ์คือชื่อสถานที่ที่จะแสดง
+    emit({ placeName: text, roomId: null, roomType: null, tempPlaceCategoryId: "" });   // พิมพ์เองถือว่าไม่ได้ยืนยันว่าเป็นห้อง
     clearTimeout(timer.current);
     if (text.trim().length < 2) { setItems([]); setOpen(false); return; }
     const local = localMatches(text);
@@ -174,7 +186,12 @@ export default function MapPicker({ value, onChange, height = 300 }) {
 
   function pick(item) {
     setQ(item.name); setOpen(false);
-    emit({ placeName: item.name });
+    emit({
+      placeName: item.name,
+      roomId: item.src === "indoor" ? (item.roomId || null) : null,
+      roomType: item.src === "indoor" ? (item.roomType || null) : null,
+      tempPlaceCategoryId: "",
+    });
     if (item.src === "indoor" && item.floor) { setIndoor(true); setFloor(item.floor); }
     setPin(item.coord[1], item.coord[0], false);
   }

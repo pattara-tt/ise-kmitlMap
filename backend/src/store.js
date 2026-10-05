@@ -113,6 +113,19 @@ export async function withTransaction(operation) {
 export async function list(name) {
   if (USE_PG) return (await pg()).list(name);
   if (name === "requests") return (db.requests || []).map(unpackRequest);
+  if (name === "rooms") {
+    const now = Date.now();
+    const active = (db.events || []).filter((e) => e.published && e.roomId && e.temporaryRoomType &&
+      (!e.startAt || new Date(e.startAt).getTime() <= now) &&
+      (!e.endAt || now < new Date(e.endAt).getTime()))
+      .sort((a,b) => new Date(b.startAt || 0) - new Date(a.startAt || 0));
+    const byRoom = new Map();
+    for (const e of active) if (!byRoom.has(String(e.roomId))) byRoom.set(String(e.roomId), e);
+    return (db.rooms || []).map((room) => {
+      const e = byRoom.get(String(room.id));
+      return e ? { ...room, type: e.temporaryRoomType, originalType: room.type, typeOverrideEventId: e.id, typeOverrideUntil: e.endAt || null } : room;
+    });
+  }
   if (name === "eventStats") {
     const statsByEvent = new Map((db.eventStats || []).map((row) => [row.eventId, row]));
     return (db.events || []).map((event) => {

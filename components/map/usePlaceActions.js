@@ -93,18 +93,21 @@ export function usePlaceActions({
       floor: meta.floor || null,
       icon: meta.icon || "📍",
       extract: meta.extract || null,
-      image: null,
+      image: meta.image || null,
       loading: !meta.extract,
       error: false
     });
-    if (!meta.extract) {
+    // ดึง PLACE_INFO แม้มี extract แล้ว เพื่อไม่ให้รูปสถานที่ที่แนบไว้ (เช่น SC8) หาย
+    if (!meta.extract || !meta.image) {
       const info = await fetchPlaceInfo(name);
       setPlaceCard(prev => prev && prev.name === name ? {
         ...prev,
-        name: info?.title || prev.name,
+        // Indoor nodes already have an authoritative room/hover name.
+        // Do not let generic place-info overwrite it (this caused "บ้านห่อง").
+        name: prev.nodeId ? prev.name : (info?.title || prev.name),
         loading: false,
-        extract: info?.extract || null,
-        image: info?.image || null,
+        extract: prev.extract || info?.extract || null,
+        image: prev.image || info?.image || null,
         error: !info
       } : prev);
     }

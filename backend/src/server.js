@@ -125,6 +125,23 @@ app.get("/api/map/graph", requireSession, wrap(async(req,res)=>{
 app.get("/api/data/:name", requireSession, wrap(async(req,res)=>{
   if(!guard(req,res)) return;
   const name=req.params.name; let items=await list(name);
+  // rooms.type มีค่า override ชั่วคราวจากกิจกรรม PR โดยไม่เขียนทับค่าจริงใน rooms
+  // จึงคืนค่าเดิมอัตโนมัติทันทีเมื่อกิจกรรมยังไม่เริ่ม/สิ้นสุด/ไม่ได้เผยแพร่
+  if(name === "rooms") {
+    const now = Date.now();
+    const events = await list("events");
+    const activeOverrides = events
+      .filter((e) => e.published && e.roomId && e.temporaryRoomType &&
+        (!e.startAt || new Date(e.startAt).getTime() <= now) &&
+        (!e.endAt || now < new Date(e.endAt).getTime()))
+      .sort((a,b) => new Date(b.startAt || 0) - new Date(a.startAt || 0));
+    const byRoom = new Map();
+    for (const e of activeOverrides) if (!byRoom.has(String(e.roomId))) byRoom.set(String(e.roomId), e);
+    items = items.map((room) => {
+      const e = byRoom.get(String(room.id));
+      return e ? { ...room, type: e.temporaryRoomType, originalType: room.type, typeOverrideEventId: e.id, typeOverrideUntil: e.endAt || null } : room;
+    });
+  }
   if(["users","contracts","institutionAccess"].includes(name)) {
     const institutions=await list("institutions"); const names=new Map(institutions.map(i=>[i.id,i.name]));
     items=items.map(x=>({...x,institutionName:names.get(x.institutionId)||null}));

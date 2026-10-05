@@ -7,6 +7,7 @@ export default function SearchPanel({ view }) {
     ctx,
     doSearch,
     events,
+    categories,
     indoorSearchNodes,
     nav,
     openEventCard,
@@ -84,7 +85,7 @@ export default function SearchPanel({ view }) {
         fontWeight: 600
       }}>ค้นหาสถานที่</div>
               </div>
-              <SearchPlaceInput value={searchQuery} onChange={setSearchQuery} events={events} rooms={rooms} searchNodes={indoorSearchNodes} placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ" onPick={async sg => {
+              <SearchPlaceInput value={searchQuery} onChange={setSearchQuery} events={events} categories={categories} rooms={rooms} searchNodes={indoorSearchNodes} placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ" onPick={async sg => {
       if (sg.src === "event" && sg.event) {
         openEventCard(sg.event);
         return;

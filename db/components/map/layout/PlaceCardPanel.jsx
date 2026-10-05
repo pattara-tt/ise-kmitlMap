@@ -16,7 +16,6 @@ export default function PlaceCardPanel({ view }) {
   const floorRow = room ? floorRecords.find(f => f.id === room.floorId) : null;
   const floorLabel = floorRow?.name || (floorRow?.floorNo != null ? `ชั้น ${floorRow.floorNo}` : null);
   const typeLabel = room?.type || null;
-  const displayName = room?.name || placeCard.name;
   const hasRoomDetails = !!room;
   // extract from indoor nodes is only a search label (e.g. "ห้องเรียน · ชั้น 1"), not a place description.
   const description = placeCard.description || (!placeCard.nodeId ? placeCard.extract : null);
@@ -42,14 +41,14 @@ export default function PlaceCardPanel({ view }) {
         <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
           <span style={{fontSize:25,lineHeight:1}}>{placeCard.icon || "📍"}</span>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:800,fontSize:18,color:"#202124"}}>{displayName}</div>
-            {!expanded && (typeLabel || floorLabel) && <div style={{marginTop:3,fontSize:12,color:"#5F6368"}}>{[typeLabel, floorLabel].filter(Boolean).join(" · ")}</div>}
+            <div style={{fontWeight:800,fontSize:18,color:"#202124"}}>{placeCard.name}</div>
+            {(typeLabel || floorLabel) && <div style={{marginTop:3,fontSize:12,color:"#5F6368"}}>{[typeLabel, floorLabel].filter(Boolean).join(" · ")}</div>}
           </div>
           <button onClick={openReportForm} title="แจ้งปัญหา" aria-label="แจ้งปัญหาข้อมูลสถานที่" style={{width:32,height:32,borderRadius:"50%",border:0,background:"#F1F3F4",color:"#5F6368",cursor:"pointer",display:"grid",placeItems:"center"}}>⚑</button>
           <button onClick={()=>setPlaceCard(null)} aria-label="ปิด" style={{width:32,height:32,borderRadius:"50%",border:0,background:"#F1F3F4",color:"#5F6368",cursor:"pointer"}}>✕</button>
         </div>
 
-        {placeCard.image && <img src={placeCard.image} alt={displayName || "รูปสถานที่"} style={{width:"100%",height:expanded?190:110,objectFit:"cover",borderRadius:12,marginTop:11,display:"block"}} />}
+        {placeCard.image && <img src={placeCard.image} alt={placeCard.name || "รูปสถานที่"} style={{width:"100%",height:expanded?190:110,objectFit:"cover",borderRadius:12,marginTop:11,display:"block"}} />}
 
         {expanded && <div style={{marginTop:12,borderTop:"1px solid #EEF0F2",paddingTop:12}}>
           {hasRoomDetails && <div style={{padding:"10px 12px",background:"#F8F9FA",borderRadius:12,fontSize:13,lineHeight:1.85,color:"#3C4043"}}>

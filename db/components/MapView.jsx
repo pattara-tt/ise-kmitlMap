@@ -330,8 +330,6 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     kmitlRouteResult,
     mapRef,
     openPlaceCard,
-    rooms,
-    nodeIdByKey,
     setKmitlRouteResult,
   });
 
@@ -461,8 +459,6 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     reportSending,
     resolveLandmark,
     rooms,
-    nodeIdByKey,
-    floorRecords,
     routeData,
     routeFormOpen,
     routeSheetOpen,

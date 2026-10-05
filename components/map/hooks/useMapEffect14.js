@@ -15,6 +15,8 @@ export function useMapEffect14({
   kmitlRouteResult,
   mapRef,
   openPlaceCard,
+  rooms,
+  nodeIdByKey,
   setKmitlRouteResult
  }) {
   useEffect(() => {
@@ -35,12 +37,16 @@ export function useMapEffect14({
       if (chipKey && !chips[chipKey]) continue; // ชิปหมวดนี้ปิดอยู่ — ข้าม node ประเภทนี้ไป
       const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
       const marker = L.circleMarker([n.lat, n.lon], { radius: 5, color: "#FFFFFF", weight: 1.5, fillColor: t.color, fillOpacity: 0.95, pane: "bdiFloorPane" }).addTo(m);
-      const nodeName = n.label || t.label;
+      const entry = indoorSearchNodes.find((x) => x.id === id || x.markerId === id);
+      const routeKey = entry?.id || id;
+      const internalNodeId = entry?.internalId || nodeIdByKey?.[routeKey];
+      const room = rooms?.find((r) => r.nodeId === internalNodeId);
+      // Tooltip และ Bottom Sheet ใช้ชื่อจาก rooms record เดียวกันเมื่อ node นี้เป็นห้อง
+      const nodeName = room?.name || entry?.name || n.label || t.label;
       marker.bindTooltip(nodeName, { direction: "top", offset: [0, -8] });
       // กดที่ node แล้วเปิดการ์ดสถานที่แบบเดียวกับการค้นหา (มีปุ่มนำทาง / แจ้งปัญหา)
       marker.on("click", () => {
-        const entry = indoorSearchNodes.find((x) => x.id === id || x.markerId === id);
-        openPlaceCard(entry?.name || nodeName, [n.lon, n.lat], {
+        openPlaceCard(nodeName, [n.lon, n.lat], {
           nodeId: entry?.id || id,
           markerNodeId: entry?.markerId || id,
           floor: kmitlFloor,
@@ -55,5 +61,5 @@ export function useMapEffect14({
       if (latlngs.length > 1) c.kmitlGraphLayer.push(L.polyline(latlngs, { color: "#F9AB00", weight: 6, opacity: 0.95, pane: "bdiFloorPane" }).addTo(m));
     }
     return () => { (c.kmitlGraphLayer || []).forEach((ly) => { if (m.hasLayer(ly)) m.removeLayer(ly); }); c.kmitlGraphLayer = []; };
-  }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlRouteResult, chips, indoorSearchNodes]);
+  }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlRouteResult, chips, indoorSearchNodes, rooms, nodeIdByKey]);
 }
