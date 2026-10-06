@@ -163,6 +163,83 @@ export default function RegistrarPanel({ uc, user }) {
   );
 }
 
+const splitTeacherNames = (value) => {
+  const text = String(value || "").trim();
+  if (!text || text === "-") return [];
+  return text.split(/\s*(?:\n|,|;|\||\/)\s*/).map((name) => name.trim()).filter(Boolean);
+};
+
+const teacherNamesToText = (names) =>
+  (Array.isArray(names) ? names : []).map((name) => String(name || "").trim()).filter(Boolean).join(" / ");
+
+const ROOM_TYPE_OPTIONS = ["ห้องเรียน", "Cowork", "ห้องบรรยาย", "ห้องประชุม", "ห้องพักอาจารย์"];
+
+function RoomTypeSelect({ value, onChange, style }) {
+  return (
+    <select
+      value={value}
+      onChange={onChange}
+      style={{
+        width: "100%",
+        minHeight: 38,
+        padding: "8px 10px",
+        border: "1px solid #DADCE0",
+        borderRadius: 8,
+        background: "#fff",
+        color: "#202124",
+        fontSize: 13.5,
+        outline: "none",
+        ...style,
+      }}
+    >
+      {value && !ROOM_TYPE_OPTIONS.includes(value) ? (
+        <option value={value}>{value}</option>
+      ) : null}
+      {ROOM_TYPE_OPTIONS.map((type) => (
+        <option key={type} value={type}>{type}</option>
+      ))}
+    </select>
+  );
+}
+
+function TeacherInputs({ count, names, onCountChange, onNameChange }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 8 }}>
+        <div style={{ width: 180 }}>
+          <Field label="จำนวนอาจารย์">
+            <Input
+              type="number"
+              min="0"
+              max="20"
+              value={count}
+              onFocus={(e) => {
+                if (String(e.target.value) === "0") onCountChange("");
+                else e.target.select();
+              }}
+              onChange={(e) => onCountChange(e.target.value)}
+              placeholder="กรอกจำนวน"
+            />
+          </Field>
+        </div>
+        <div style={{ color: "#5F6368", fontSize: 12.5, paddingBottom: 12 }}>
+          กรอกจำนวน แล้วระบบจะสร้างช่องชื่ออาจารย์ให้ตามจำนวนนั้น
+        </div>
+      </div>
+
+      {Array.from({ length: Math.max(0, Number(count) || 0) }, (_, index) => (
+        <Field key={index} label={`อาจารย์คนที่ ${index + 1}`}>
+          <Input
+            value={names[index] || ""}
+            onChange={(e) => onNameChange(index, e.target.value)}
+            placeholder="อ.ดร. ..."
+          />
+        </Field>
+      ))}
+    </div>
+  );
+}
+
 // Sub-Component: จัดการห้องพักในชั้นที่เลือก
 function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearchMatch }) {
   const { items, create, patch, destroy } = useCollection("rooms");
@@ -171,7 +248,10 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
   const buildingRow = buildings.find((b) => b.name === building || b.code === building || b.id === building);
   const floorRow = floors.find((f) => f.buildingId === buildingRow?.id && String(f.floorNo) === String(floor));
   const [q, setQ] = useState("");
-  const [form, setForm] = useState({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacher: "", nodeId: "" });
+  const [form, setForm] = useState({
+    code: "", name: "", type: "ห้องเรียน", capacity: 40,
+    teacherCount: 1, teachers: [""], nodeId: "",
+  });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   // โหมดการแสดงผลของแผงห้อง: 'idle' = รายการทั้งหมด, 'view' = ดูข้อมูลอย่างเดียว, 'edit' = ฟอร์มแก้ไข, 'create' = ห้องที่ยังไม่มีข้อมูล
@@ -217,7 +297,11 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
         name: matchedRoom.name || "",
         type: matchedRoom.type || "ห้องเรียน",
         capacity: matchedRoom.capacity ?? 0,
-        teacher: matchedRoom.teacher || "",
+        teacherCount: Math.max(1, splitTeacherNames(matchedRoom.teacher).length),
+        teachers: (() => {
+          const names = splitTeacherNames(matchedRoom.teacher);
+          return names.length ? names : [""];
+        })(),
         nodeId: matchedRoom.nodeId || "",
       });
       setIsEditing(editIntentRef.current);
@@ -243,6 +327,26 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
   }, [effectiveFocus, matchedRoom]);
 
   const setEdit = (k) => (e) => setEditForm((f) => ({ ...f, [k]: e.target.value }));
+  const setTeacherCount = (target) => (rawValue) => {
+    // อนุญาตให้ช่องว่างได้ชั่วคราว เพื่อให้กดแล้วพิมพ์เลขใหม่โดยไม่ติด 0 เดิม
+    if (rawValue === "") {
+      target((f) => ({ ...f, teacherCount: "", teachers: [] }));
+      return;
+    }
+    const count = Math.max(0, Math.min(20, Number.parseInt(rawValue, 10) || 0));
+    target((f) => ({
+      ...f,
+      teacherCount: count,
+      teachers: Array.from({ length: count }, (_, i) => f.teachers?.[i] || ""),
+    }));
+  };
+  const setTeacherName = (target) => (index, value) => {
+    target((f) => {
+      const teachers = Array.from({ length: f.teacherCount || 0 }, (_, i) => f.teachers?.[i] || "");
+      teachers[index] = value;
+      return { ...f, teachers };
+    });
+  };
   // "แสดงห้องทั้งหมด" → ล้างห้องที่โฟกัสด้วย เพื่อให้แผนที่กลับมาเป็นผังชั้นปกติ (ไม่ค้างกรอบฟ้า/ซูมที่ห้องเดิม)
   const backToList = () => { setManualOverride(true); setFocusRoom(null); };
 
@@ -284,6 +388,9 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
   // เทียบค่าฟอร์มที่กำลังแก้กับค่าที่บันทึกไว้จริงของห้องนี้ ใช้ไฮไลต์ช่องที่ถูกแก้ไข
   const fieldChanged = (k) => {
     if (!editForm || !matchedRoom) return false;
+    if (k === "teacher") {
+      return teacherNamesToText(editForm.teachers) !== teacherNamesToText(splitTeacherNames(matchedRoom.teacher));
+    }
     const saved =
       k === "capacity" ? matchedRoom.capacity ?? 0
       : k === "type" ? matchedRoom.type || "ห้องเรียน"
@@ -367,7 +474,11 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
         name: matchedRoom.name || "",
         type: matchedRoom.type || "ห้องเรียน",
         capacity: matchedRoom.capacity ?? 0,
-        teacher: matchedRoom.teacher || "",
+        teacherCount: Math.max(1, splitTeacherNames(matchedRoom.teacher).length),
+        teachers: (() => {
+          const names = splitTeacherNames(matchedRoom.teacher);
+          return names.length ? names : [""];
+        })(),
         nodeId: matchedRoom.nodeId || "",
       });
       setIsEditing(false);
@@ -409,7 +520,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <EditField label="ประเภท" changed={fieldChanged("type")}>
-                <Input value={editForm.type} onChange={setEdit("type")} style={diffInputStyle(fieldChanged("type"))} />
+                <RoomTypeSelect value={editForm.type} onChange={setEdit("type")} style={diffInputStyle(fieldChanged("type"))} />
               </EditField>
             </div>
             <div style={{ flex: 1 }}>
@@ -419,7 +530,14 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
             </div>
           </div>
           <EditField label="อาจารย์ประจำห้อง" changed={fieldChanged("teacher")}>
-            <Input value={editForm.teacher} onChange={setEdit("teacher")} style={diffInputStyle(fieldChanged("teacher"))} />
+            <div style={fieldChanged("teacher") ? diffInputStyle(true) : undefined}>
+              <TeacherInputs
+                count={editForm.teacherCount}
+                names={editForm.teachers}
+                onCountChange={setTeacherCount(setEditForm)}
+                onNameChange={setTeacherName(setEditForm)}
+              />
+            </div>
           </EditField>
           <EditField label="รหัส node บนผังชั้น" changed={fieldChanged("nodeId")}>
             <Input value={editForm.nodeId} readOnly title="รหัส node มาจากข้อมูลแผนที่ของฝ่ายแผนที่" style={{ ...diffInputStyle(false), background: "#F8F9FA", color: "#5F6368" }} />
@@ -441,18 +559,39 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
                 // by the map team and should never be sent back from this form.
                 const changes = {
                   code, name, type: String(editForm.type || "").trim(), capacity,
-                  teacher: String(editForm.teacher || "").trim(),
+                  teacher: teacherNamesToText(editForm.teachers),
                 };
                 setSavingRoom(true);
                 try {
                   const updated = await patch(matchedRoom.id, changes, user);
                   if (!updated) throw new Error("ไม่พบห้องที่ต้องการแก้ไข");
-                  setFocusRoom(updated);
-                  setEditForm({ ...editForm, ...changes });
+
+                  // patch() บาง backend อาจคืนเฉพาะ field ที่แก้ ทำให้ nodeId/floorId หายไป
+                  // ถ้าเอา updated ไปแทน focusRoom ตรง ๆ BuildingFloorPicker จะเสีย focusedNodeId
+                  // และผังที่กำลังเปิดอาจหาย/หลุดหลังบันทึก จึง merge กับข้อมูลเดิมไว้เสมอ
+                  const mergedRoom = {
+                    ...matchedRoom,
+                    ...updated,
+                    ...changes,
+                    id: updated?.id ?? matchedRoom.id,
+                    nodeId: updated?.nodeId ?? matchedRoom.nodeId ?? editForm.nodeId ?? "",
+                    floorId: updated?.floorId ?? matchedRoom.floorId,
+                  };
+
+                  setEditForm((f) => ({
+                    ...f,
+                    code: mergedRoom.code || "",
+                    name: mergedRoom.name || "",
+                    type: mergedRoom.type || "ห้องเรียน",
+                    capacity: mergedRoom.capacity ?? 0,
+                    nodeId: mergedRoom.nodeId || "",
+                    teachers: splitTeacherNames(mergedRoom.teacher),
+                    teacherCount: splitTeacherNames(mergedRoom.teacher).length,
+                  }));
                   setIsEditing(false);
-                  setNotice({ icon: "✅", title: "สำเร็จ", message: "บันทึกการแก้ไขเรียบร้อยแล้ว" });
+                  setNotice({ icon: null, title: "สำเร็จ", message: "บันทึกการแก้ไขเรียบร้อยแล้ว" });
                 } catch (error) {
-                  setNotice({ icon: "❌", title: "บันทึกไม่สำเร็จ", message: error?.message || String(error) });
+                  setNotice({ icon: null, title: "บันทึกไม่สำเร็จ", message: error?.message || String(error) });
                 } finally {
                   setSavingRoom(false);
                 }
@@ -493,10 +632,15 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
               <div style={{ flex: 2 }}><Field label="ชื่อห้อง"><Input value={form.name} onChange={set("name")} placeholder="ห้อง 108" /></Field></div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}><Field label="ประเภท"><Input value={form.type} onChange={set("type")} /></Field></div>
+              <div style={{ flex: 1 }}><Field label="ประเภท"><RoomTypeSelect value={form.type} onChange={set("type")} /></Field></div>
               <div style={{ flex: 1 }}><Field label="ความจุ"><Input type="number" value={form.capacity} onChange={set("capacity")} /></Field></div>
             </div>
-            <Field label="อาจารย์ประจำห้อง"><Input value={form.teacher} onChange={set("teacher")} placeholder="อ.ดร. ..." /></Field>
+            <TeacherInputs
+              count={form.teacherCount}
+              names={form.teachers}
+              onCountChange={setTeacherCount(setForm)}
+              onNameChange={setTeacherName(setForm)}
+            />
             <Field label="รหัส node บนผังชั้น (จากฝ่ายแผนที่)"><Input value={form.nodeId} readOnly placeholder="Sc8StudyRoom4F1" style={{ background: "#F8F9FA", color: "#5F6368" }} /></Field>
 
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -509,14 +653,29 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
                   // create() จะ throw ต้องดักไว้ ไม่งั้นปุ่มจะเงียบไปเฉยๆ โดยผู้ใช้ไม่รู้สาเหตุ
                   let createdRoom;
                   try {
-                    createdRoom = await create({ ...form, floorId: floorRow?.id, capacity: Number(form.capacity) }, user);
+                    createdRoom = await create({
+                      code: form.code,
+                      name: form.name,
+                      type: form.type,
+                      capacity: Number(form.capacity),
+                      teacher: teacherNamesToText(form.teachers),
+                      nodeId: form.nodeId,
+                      floorId: floorRow?.id,
+                    }, user);
                   } catch (e) {
-                    return setNotice({ icon: "❌", title: "บันทึกไม่สำเร็จ", message: "อาจมีรหัสห้องนี้อยู่แล้วในชั้นนี้ — " + (e?.message || e) });
+                    return setNotice({ icon: null, title: "บันทึกไม่สำเร็จ", message: "อาจมีรหัสห้องนี้อยู่แล้วในชั้นนี้ — " + (e?.message || e) });
                   }
-                  setForm({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacher: "", nodeId: "" });
+                  setForm({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacherCount: 1, teachers: [""], nodeId: "" });
                   setShowAddForm(false);
-                  if (createdRoom) setFocusRoom(createdRoom);
-                  setNotice({ icon: "✅", title: "สำเร็จ", message: "เพิ่มข้อมูลห้องเรียบร้อยแล้ว" });
+                  if (createdRoom) {
+                    // create() อาจคืนข้อมูลไม่ครบเช่นเดียวกับ patch() — รักษา nodeId/floorId ไว้
+                    setFocusRoom({
+                      ...createdRoom,
+                      nodeId: createdRoom?.nodeId ?? form.nodeId ?? "",
+                      floorId: createdRoom?.floorId ?? floorRow?.id,
+                    });
+                  }
+                  setNotice({ icon: null, title: "สำเร็จ", message: "เพิ่มข้อมูลห้องเรียบร้อยแล้ว" });
                 }}
               >
                 บันทึกข้อมูลห้อง
@@ -728,7 +887,7 @@ function FloorsManager({ building, floor, user }) {
               const ok = await save();
               if (ok) {
                 setIsEditing(false);
-                setNotice({ icon: "✅", title: "สำเร็จ", message: "บันทึกข้อมูลชั้นเรียบร้อยแล้ว" });
+                setNotice({ icon: null, title: "สำเร็จ", message: "บันทึกข้อมูลชั้นเรียบร้อยแล้ว" });
               }
             }}
           >
@@ -744,7 +903,7 @@ function FloorsManager({ building, floor, user }) {
 // ---------- Popup ยืนยัน / แจ้งผล ในสไตล์แอป (แทน confirm()/alert() ของเบราว์เซอร์) ----------
 // ใช้แทนกล่อง native ของเบราว์เซอร์ (เช่น "ลบ ห้อง 107?" หรือ "บันทึกการแก้ไขเรียบร้อยแล้ว")
 // ด้วยการ์ดลอยกึ่งกลางจอ ดีไซน์เดียวกับป้ายข้อมูลห้องบนแผนที่
-function ModalPopup({ icon = "ℹ️", title, message, confirmText = "ตกลง", cancelText, danger, onConfirm, onCancel }) {
+function ModalPopup({ icon = null, title, message, confirmText = "ตกลง", cancelText, danger, onConfirm, onCancel }) {
   return (
     <div
       style={{
@@ -765,7 +924,7 @@ function ModalPopup({ icon = "ℹ️", title, message, confirmText = "ตกล�
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 20 }}>{icon}</span>
+          {icon ? <span style={{ fontSize: 20 }}>{icon}</span> : null}
           <b style={{ fontSize: 14.5, color: "#202124" }}>{title}</b>
         </div>
         <div style={{ fontSize: 13, color: "#3C4043", marginBottom: 18, lineHeight: 1.5, whiteSpace: "pre-line" }}>

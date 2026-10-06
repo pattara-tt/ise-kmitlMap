@@ -1,14 +1,9 @@
 "use client";
 
-import { apiFetch } from "../lib/api";
-import { clearMapDataCache } from "../lib/useMapData";
-import { formatDateTime } from "../lib/datetime";
-
 import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 
@@ -143,7 +138,6 @@ const STATUS_STYLE = {
   approved: ["#188038", "#E6F4EA", "อนุมัติ"],
   rejected: ["#D93025", "#FCE8E6", "ไม่อนุมัติ"],
   cancelled: ["#5F6368", "#F1F3F4", "ยกเลิกแล้ว"],
-    processing: ["#1A73E8", "#E8F0FE", "กำลังดำเนินการ"],
   active: ["#188038", "#E6F4EA", "ใช้งาน"],
   suspended: ["#D93025", "#FCE8E6", "ระงับ"],
   expired: ["#D93025", "#FCE8E6", "หมดอายุ"],
@@ -201,19 +195,49 @@ export function SearchBar({ value, onChange, placeholder }) {
   );
 }
 
+function apiFetch(url, options = {}) {
+  const sessionId = localStorage.getItem("kmitlmap:session");
+
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(sessionId ? { "x-session-id": sessionId } : {}),
+    },
+  }).then(async (res) => {
+    if (res.status === 401) {
+      let data = null;
+
+      try {
+        data = await res.clone().json();
+      } catch (e) {}
+
+      window.dispatchEvent(
+        new CustomEvent("session-invalid", {
+          detail: {
+            code: data?.code || "SESSION_EXPIRED",
+            message:
+              data?.error ||
+              "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่",
+          },
+        })
+      );
+    }
+
+    return res;
+  });
+}
 
 // ───────── hook เรียกข้อมูลจาก /api/data/[name] ─────────
-const MAP_DATA_COLLECTIONS = new Set(["buildings", "floors", "nodes", "edges", "rooms", "mapBoundaries", "mapAssets"]);
-
 export function useCollection(name) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const instance = useRef(Symbol(name));
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const j = await apiFetch("/api/data/" + name);
+      const r = await apiFetch("/api/data/" + name);
+      const j = await r.json();
       setItems(j.items || []);
     } catch (e) {
       setItems([]);
@@ -223,51 +247,54 @@ export function useCollection(name) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Multiple panels can consume the same collection. After a successful write,
-  // refresh the other mounted consumers (e.g. registrar floor header / map popup).
-  useEffect(() => {
-    const onChanged = (event) => {
-      if (event.detail?.name === name && event.detail?.origin !== instance.current) reload();
-    };
-    window.addEventListener("scimap-collection-changed", onChanged);
-    return () => window.removeEventListener("scimap-collection-changed", onChanged);
-  }, [name, reload]);
-
-  const notifyChanged = useCallback(() => {
-    if (MAP_DATA_COLLECTIONS.has(name)) clearMapDataCache();
-    window.dispatchEvent(new CustomEvent("scimap-collection-changed", {
-      detail: { name, origin: instance.current },
-    }));
-  }, [name]);
+  // const create = useCallback(async (item, actor) => {
+  //   await apiFetch("/api/data/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, _actor: actor }) });
+  //   await reload();
+  // }, [name, reload]);
 
   const create = useCallback(async (item, actor) => {
-      const j = await apiFetch("/api/data/" + name, {
+      const r = await apiFetch("/api/data/" + name, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...item, _actor: actor })
       });
+
+      const j = await r.json().catch(() => ({}));
+
+      if (!r.ok) {
+        throw new Error(j.error || `สร้างข้อมูลไม่สำเร็จ (${r.status})`);
+      }
+
       await reload();
-      notifyChanged();
       return j.item;
-    }, [name, reload, notifyChanged]);
+    }, [name, reload]);
+
+  // const patch = useCallback(async (id, p, actor) => {
+  //   await apiFetch("/api/data/" + name, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p, _actor: actor }) });
+  //   await reload();
+  // }, [name, reload]);
 
   const patch = useCallback(async (id, p, actor) => {
-    const j = await apiFetch("/api/data/" + name, { 
+    const r = await apiFetch("/api/data/" + name, { 
       method: "PATCH", 
       headers: { "Content-Type": "application/json" }, 
       body: JSON.stringify({ id, ...p, _actor: actor }) 
     });
+
+    const j = await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+      throw new Error(j.error || `อัปเดตข้อมูลไม่สำเร็จ (${r.status})`);
+    }
+
     await reload();
-    notifyChanged();
     return j.item;
-  }, [name, reload, notifyChanged]);
+  }, [name, reload]);
 
   const destroy = useCallback(async (id, actor) => {
-    const encodedId = typeof id === "object" ? JSON.stringify(id) : id;
-    await apiFetch(`/api/data/${name}?id=${encodeURIComponent(encodedId)}&actor=${encodeURIComponent(actor?.name || "")}`, { method: "DELETE" });
+    await apiFetch(`/api/data/${name}?id=${encodeURIComponent(id)}&actor=${encodeURIComponent(actor?.name || "")}`, { method: "DELETE" });
     await reload();
-    notifyChanged();
-  }, [name, reload, notifyChanged]);
+  }, [name, reload]);
 
   return { items, loading, reload, create, patch, destroy };
 }
@@ -275,7 +302,7 @@ export function useCollection(name) {
 export function useStats() {
   const [stats, setStats] = useState(null);
   useEffect(() => {
-    apiFetch("/api/stats").then(setStats).catch(() => setStats(null));
+    apiFetch("/api/stats").then((r) => r.json()).then(setStats).catch(() => setStats(null));
   }, []);
   return stats;
 }
@@ -355,6 +382,3 @@ export function Note({ children, tone = "info" }) {
     </div>
   );
 }
-
-// ───────── ฟอร์แมทเวลา ─────────
-export { formatDateTime };
