@@ -1,0 +1,134 @@
+[
+  {
+    "key": "overview",
+    "title": "ดูรายงานและสถิติภาพรวมระบบ",
+    "icon": "svg:growth_graph",
+    "sortOrder": 0
+  },
+  {
+    "key": "feedback",
+    "title": "ตรวจสอบข้อเสนอแนะและคำขอจากผู้ใช้งานทั่วไป",
+    "icon": "svg:Chat_search_light",
+    "sortOrder": 1
+  },
+  {
+    "key": "contracts",
+    "title": "ตรวจสอบสัญญาที่ฝ่ายการตลาดทำกับฝ่ายการตลาด",
+    "icon": "svg:Folder_search_light",
+    "sortOrder": 2
+  },
+  {
+    "key": "audit",
+    "title": "ตรวจสอบบันทึกประวัติการแก้ไขข้อมูลแผนที่",
+    "icon": "svg:Map_light",
+    "sortOrder": 3
+  },
+  {
+    "key": "broadcast",
+    "title": "ส่งข้อความแจ้งเตือนระบบถึงมหาวิทยาลัยในระบบ",
+    "icon": "svg:bullhorn",
+    "sortOrder": 4
+  },
+  {
+    "key": "access",
+    "title": "จัดการสิทธิ์การเข้าถึงระดับสถาบัน",
+    "icon": "svg:dataflow",
+    "sortOrder": 5
+  },
+  {
+    "key": "boundary",
+    "title": "จัดการขอบเขตแผนผัง",
+    "icon": "🗺️",
+    "sortOrder": 6
+  },
+  {
+    "key": "assets",
+    "title": "จัดการข้อมูลประกอบแผนผัง",
+    "icon": "🧩",
+    "sortOrder": 7
+  },
+  {
+    "key": "save",
+    "title": "บันทึกข้อมูลแผนที่",
+    "icon": "💾",
+    "sortOrder": 8
+  },
+  {
+    "key": "users",
+    "title": "ข้อมูลผู้ใช้งาน",
+    "icon": "👥",
+    "sortOrder": 9
+  },
+  {
+    "key": "requests",
+    "title": "คำร้อง",
+    "icon": "🔎",
+    "sortOrder": 10
+  },
+  {
+    "key": "roles",
+    "title": "สิทธิ์ผู้ใช้งาน",
+    "icon": "🔑",
+    "sortOrder": 11
+  },
+  {
+    "key": "status",
+    "title": "สถานะบัญชีผู้ใช้งาน",
+    "icon": "🚦",
+    "sortOrder": 12
+  },
+  {
+    "key": "news",
+    "title": "ข้อมูลข่าวสาร",
+    "icon": "svg:news",
+    "sortOrder": 13
+  },
+  {
+    "key": "events",
+    "title": "ข้อมูลกิจกรรม",
+    "icon": "svg:bullhorn",
+    "sortOrder": 14
+  },
+  {
+    "key": "interest",
+    "title": "ตรวจสอบสถิติความสนใจของกิจกรรม",
+    "icon": "svg:growth",
+    "sortOrder": 15
+  },
+  {
+    "key": "categories",
+    "title": "เพิ่ม / แก้ไข / ลบหมวดหมู่กิจกรรมและสถานที่",
+    "icon": "svg:folder",
+    "sortOrder": 16
+  },
+  {
+    "key": "rooms",
+    "title": "จัดการรายละเอียดข้อมูลบนแผนที่",
+    "icon": "🗺️",
+    "sortOrder": 17
+  },
+  {
+    "key": "search",
+    "title": "ค้นหาห้องเรียน อาคาร หรือชื่ออาจารย์",
+    "icon": "🔍",
+    "sortOrder": 18
+  },
+  {
+    "key": "route",
+    "title": "ค้นหาวิธีไปยังจุดหมาย",
+    "icon": "svg:compass",
+    "sortOrder": 19
+  },
+  {
+    "key": "common_1",
+    "title": "ลงทะเบียนเข้าใช้ระบบ",
+    "icon": null,
+    "sortOrder": 20
+  },
+  {
+    "key": "common_2",
+    "title": "เข้าสู่ระบบด้วย E-mail",
+    "icon": null,
+    "sortOrder": 21
+  }
+]

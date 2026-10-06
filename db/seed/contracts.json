@@ -1,0 +1,38 @@
+[
+  {
+    "id": "CT-01",
+    "plan": "Campus Pro",
+    "startDate": "2025-09-01",
+    "endDate": "2026-08-31",
+    "status": "active",
+    "contact": "ict@kmitl.ac.th",
+    "institutionId": "INST-01"
+  },
+  {
+    "id": "CT-02",
+    "plan": "Campus Basic",
+    "startDate": "2025-06-01",
+    "endDate": "2026-09-15",
+    "status": "active",
+    "contact": "it@univ-a.ac.th",
+    "institutionId": "INST-02"
+  },
+  {
+    "id": "CT-03",
+    "plan": "Campus Pro",
+    "startDate": "2024-10-01",
+    "endDate": "2026-08-26",
+    "status": "active",
+    "contact": "admin@univ-b.ac.th",
+    "institutionId": "INST-03"
+  },
+  {
+    "id": "CT-04",
+    "plan": "Trial",
+    "startDate": "2026-05-01",
+    "endDate": "2026-07-31",
+    "status": "expired",
+    "contact": "office@univ-c.ac.th",
+    "institutionId": "INST-04"
+  }
+]

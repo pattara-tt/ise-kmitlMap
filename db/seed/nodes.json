@@ -1,0 +1,335 @@
+[
+  {
+    "id": "ND-0001",
+    "nodeKey": "Sc8Lift1F1",
+    "floorId": "FL-SC8-1",
+    "name": "ลิฟต์ ชั้น1",
+    "type": "lift",
+    "x": 100.7802095,
+    "y": 13.7291256
+  },
+  {
+    "id": "ND-0002",
+    "nodeKey": "Sc8Toilet1F1",
+    "floorId": "FL-SC8-1",
+    "name": "ห้องน้ำชั้น 1",
+    "type": "Toilet",
+    "x": 100.7800143,
+    "y": 13.7291665
+  },
+  {
+    "id": "ND-0003",
+    "nodeKey": "Sc8FireExit1F1",
+    "floorId": "FL-SC8-1",
+    "name": "ทางหนึไฟชั้น 1",
+    "type": "Fire_Exit",
+    "x": 100.7799855,
+    "y": 13.7288873
+  },
+  {
+    "id": "ND-0004",
+    "nodeKey": "Sc8Entrance1F1",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเข้าอาคารพระจอมชั้น 1",
+    "type": "Entrance",
+    "x": 100.7799219,
+    "y": 13.7290372
+  },
+  {
+    "id": "ND-0005",
+    "nodeKey": "Sc8Stair1F1",
+    "floorId": "FL-SC8-1",
+    "name": "ทางหนึไฟข้างลิฟต์ชั้น 1",
+    "type": "Stair",
+    "x": 100.7801042,
+    "y": 13.7291831
+  },
+  {
+    "id": "ND-0006",
+    "nodeKey": "Sc8Stair2F1",
+    "floorId": "FL-SC8-1",
+    "name": "บันไดกลางโถงชั้น 1",
+    "type": "Stair",
+    "x": 100.7801518,
+    "y": 13.7290097
+  },
+  {
+    "id": "ND-0007",
+    "nodeKey": "Sc8CoWork1F1",
+    "floorId": "FL-SC8-1",
+    "name": "coworking space KDAI",
+    "type": "Co_Work",
+    "x": 100.7800338,
+    "y": 13.7288521
+  },
+  {
+    "id": "ND-0008",
+    "nodeKey": "Sc8StudyRoom1F1",
+    "floorId": "FL-SC8-1",
+    "name": "ห้อง 108 ตึกพระจอมฯ",
+    "type": "Study_Room",
+    "x": 100.7802591,
+    "y": 13.7291126
+  },
+  {
+    "id": "ND-0009",
+    "nodeKey": "Sc8StudyRoom2F1",
+    "floorId": "FL-SC8-1",
+    "name": "ห้อง 107 ตึกพระจอมฯ",
+    "type": "Study_Room",
+    "x": 100.7802711,
+    "y": 13.7289785
+  },
+  {
+    "id": "ND-0010",
+    "nodeKey": "Sc8StudyRoom3F1",
+    "floorId": "FL-SC8-1",
+    "name": "ห้อง 106 ตึกพระจอมฯ",
+    "type": "Study_Room",
+    "x": 100.7802738,
+    "y": 13.7288756
+  },
+  {
+    "id": "ND-0011",
+    "nodeKey": "Sc8PC1",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800217,
+    "y": 13.7290345
+  },
+  {
+    "id": "ND-0012",
+    "nodeKey": "Sc8PC2",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800928,
+    "y": 13.7290358
+  },
+  {
+    "id": "ND-0013",
+    "nodeKey": "Sc8PC3",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7801504,
+    "y": 13.7290358
+  },
+  {
+    "id": "ND-0014",
+    "nodeKey": "Sc8PC4",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.780023,
+    "y": 13.7290866
+  },
+  {
+    "id": "ND-0015",
+    "nodeKey": "Sc8PC5",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800968,
+    "y": 13.7290879
+  },
+  {
+    "id": "ND-0016",
+    "nodeKey": "Sc8PC6",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7801518,
+    "y": 13.7290853
+  },
+  {
+    "id": "ND-0017",
+    "nodeKey": "Sc8PC7",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7801518,
+    "y": 13.7291296
+  },
+  {
+    "id": "ND-0018",
+    "nodeKey": "Sc8PC8",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7801303,
+    "y": 13.7291556
+  },
+  {
+    "id": "ND-0019",
+    "nodeKey": "Sc8PC9",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800131,
+    "y": 13.7291544
+  },
+  {
+    "id": "ND-0020",
+    "nodeKey": "Sc8PC9_5",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800801,
+    "y": 13.729157
+  },
+  {
+    "id": "ND-0021",
+    "nodeKey": "Sc8PC10",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800788,
+    "y": 13.7291818
+  },
+  {
+    "id": "ND-0022",
+    "nodeKey": "Sc8PC11",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7802229,
+    "y": 13.7290853
+  },
+  {
+    "id": "ND-0023",
+    "nodeKey": "Sc8PC12",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7802242,
+    "y": 13.7290345
+  },
+  {
+    "id": "ND-0024",
+    "nodeKey": "Sc8PC13",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7802255,
+    "y": 13.7289798
+  },
+  {
+    "id": "ND-0025",
+    "nodeKey": "Sc8PC14",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7802282,
+    "y": 13.7289212
+  },
+  {
+    "id": "ND-0026",
+    "nodeKey": "Sc8PC15",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7802269,
+    "y": 13.7288769
+  },
+  {
+    "id": "ND-0027",
+    "nodeKey": "Sc8PC16",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800847,
+    "y": 13.7288769
+  },
+  {
+    "id": "ND-0028",
+    "nodeKey": "Sc8PC17",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800888,
+    "y": 13.7289811
+  },
+  {
+    "id": "ND-0029",
+    "nodeKey": "Sc8PC18",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800834,
+    "y": 13.7289303
+  },
+  {
+    "id": "ND-0030",
+    "nodeKey": "Sc8PC19",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800552,
+    "y": 13.7289016
+  },
+  {
+    "id": "ND-0031",
+    "nodeKey": "Sc8PC20",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800123,
+    "y": 13.7288899
+  },
+  {
+    "id": "ND-0032",
+    "nodeKey": "Sc8PC21",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเดินอาคารพระจอมชั้น 1",
+    "type": "path",
+    "x": 100.7800364,
+    "y": 13.728873
+  },
+  {
+    "id": "ND-0033",
+    "nodeKey": "Sc8StudyRoom1CenterF1",
+    "floorId": "FL-SC8-1",
+    "name": "ห้อง 108 ตึกพระจอมฯ",
+    "type": "path",
+    "x": 100.7802781,
+    "y": 13.7291617
+  },
+  {
+    "id": "ND-0034",
+    "nodeKey": "Sc8StudyRoom2CenterF1",
+    "floorId": "FL-SC8-1",
+    "name": "ห้อง 107 ตึกพระจอมฯ",
+    "type": "path",
+    "x": 100.7802956,
+    "y": 13.7289767
+  },
+  {
+    "id": "ND-0035",
+    "nodeKey": "Sc8StudyRoom3CenterF1",
+    "floorId": "FL-SC8-1",
+    "name": "ห้อง 106 ตึกพระจอมฯ",
+    "type": "path",
+    "x": 100.7803023,
+    "y": 13.728862
+  },
+  {
+    "id": "ND-0036",
+    "nodeKey": "Sc8CoWork1F1Center",
+    "floorId": "FL-SC8-1",
+    "name": "coworking space KDAI",
+    "type": "path",
+    "x": 100.7800917,
+    "y": 13.7288373
+  },
+  {
+    "id": "ND-0037",
+    "nodeKey": "Sc8Ext0",
+    "floorId": "FL-SC8-1",
+    "name": "ทางเข้า Sc8",
+    "type": "exterior",
+    "x": 100.7799681,
+    "y": 13.7290371
+  }
+]

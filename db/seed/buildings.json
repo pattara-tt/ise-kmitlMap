@@ -1,0 +1,140 @@
+[
+  {
+    "id": "BLD-SC8",
+    "facultyId": "FAC-05",
+    "code": "SC8",
+    "name": "Sc8",
+    "outline": [
+      [
+        13.729617,
+        100.779691
+      ],
+      [
+        13.729617,
+        100.780308
+      ],
+      [
+        13.728375,
+        100.780315
+      ],
+      [
+        13.728375,
+        100.780029
+      ],
+      [
+        13.728858,
+        100.780029
+      ],
+      [
+        13.728858,
+        100.779797
+      ],
+      [
+        13.729272,
+        100.779797
+      ],
+      [
+        13.729272,
+        100.779691
+      ]
+    ],
+    "bounds": [
+      [
+        13.728306,
+        100.779664
+      ],
+      [
+        13.729686,
+        100.780328
+      ]
+    ]
+  },
+  {
+    "id": "BLD-B001",
+    "facultyId": "FAC-05",
+    "code": "B001",
+    "name": "SC9",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B002",
+    "facultyId": "FAC-05",
+    "code": "B002",
+    "name": "อาคารจุฬาภรณวลัยลักษณ์ 1",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B003",
+    "facultyId": "FAC-05",
+    "code": "B003",
+    "name": "อาคารจุฬาภรณวลัยลักษณ์ 2",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B004",
+    "facultyId": "FAC-01",
+    "code": "B004",
+    "name": "อาคาร 12 ชั้น",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B005",
+    "facultyId": "FAC-01",
+    "code": "B005",
+    "name": "อาคารเรียนรวม",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B006",
+    "facultyId": "FAC-01",
+    "code": "B006",
+    "name": "อาคารปฏิบัติการวิศวกรรม",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B007",
+    "facultyId": "FAC-06",
+    "code": "B007",
+    "name": "อาคารคณะเทคโนโลยีสารสนเทศ",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B008",
+    "facultyId": "FAC-10",
+    "code": "B008",
+    "name": "อาคารส่วนกลาง",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B009",
+    "facultyId": "FAC-10",
+    "code": "B009",
+    "name": "พื้นที่ภายนอกอาคาร",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B010",
+    "facultyId": "FAC-10",
+    "code": "B010",
+    "name": "อาคารสำนักงาน",
+    "outline": null,
+    "bounds": null
+  },
+  {
+    "id": "BLD-B011",
+    "facultyId": "FAC-10",
+    "code": "B011",
+    "name": "อาคารกิจกรรมนักศึกษา",
+    "outline": null,
+    "bounds": null
+  }
+]

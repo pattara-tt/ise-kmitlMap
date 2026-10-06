@@ -1,0 +1,20 @@
+[
+  {
+    "id": "MB-01",
+    "buildingId": "UNI-KMITL",
+    "name": "ขอบเขตวิทยาเขตลาดกระบัง",
+    "type": "campus",
+    "geometry": null,
+    "status": "published",
+    "updatedAt": "2026-08-01"
+  },
+  {
+    "id": "MB-02",
+    "buildingId": "BLD-SC8",
+    "name": "ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)",
+    "type": "building",
+    "geometry": null,
+    "status": "published",
+    "updatedAt": "2026-08-20"
+  }
+]

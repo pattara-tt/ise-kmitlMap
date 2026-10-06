@@ -1,0 +1,322 @@
+[
+  {
+    "id": "ED-0001",
+    "fromNodeId": "ND-0004",
+    "toNodeId": "ND-0011",
+    "distance": 10.8,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0002",
+    "fromNodeId": "ND-0011",
+    "toNodeId": "ND-0012",
+    "distance": 7.69,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0003",
+    "fromNodeId": "ND-0011",
+    "toNodeId": "ND-0014",
+    "distance": 5.76,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0004",
+    "fromNodeId": "ND-0014",
+    "toNodeId": "ND-0015",
+    "distance": 7.98,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0005",
+    "fromNodeId": "ND-0016",
+    "toNodeId": "ND-0015",
+    "distance": 5.95,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0006",
+    "fromNodeId": "ND-0012",
+    "toNodeId": "ND-0013",
+    "distance": 6.23,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0007",
+    "fromNodeId": "ND-0011",
+    "toNodeId": "ND-0028",
+    "distance": 9.35,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0008",
+    "fromNodeId": "ND-0012",
+    "toNodeId": "ND-0015",
+    "distance": 5.78,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0009",
+    "fromNodeId": "ND-0022",
+    "toNodeId": "ND-0023",
+    "distance": 5.62,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0010",
+    "fromNodeId": "ND-0013",
+    "toNodeId": "ND-0016",
+    "distance": 5.47,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0011",
+    "fromNodeId": "ND-0004",
+    "toNodeId": "ND-0014",
+    "distance": 12.22,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0012",
+    "fromNodeId": "ND-0016",
+    "toNodeId": "ND-0017",
+    "distance": 4.9,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0013",
+    "fromNodeId": "ND-0017",
+    "toNodeId": "ND-0018",
+    "distance": 3.7,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0014",
+    "fromNodeId": "ND-0018",
+    "toNodeId": "ND-0019",
+    "distance": 12.67,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0015",
+    "fromNodeId": "ND-0020",
+    "toNodeId": "ND-0019",
+    "distance": 7.25,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0016",
+    "fromNodeId": "ND-0019",
+    "toNodeId": "ND-0002",
+    "distance": 1.34,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0017",
+    "fromNodeId": "ND-0020",
+    "toNodeId": "ND-0021",
+    "distance": 2.74,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0018",
+    "fromNodeId": "ND-0021",
+    "toNodeId": "ND-0005",
+    "distance": 2.75,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0019",
+    "fromNodeId": "ND-0013",
+    "toNodeId": "ND-0006",
+    "distance": 2.89,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0020",
+    "fromNodeId": "ND-0016",
+    "toNodeId": "ND-0001",
+    "distance": 7.67,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0021",
+    "fromNodeId": "ND-0016",
+    "toNodeId": "ND-0022",
+    "distance": 7.69,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0022",
+    "fromNodeId": "ND-0022",
+    "toNodeId": "ND-0008",
+    "distance": 4.94,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0023",
+    "fromNodeId": "ND-0013",
+    "toNodeId": "ND-0023",
+    "distance": 7.98,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0024",
+    "fromNodeId": "ND-0023",
+    "toNodeId": "ND-0024",
+    "distance": 6.05,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0025",
+    "fromNodeId": "ND-0024",
+    "toNodeId": "ND-0009",
+    "distance": 4.93,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0026",
+    "fromNodeId": "ND-0024",
+    "toNodeId": "ND-0025",
+    "distance": 6.48,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0027",
+    "fromNodeId": "ND-0025",
+    "toNodeId": "ND-0026",
+    "distance": 4.9,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0028",
+    "fromNodeId": "ND-0026",
+    "toNodeId": "ND-0010",
+    "distance": 5.07,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0029",
+    "fromNodeId": "ND-0026",
+    "toNodeId": "ND-0027",
+    "distance": 15.38,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0030",
+    "fromNodeId": "ND-0027",
+    "toNodeId": "ND-0032",
+    "distance": 5.24,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0031",
+    "fromNodeId": "ND-0032",
+    "toNodeId": "ND-0007",
+    "distance": 2.33,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0032",
+    "fromNodeId": "ND-0032",
+    "toNodeId": "ND-0031",
+    "distance": 3.21,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0033",
+    "fromNodeId": "ND-0031",
+    "toNodeId": "ND-0003",
+    "distance": 2.91,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0034",
+    "fromNodeId": "ND-0012",
+    "toNodeId": "ND-0028",
+    "distance": 6.06,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0035",
+    "fromNodeId": "ND-0028",
+    "toNodeId": "ND-0029",
+    "distance": 5.65,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0036",
+    "fromNodeId": "ND-0029",
+    "toNodeId": "ND-0030",
+    "distance": 4.4,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0037",
+    "fromNodeId": "ND-0030",
+    "toNodeId": "ND-0031",
+    "distance": 4.82,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0038",
+    "fromNodeId": "ND-0030",
+    "toNodeId": "ND-0032",
+    "distance": 3.76,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0039",
+    "fromNodeId": "ND-0030",
+    "toNodeId": "ND-0027",
+    "distance": 4.2,
+    "edgeType": "walk",
+    "accessible": true
+  },
+  {
+    "id": "ED-0040",
+    "fromNodeId": "ND-0004",
+    "toNodeId": "ND-0037",
+    "distance": 5.0,
+    "edgeType": "exterior",
+    "accessible": true
+  }
+]

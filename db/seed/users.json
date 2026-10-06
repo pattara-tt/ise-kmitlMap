@@ -1,0 +1,82 @@
+[
+  {
+    "id": "U001",
+    "email": "exec@kmitl.ac.th",
+    "name": "จินยอง ปาร์ค",
+    "username": "exec",
+    "roleCode": "exec",
+    "institutionId": "INST-01",
+    "status": "active",
+    "createdAt": "2026-01-12"
+  },
+  {
+    "id": "U002",
+    "email": "marketing@kmitl.ac.th",
+    "name": "อาฮยาน จาง",
+    "username": "marketing",
+    "roleCode": "marketing",
+    "institutionId": "INST-01",
+    "status": "active",
+    "createdAt": "2026-01-12"
+  },
+  {
+    "id": "U003",
+    "email": "gis@kmitl.ac.th",
+    "name": "ธานอส ซัง",
+    "username": "gis",
+    "roleCode": "gis",
+    "institutionId": "INST-01",
+    "status": "active",
+    "createdAt": "2026-01-15"
+  },
+  {
+    "id": "U004",
+    "email": "admin@kmitl.ac.th",
+    "name": "แตงโม จัง",
+    "username": "admin",
+    "roleCode": "admin",
+    "institutionId": "INST-01",
+    "status": "active",
+    "createdAt": "2026-01-10"
+  },
+  {
+    "id": "U005",
+    "email": "pr@kmitl.ac.th",
+    "name": "อาสะ คิม",
+    "username": "pr",
+    "roleCode": "pr",
+    "institutionId": "INST-01",
+    "status": "active",
+    "createdAt": "2026-02-02"
+  },
+  {
+    "id": "U006",
+    "email": "registrar@kmitl.ac.th",
+    "name": "ฮง ไลเคน",
+    "username": "registrar",
+    "roleCode": "registrar",
+    "institutionId": "INST-01",
+    "status": "active",
+    "createdAt": "2026-02-02"
+  },
+  {
+    "id": "U007",
+    "email": "student@kmitl.ac.th",
+    "name": "อินฟินิตี้ ไอ",
+    "username": "student",
+    "roleCode": "user",
+    "institutionId": "INST-01",
+    "status": "active",
+    "createdAt": "2026-03-01"
+  },
+  {
+    "id": "U008",
+    "email": "somchai@kmitl.ac.th",
+    "name": "สมชาย ตั้งมั่น",
+    "username": "somchai",
+    "roleCode": "user",
+    "institutionId": "INST-01",
+    "status": "active",
+    "createdAt": "2026-03-04"
+  }
+]

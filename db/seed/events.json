@@ -1,0 +1,47 @@
+[
+  {
+    "id": "EV-01",
+    "name": "ISE Open House 2026",
+    "detail": "เปิดบ้านคณะวิศวกรรมศาสตร์นานาชาติ พบกิจกรรมและ workshop ตลอดวัน",
+    "categoryId": "CAT-01",
+    "startAt": "2026-09-05T09:00",
+    "endAt": "2026-09-05T16:00",
+    "placeName": "ลานหน้าอาคารพระจอมเกล้าฯ (Sc8)",
+    "lat": 13.729721,
+    "lon": 100.780099,
+    "tempPlaceCategoryId": "CAT-05",
+    "published": true,
+    "createdAt": "2026-08-10",
+    "authorId": "U005"
+  },
+  {
+    "id": "EV-02",
+    "name": "กีฬาสีภาควิชา",
+    "detail": "แข่งขันกีฬาสีประจำปี ณ สนามกีฬากลาง",
+    "categoryId": "CAT-02",
+    "startAt": "2026-09-18T08:00",
+    "endAt": "2026-09-19T17:00",
+    "placeName": "สนามกีฬากลาง สจล.",
+    "lat": 13.7275,
+    "lon": 100.7772,
+    "tempPlaceCategoryId": null,
+    "published": true,
+    "createdAt": "2026-08-12",
+    "authorId": "U005"
+  },
+  {
+    "id": "EV-03",
+    "name": "อบรมการใช้งาน SciMap",
+    "detail": "อบรมการใช้งานระบบแผนที่สำหรับเจ้าหน้าที่ภาควิชา",
+    "categoryId": "CAT-01",
+    "startAt": "2026-08-01T13:00",
+    "endAt": "2026-08-01T16:00",
+    "placeName": "Coworking Space KDAI",
+    "lat": 13.729,
+    "lon": 100.7799,
+    "tempPlaceCategoryId": null,
+    "published": true,
+    "createdAt": "2026-07-20",
+    "authorId": "U005"
+  }
+]

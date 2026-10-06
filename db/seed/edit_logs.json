@@ -1,0 +1,32 @@
+[
+  {
+    "id": "ML-3001",
+    "userId": "U003",
+    "action": "แก้ไขขอบเขตแผนผัง",
+    "before": "polygon v2",
+    "after": "polygon v3",
+    "editedAt": "2026-08-20T14:02:00+07:00",
+    "mapBoundaryId": "MB-02",
+    "targetLabel": "ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)"
+  },
+  {
+    "id": "ML-3002",
+    "userId": "U006",
+    "action": "แก้ไขข้อมูลห้อง",
+    "before": "ห้องเรียนรวม",
+    "after": "ห้องปฏิบัติการ",
+    "editedAt": "2026-08-19T09:41:00+07:00",
+    "roomId": "RM-02",
+    "targetLabel": "ห้อง 107 ชั้น 1"
+  },
+  {
+    "id": "ML-3003",
+    "userId": "U005",
+    "action": "เพิ่มตำแหน่งกิจกรรม",
+    "before": "-",
+    "after": "ลานหน้าอาคาร Sc8",
+    "editedAt": "2026-08-17T16:20:00+07:00",
+    "eventId": "EV-01",
+    "targetLabel": "ISE Open House 2026"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "month": "2026-03",
+    "activeUsers": 1820,
+    "searches": 9120,
+    "routes": 4310
+  },
+  {
+    "month": "2026-04",
+    "activeUsers": 2110,
+    "searches": 10480,
+    "routes": 5020
+  },
+  {
+    "month": "2026-05",
+    "activeUsers": 2450,
+    "searches": 12240,
+    "routes": 6110
+  },
+  {
+    "month": "2026-06",
+    "activeUsers": 1980,
+    "searches": 8830,
+    "routes": 3990
+  },
+  {
+    "month": "2026-07",
+    "activeUsers": 2680,
+    "searches": 13910,
+    "routes": 6840
+  },
+  {
+    "month": "2026-08",
+    "activeUsers": 3120,
+    "searches": 16240,
+    "routes": 7930
+  }
+]
