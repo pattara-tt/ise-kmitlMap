@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Btn, Card, Field, Icon, Input, Pill, Status, Textarea, UCHead, useCollection, formatDateTime } from "./ui";
+import { Btn, Card, Field, Icon, Input, Pill, Status, Textarea, UCHead, useCollection} from "./ui";
+import { formatDateTime } from "../lib/datetime";
 import { EVENT_STATE_LABEL, eventState, fmt, newsState } from "../lib/schedule";
 import { dayKey, monthKey, todayKey } from "../lib/datetime";
 

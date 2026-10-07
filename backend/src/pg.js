@@ -59,6 +59,22 @@ function unpackRequest(row) {
   return out;
 }
 
+const JSON_COLS = { mapBoundaries: ["geometry"] };
+function packJson(name, row) {
+  const cols = JSON_COLS[name];
+  if (!cols || !row) return row;
+  const out = { ...row };
+  for (const c of cols) if (out[c] != null && typeof out[c] !== "string") out[c] = JSON.stringify(out[c]);
+  return out;
+}
+function unpackJson(name, row) {
+  const cols = JSON_COLS[name];
+  if (!cols || !row) return row;
+  const out = { ...row };
+  for (const c of cols) if (typeof out[c] === "string") { try { out[c] = JSON.parse(out[c]); } catch {} }
+  return out;
+}
+
 let pool;
 export async function getPool() {
   if (pool) return pool;
@@ -114,7 +130,13 @@ export async function list(name) {
   if (name === "eventStats") { const { rows } = await query(`SELECT * FROM event_stats_view ORDER BY event_id`); return rows.map(rowOut); }
   const order = JOINED_ORDER[name] || ORDER[name] || (PK[name] ? snake(PK[name]) : "id ASC");
   const sql = JOINED_LISTS[name] ? `${JOINED_LISTS[name]} ORDER BY ${order}` : `SELECT * FROM ${table(name)} ORDER BY ${order}`;
-  const {rows}=await query(sql); const out=rows.map(rowOut); if (name === "mapAssets") return out.map(unpackAsset); if (name === "requests") return out.map(unpackRequest); return out;
+  const {rows}=await query(sql); const out=rows.map(rowOut); 
+  if (name === "mapAssets") 
+    return out.map(unpackAsset); 
+  if (name === "requests") 
+    return out.map(unpackRequest); 
+  if (name === "mapBoundaries") return out.map((r) => unpackJson(name, r));
+    return out;
 }
 async function generateId(name) {
   if(name==="users") { const {rows}=await query(`SELECT id FROM users WHERE id ~ '^U[0-9]+$' ORDER BY CAST(SUBSTRING(id FROM 2) AS INTEGER) DESC LIMIT 1`); const n=rows[0]?.id?Number(rows[0].id.slice(1))+1:1; return `U${String(n).padStart(3,"0")}`; }
@@ -122,14 +144,13 @@ async function generateId(name) {
   return `${name.slice(0,2).toUpperCase()}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
 }
 export async function insert(name,item) {
-  const row=name === "mapAssets" ? packAsset({...item}) : name === "requests" ? packRequest({...item}) : {...item}; const pk=PK[name]||"id";
-  if(!COMPOSITE[name] && pk==="id" && !row.id) row.id=await generateId(name);
+  const row = packJson(name, name === "mapAssets" ? packAsset({...item}) : name === "requests" ? packRequest({...item}) : {...item}); const pk=PK[name]||"id";  if(!COMPOSITE[name] && pk==="id" && !row.id) row.id=await generateId(name);
   const keys=Object.keys(row).filter(k=>row[k]!==undefined); if(!keys.length) throw new Error("ไม่มีข้อมูลสำหรับ insert");
   const cols=keys.map(k=>`"${snake(k)}"`).join(", "); const ph=keys.map((_,i)=>`$${i+1}`).join(", "); const vals=keys.map(k=>row[k]);
   // A create operation must never overwrite an existing row. PostgreSQL's
   // 23505 is translated into HTTP 409 by server.js.
   const {rows}=await query(`INSERT INTO ${table(name)} (${cols}) VALUES (${ph}) RETURNING *`, vals);
-  const out = rowOut(rows[0]);
+  const out = unpackJson(name, rowOut(rows[0]));
   return name === "requests" ? unpackRequest(out) : name === "mapAssets" ? unpackAsset(out) : out;
 }
 function whereFor(name,id,start=1) {
@@ -139,6 +160,7 @@ function whereFor(name,id,start=1) {
 }
 export async function update(name,id,patch) {
   if (name === "requests") patch = packRequest(patch);
+  patch = packJson(name, patch);
   if (name === "mapAssets" && Object.prototype.hasOwnProperty.call(patch, "placement")) {
     const { rows } = await query(`SELECT * FROM map_assets WHERE id=$1`, [id]);
     const current = unpackAsset(rowOut(rows[0]));
@@ -152,7 +174,7 @@ export async function update(name,id,patch) {
   }
   const pk=PK[name]||"id"; const blocked=new Set([pk,...(COMPOSITE[name]||[]).map(camel)]); const keys=Object.keys(patch).filter(k=>patch[k]!==undefined&&!blocked.has(k));
   if(!keys.length) return null; const sets=keys.map((k,i)=>`"${snake(k)}"=$${i+1}`).join(", "); const w=whereFor(name,id,keys.length+1);
-  const {rows}=await query(`UPDATE ${table(name)} SET ${sets} WHERE ${w.sql} RETURNING *`,[...keys.map(k=>patch[k]),...w.vals]); const out=rowOut(rows[0]||null); return name === "requests" ? unpackRequest(out) : name === "mapAssets" ? unpackAsset(out) : out;
+  const {rows}=await query(`UPDATE ${table(name)} SET ${sets} WHERE ${w.sql} RETURNING *`,[...keys.map(k=>patch[k]),...w.vals]); const out=unpackJson(name, rowOut(rows[0]||null)); return name === "requests" ? unpackRequest(out) : name === "mapAssets" ? unpackAsset(out) : out;
 }
 export async function remove(name,id) { const w=whereFor(name,id,1); const r=await query(`DELETE FROM ${table(name)} WHERE ${w.sql}`,w.vals); return r.rowCount>0; }
 

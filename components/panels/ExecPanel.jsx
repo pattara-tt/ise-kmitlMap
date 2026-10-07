@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart, Card, Pill, SearchBar, Status, Table, Tiles, UCHead, useCollection, useStats, formatDateTime } from "../ui";
+import { BarChart, Card, Pill, SearchBar, Status, Table, Tiles, UCHead, useCollection, useStats } from "../ui";
+import { formatDateTime } from "../../lib/datetime";
 import { contractDaysLeft, datePart } from "./marketing/shared";
 
 // Actor: บริหาร — สถิติภาพรวม · ข้อเสนอแนะจากผู้ใช้ · ตรวจสอบสัญญาบริการ · ประวัติแก้ไขข้อมูลแผนที่

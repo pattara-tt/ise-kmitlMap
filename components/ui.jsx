@@ -261,6 +261,14 @@ export function useCollection(name) {
 
       const j = await r.json().catch(() => ({}));
 
+      console.log("CREATE:", {
+        name,
+        status: r.status,
+        ok: r.ok,
+        response: j,
+        item
+      });
+      
       if (!r.ok) {
         throw new Error(j.error || `สร้างข้อมูลไม่สำเร็จ (${r.status})`);
       }

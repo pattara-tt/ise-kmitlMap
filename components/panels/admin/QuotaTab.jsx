@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Card, Field, Input, useCollection, formatDateTime } from "../../ui";
+import { Btn, Card, Field, Input, useCollection} from "../../ui";
+import { formatDateTime } from "../../../lib/datetime";
 
 // ── UC15 กำหนดจำนวนการส่งคำร้อง ──────────────────────────
 function Quota({

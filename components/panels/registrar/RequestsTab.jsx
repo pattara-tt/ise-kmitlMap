@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Card, Field, Input, SearchBar, Select, Status, Table, Textarea, useCollection, formatDateTime } from "../../ui";
+import { Btn, Card, Field, Input, SearchBar, Select, Status, Table, Textarea, useCollection} from "../../ui";
+import { formatDateTime } from "../../../lib/datetime";
 
 const FIELD_LABEL = {
   name: "ชื่อห้อง",

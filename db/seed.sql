@@ -29,7 +29,7 @@ INSERT INTO use_cases ("key", "title", "icon", "sort_order") VALUES
   ('assets', 'จัดการข้อมูลประกอบแผนผัง', '🧩', 7),
   ('save', 'บันทึกข้อมูลแผนที่', '💾', 8),
   ('users', 'ข้อมูลผู้ใช้งาน', '👥', 9),
-  ('requests', 'คำร้อง', '🔎', 10),
+  ('requests', 'คำร้อง', '📋', 10),
   ('roles', 'สิทธิ์ผู้ใช้งาน', '🔑', 11),
   ('status', 'สถานะบัญชีผู้ใช้งาน', '🚦', 12),
   ('news', 'ข้อมูลข่าวสาร', 'svg:news', 13),
@@ -85,14 +85,14 @@ INSERT INTO role_use_cases ("role_code", "use_case_key") VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users ("id", "email", "name", "username", "role_code", "institution_id", "status", "created_at", "password_hash") VALUES
-  ('U001', 'exec@kmitl.ac.th', 'จินยอง ปาร์ค', 'exec', 'exec', 'INST-01', 'active', '2026-01-12', '$2y$10$AFFLnQPzQPam0rdDBAfuGOe.4FMmICoAb5ydkpEVo7AS47PFWhFmK'),
-  ('U002', 'marketing@kmitl.ac.th', 'อาฮยาน จาง', 'marketing', 'marketing', 'INST-01', 'active', '2026-01-12', '$2y$10$AFFLnQPzQPam0rdDBAfuGOe.4FMmICoAb5ydkpEVo7AS47PFWhFmK'),
-  ('U003', 'gis@kmitl.ac.th', 'ธานอส ซัง', 'gis', 'gis', 'INST-01', 'active', '2026-01-15', '$2y$10$AFFLnQPzQPam0rdDBAfuGOe.4FMmICoAb5ydkpEVo7AS47PFWhFmK'),
-  ('U004', 'admin@kmitl.ac.th', 'แตงโม จัง', 'admin', 'admin', 'INST-01', 'active', '2026-01-10', '$2y$10$AFFLnQPzQPam0rdDBAfuGOe.4FMmICoAb5ydkpEVo7AS47PFWhFmK'),
-  ('U005', 'pr@kmitl.ac.th', 'อาสะ คิม', 'pr', 'pr', 'INST-01', 'active', '2026-02-02', '$2y$10$AFFLnQPzQPam0rdDBAfuGOe.4FMmICoAb5ydkpEVo7AS47PFWhFmK'),
-  ('U006', 'registrar@kmitl.ac.th', 'ฮง ไลเคน', 'registrar', 'registrar', 'INST-01', 'active', '2026-02-02', '$2y$10$AFFLnQPzQPam0rdDBAfuGOe.4FMmICoAb5ydkpEVo7AS47PFWhFmK'),
-  ('U007', 'student@kmitl.ac.th', 'อินฟินิตี้ ไอ', 'student', 'user', 'INST-01', 'active', '2026-03-01', '$2y$10$AFFLnQPzQPam0rdDBAfuGOe.4FMmICoAb5ydkpEVo7AS47PFWhFmK'),
-  ('U008', 'somchai@kmitl.ac.th', 'สมชาย ตั้งมั่น', 'somchai', 'user', 'INST-01', 'active', '2026-03-04', '$2y$10$AFFLnQPzQPam0rdDBAfuGOe.4FMmICoAb5ydkpEVo7AS47PFWhFmK')
+  ('U001', 'exec@kmitl.ac.th', 'จินยอง ปาร์ค', 'exec', 'exec', 'INST-01', 'active', '2026-01-12', '$2b$10$/I4qXknccgrR4piyV2Hz4ODGvEq5GpZbpfUAsTzCki1qAM9VWOzk6'),
+  ('U002', 'marketing@kmitl.ac.th', 'อาฮยาน จาง', 'marketing', 'marketing', 'INST-01', 'active', '2026-01-12', '$2b$10$/I4qXknccgrR4piyV2Hz4ODGvEq5GpZbpfUAsTzCki1qAM9VWOzk6'),
+  ('U003', 'gis@kmitl.ac.th', 'ธานอส ซัง', 'gis', 'gis', 'INST-01', 'active', '2026-01-15', '$2b$10$/I4qXknccgrR4piyV2Hz4ODGvEq5GpZbpfUAsTzCki1qAM9VWOzk6'),
+  ('U004', 'admin@kmitl.ac.th', 'แตงโม จัง', 'admin', 'admin', 'INST-01', 'active', '2026-01-10', '$2b$10$/I4qXknccgrR4piyV2Hz4ODGvEq5GpZbpfUAsTzCki1qAM9VWOzk6'),
+  ('U005', 'pr@kmitl.ac.th', 'อาสะ คิม', 'pr', 'pr', 'INST-01', 'active', '2026-02-02', '$2b$10$/I4qXknccgrR4piyV2Hz4ODGvEq5GpZbpfUAsTzCki1qAM9VWOzk6'),
+  ('U006', 'registrar@kmitl.ac.th', 'ฮง ไลเคน', 'registrar', 'registrar', 'INST-01', 'active', '2026-02-02', '$2b$10$/I4qXknccgrR4piyV2Hz4ODGvEq5GpZbpfUAsTzCki1qAM9VWOzk6'),
+  ('U007', 'student@kmitl.ac.th', 'อินฟินิตี้ ไอ', 'student', 'user', 'INST-01', 'active', '2026-03-01', '$2b$10$/I4qXknccgrR4piyV2Hz4ODGvEq5GpZbpfUAsTzCki1qAM9VWOzk6'),
+  ('U008', 'somchai@kmitl.ac.th', 'สมชาย ตั้งมั่น', 'somchai', 'user', 'INST-01', 'active', '2026-03-04', '$2b$10$/I4qXknccgrR4piyV2Hz4ODGvEq5GpZbpfUAsTzCki1qAM9VWOzk6')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO faculties ("id", "name") VALUES
@@ -233,7 +233,7 @@ INSERT INTO rooms ("id", "code", "name", "type", "capacity", "teacher", "node_id
 ON CONFLICT DO NOTHING;
 
 INSERT INTO map_boundaries ("id", "building_id", "name", "type", "geometry", "status", "updated_at") VALUES
-  ('MB-01', NULL, 'ขอบเขตวิทยาเขตลาดกระบัง', 'campus', NULL, 'published', '2026-08-01'),
+  ('MB-01', 'UNI_KMITL', 'ขอบเขตวิทยาเขตลาดกระบัง', 'campus', NULL, 'published', '2026-08-01'),
   ('MB-02', 'BLD-SC8', 'ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)', 'building', NULL, 'published', '2026-08-20')
 ON CONFLICT DO NOTHING;
 

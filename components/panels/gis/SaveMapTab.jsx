@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useMapData } from "../../../lib/useMapData";
-import { Btn, Card, Field, Input, Status, Textarea, UCHead, useCollection, formatDateTime } from "../../ui";
+import { Btn, Card, Field, Input, Status, Textarea, UCHead, useCollection } from "../../ui";
+import { formatDateTime } from "../../../lib/datetime";
 import NodeEdgeTab from "./NodeEdgeTab";
+import { todayStr } from "./shared";
 
 /* =========================================================
    UC9 : บันทึกข้อมูลแผนที่
@@ -32,6 +34,8 @@ function SaveMap({
     name: "",
     note: ""
   });
+
+  const [mapPage, setMapPage] = useState("select");
   const set = k => e => setForm(f => ({
     ...f,
     [k]: e.target.value
@@ -48,7 +52,7 @@ function SaveMap({
         try {
           await patchAsset(asset.id, {
             status: "published",
-            updatedAt: new Date().toISOString()
+            updatedAt: todayStr()
           }, user);
         } catch (e) {
           console.warn(`Publish asset ${asset.id} failed:`, e);
@@ -58,7 +62,7 @@ function SaveMap({
         try {
           await patchBoundary(boundary.id, {
             status: "published",
-            updatedAt: new Date().toISOString()
+            updatedAt: todayStr()
           }, user);
         } catch (e) {
           console.warn(`Publish boundary ${boundary.id} failed:`, e);
@@ -71,9 +75,11 @@ function SaveMap({
     }
   };
   return <>
-      <UCHead code="UC9" title="บันทึกข้อมูลแผนที่" desc="บันทึกการเปลี่ยนแปลงเป็นฉบับร่างก่อน แล้วจึงยืนยันเผยแพร่ขึ้นระบบจริง" />
+      <UCHead title="บันทึกข้อมูลแผนที่" desc="บันทึกการเปลี่ยนแปลงเป็นฉบับร่างก่อน แล้วจึงยืนยันเผยแพร่ขึ้นระบบจริง" />
 
-      <NodeEdgeTab user={user} mapData={mapData} />
+      <NodeEdgeTab user={user} mapData={mapData} onPageChange={setMapPage} />
+
+      {mapPage === "select" && <>
 
       <Card>
         <b style={{
@@ -229,6 +235,7 @@ function SaveMap({
               </Btn>}
           </div>
         </Card>)}
+        </>}
     </>;
 }
 

@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { useMapData } from "../../../lib/useMapData";
 import { MAX_SVG_BYTES } from "../../../lib/constants";
 import { SC8_CENTER } from "../../mapConfig";
-import { Btn, Card, Field, Input, Pill, Select, Status, UCHead, useCollection, formatDateTime } from "../../ui";
+import { Btn, Card, Field, Input, Pill, Select, Status, UCHead, useCollection } from "../../ui";
+import { formatDate, formatDateTime } from "../../../lib/datetime";
 import FloorplanEditor from "./FloorplanEditor";
-import { DEFAULT_PLACEMENT } from "./shared";
+import { DEFAULT_PLACEMENT, todayStr } from "./shared";
 
 export default function Assets({
   user
@@ -35,14 +36,26 @@ export default function Assets({
     setForm(current => {
       const buildingId = current.buildingId || selectedBuilding.id;
       const building = buildings.find(b => b.id === buildingId) || selectedBuilding;
-      const validFloor = (building.floors || []).some(f => f.id === current.floorId);
+      const floors = building.floors || [];
+
+      if(floors.length === 0) {
+        return {
+          ...current,
+          buildingId,
+          floorId: "custom"
+        };
+      }
+      
+      const validFloor = floors.some(f => f.id === current.floorId);
+
       return {
         ...current,
         buildingId,
-        floorId: validFloor ? current.floorId : building.floors?.[0]?.id || ""
+        floorId: validFloor ? current.floorId : floors[0]?.id || ""
       };
     });
   }, [buildings, selectedBuilding?.id]);
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -109,9 +122,6 @@ export default function Assets({
   ----------------------------------------- */
 
   const openNewEditor = () => {
-    if (!form.name.trim()) {
-      return alert("กรุณาระบุชื่อรายการ");
-    }
     if (!form.file.trim()) {
       return alert("กรุณาอัปโหลดไฟล์ .svg ก่อน");
     }
@@ -240,59 +250,70 @@ export default function Assets({
   ----------------------------------------- */
 
   return <>
-      <UCHead code="UC8" title="จัดการข้อมูลประกอบแผนผัง" desc="อัปโหลดไฟล์ผังชั้น (.svg) ภาพประกอบ และไอคอน ที่ใช้แสดงบนแผนที่ได้โดยตรงจากหน้านี้ — สำหรับผังชั้นสามารถปรับตำแหน่ง ขนาด และการหมุนบนแผนที่จริงได้" />
+      <UCHead title="จัดการแผนผังภายในอาคาร" desc="อัปโหลดไฟล์แผนผังชั้น (.svg) ที่ใช้แสดงบนแผนที่ได้โดยตรงจากหน้านี้ — สำหรับผังชั้นสามารถปรับตำแหน่ง ขนาด และการหมุนบนแผนที่จริงได้" />
 
       <Card>
         <b style={{
         fontSize: 13.5,
         color: "#202124"
       }}>
-          เพิ่มไฟล์ประกอบ
+          เพิ่มภาพแผนผัง พร้อมข้อมูลประกอบ
         </b>
 
         <div style={{
         marginTop: 8
       }}>
-          <Field label="ชื่อรายการ">
+          {/* <Field label="ชื่อรายการ">
             <Input value={form.name} onChange={set("name")} placeholder="เช่น ผังชั้น 3 อาคาร Sc8" />
-          </Field>
+          </Field> */}
 
           <Field label="ประเภท">
-            <Select value={form.kind} onChange={set("kind")}>
-              <option value="floorplan">
-                ผังชั้น (SVG)
-              </option>
-
-              <option value="image">
-                ภาพประกอบ
-              </option>
-
-              <option value="icon">
-                ไอคอน
-              </option>
-            </Select>
+            <div>
+              ผังชั้น (SVG)
+            </div>
           </Field>
 
           {form.kind === "floorplan" ? <>
+              {/* ส่วนของอาคาร : เลือกได้เฉพาะที่มีในลิสต์เท่านั้น ไม่มีการพิมพ์เพิ่มเติม */}
               <Field label="อาคาร">
                 <Select value={form.buildingId} onChange={e => {
-              const buildingId = e.target.value;
-              const building = buildings.find(b => b.id === buildingId);
-              setForm(current => ({
-                ...current,
-                buildingId,
-                floorId: building?.floors?.[0]?.id || ""
-              }));
-            }}>
+                const buildingId = e.target.value;
+                const building = buildings.find(b => b.id === buildingId);
+                setForm(current => ({
+                  ...current,
+                  buildingId,
+                  floorId: building?.floors?.[0]?.id || ""
+                }));
+              }}>              
                   {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </Select>
               </Field>
 
+              {/* ส่วนของชั้น */}
               <Field label="ชั้น">
-                <Select value={form.floorId} onChange={set("floorId")}>
+                <Select value={form.floorId} onChange={e => {
+                  const floorId = e.target.value;
+                  if (floorId === "custom") {
+                    setForm(current => ({ ...current, floorId: "custom", customFloor: "" }));
+                  } else {
+                    setForm(current => ({ ...current, floorId }));
+                  }
+                }}>
                   {selectedFloors.map(f => <option key={f.id} value={f.id}>{f.name || `ชั้น ${f.floorNo}`}</option>)}
+                  <option value="custom">-- พิมพ์ระบุเอง (กรณีไม่มีในรายการ) --</option>
                 </Select>
               </Field>
+
+              {/* ถ้าเลือก ชั้น แบบกำหนดเอง ให้แสดงช่อง Input ให้พิมพ์ */}
+              {(form.floorId === "custom" || selectedFloors.length === 0) && (
+                <Field label="ระบุชั้นเอง">
+                  <Input 
+                    value={form.customFloor || ""} 
+                    onChange={set("customFloor")} 
+                    placeholder="เช่น 1 หรือ 2 หรือ ชั้นลอย" 
+                  />
+                </Field>
+              )}
             </> : null}
 
           <Field label="อัปโหลดไฟล์แผนผัง (.svg)">
@@ -387,22 +408,20 @@ export default function Assets({
               </div>}
           </Field>
 
-          {/* ปุ่มเดิม */}
+          {/* ปุ่ม*/}
           <div style={{
           display: "flex",
           gap: 8,
           flexWrap: "wrap"
         }}>
             <Btn disabled={uploading} onClick={async () => {
-            if (!form.name.trim()) {
-              return alert("กรุณาระบุชื่อรายการ");
-            }
+              
             if (!form.file.trim()) {
               return alert("กรุณาอัปโหลดไฟล์ .svg ก่อน");
             }
             await create({
               ...form,
-              updatedAt: new Date().toISOString(),
+              updatedAt: todayStr(),
               status: "draft"
             }, user);
             setForm({
@@ -418,7 +437,7 @@ export default function Assets({
               เพิ่มไฟล์
             </Btn>
 
-            {/* ปุ่มใหม่ */}
+            {/* ปุ่ม */}
             {form.kind === "floorplan" && form.file ? <Btn disabled={uploading} onClick={openNewEditor}>
                 🗺️ เพิ่มไฟล์และจัดตำแหน่งบนแผนที่
               </Btn> : null}
@@ -426,7 +445,6 @@ export default function Assets({
         </div>
       </Card>
 
-      {/* รายการเดิม */}
 
       {items.map(a => <Card key={a.id}>
           <div style={{

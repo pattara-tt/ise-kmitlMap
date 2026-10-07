@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Card, Field, Input, Select, Textarea, UCHead, useCollection, formatDateTime } from "../../ui";
+import { Btn, Card, Field, Input, Select, Textarea, UCHead, useCollection } from "../../ui";
+import { formatDateTime } from "../../../lib/datetime";
 
 /* =========================================================
    UC-5 : ส่งข้อความแจ้งเตือน
