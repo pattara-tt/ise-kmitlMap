@@ -233,7 +233,7 @@ INSERT INTO rooms ("id", "code", "name", "type", "capacity", "teacher", "node_id
 ON CONFLICT DO NOTHING;
 
 INSERT INTO map_boundaries ("id", "building_id", "name", "type", "geometry", "status", "updated_at") VALUES
-  ('MB-01', 'UNI_KMITL', 'ขอบเขตวิทยาเขตลาดกระบัง', 'campus', NULL, 'published', '2026-08-01'),
+  ('MB-01', NULL, 'ขอบเขตวิทยาเขตลาดกระบัง', 'campus', NULL, 'published', '2026-08-01'),
   ('MB-02', 'BLD-SC8', 'ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)', 'building', NULL, 'published', '2026-08-20')
 ON CONFLICT DO NOTHING;
 
