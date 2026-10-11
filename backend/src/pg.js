@@ -7,7 +7,7 @@ export const TABLES = {
   mapDrafts: "map_drafts", requests: "requests", requestQuota: "request_quota", broadcasts: "broadcasts",
   notifications: "notifications", feedback: "feedback", news: "news", events: "events", eventInterest: "event_interest",
   eventStats: "event_stats", contracts: "contracts", modules: "modules", institutionAccess: "institution_access",
-  institutionAccessModules: "institution_access_modules", accessHistory: "access_history", editLogs: "edit_logs", usage: "usage",
+  institutionAccessModules: "institution_access_modules", accessHistory: "access_history", editLogs: "edit_logs", usage: "usage", searchLogs: "search_logs",
 };
 
 const PK = { roles: "code", useCases: "key", modules: "code", eventStats: "event_id", usage: "month" };
@@ -24,7 +24,7 @@ const ORDER = {
   mapDrafts: "saved_at DESC", requests: "created_at DESC", requestQuota: "updated_at DESC", broadcasts: "created_at DESC",
   notifications: "created_at DESC", feedback: "created_at DESC", news: "created_at DESC", events: "start_at DESC NULLS LAST",
   eventInterest: "created_at DESC", contracts: "created_at DESC", modules: "code ASC", institutionAccess: "updated_at DESC",
-  institutionAccessModules: "access_id ASC, module_code ASC", accessHistory: "changed_at DESC", editLogs: "edited_at DESC", usage: "month ASC",
+  institutionAccessModules: "access_id ASC, module_code ASC", accessHistory: "changed_at DESC", editLogs: "edited_at DESC", usage: "month ASC", searchLogs: "created_at DESC",
 };
 
 export const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -114,6 +114,7 @@ function table(name) { const t=TABLES[name]; if(!t) throw new Error("ไม่�
 const JOINED_LISTS = {
   editLogs: `SELECT e.*, u.name AS user_name FROM edit_logs e LEFT JOIN users u ON u.id=e.user_id`,
   feedback: `SELECT f.*, u.name AS user_name FROM feedback f LEFT JOIN users u ON u.id=f.user_id`,
+  requests: `SELECT r.*, u.name AS user_name FROM requests r LEFT JOIN users u ON u.id=r.user_id`,
   accessHistory: `SELECT h.*, u.name AS actor_name FROM access_history h LEFT JOIN users u ON u.id=h.actor_id`,
   accountHistory: `SELECT h.*, u.name AS user_name, a.name AS actor_name FROM account_history h LEFT JOIN users u ON u.id=h.user_id LEFT JOIN users a ON a.id=h.changed_by`,
   broadcasts: `SELECT b.*, u.name AS sender_name FROM broadcasts b LEFT JOIN users u ON u.id=b.sent_by`,
@@ -122,7 +123,7 @@ const JOINED_LISTS = {
   mapDrafts: `SELECT d.*, u.name AS saved_by_name FROM map_drafts d LEFT JOIN users u ON u.id=d.saved_by`,
 };
 const JOINED_ORDER = {
-  editLogs: "e.edited_at DESC", feedback: "f.created_at DESC", accessHistory: "h.changed_at DESC",
+  editLogs: "e.edited_at DESC", feedback: "f.created_at DESC", requests: "r.created_at DESC", accessHistory: "h.changed_at DESC",
   accountHistory: "h.changed_at DESC", broadcasts: "b.created_at DESC", news: "n.created_at DESC",
   events: "e.start_at DESC NULLS LAST", mapDrafts: "d.saved_at DESC",
 };

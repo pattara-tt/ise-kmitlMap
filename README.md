@@ -25,7 +25,7 @@ Frontend ไม่ต่อฐานข้อมูลโดยตรง ทุ�
 | `backend/src/store.js` | data layer แบบ mock in-memory (โหลดจาก `db/seed/*.json`) |
 | `backend/src/pg.js` | data layer PostgreSQL ใช้ interface เดียวกับ `store.js` และแปลง `snake_case` ↔ `camelCase` |
 | `backend/src/auth.js`, `account.js`, `overpass.js`, `constants.js` | session/idle timeout · ผลข้างเคียงของบัญชี · proxy OSM/walknet · enum ของ role และสถานะ |
-| `db/schema.sql`, `db/SCHEMA.md` | schema ปัจจุบัน (33 ตาราง + view `event_stats_view`) และเอกสารอธิบายทุกตาราง/FK/ER diagram |
+| `db/schema.sql`, `db/SCHEMA.md` | schema ปัจจุบัน (34 ตาราง + view `event_stats_view`) และเอกสารอธิบายทุกตาราง/FK/ER diagram |
 | `db/seed/*.json` | ข้อมูล seed ต้นทาง (หนึ่งไฟล์ต่อตาราง) |
 | `db/seed.sql` | **สร้างอัตโนมัติ** จาก JSON ด้วย `scripts/build-seed.js` อย่าแก้ด้วยมือ |
 | `db/migrations/` | migration สำหรับ DB ที่มีอยู่แล้ว (ดูหัวข้อ Migration) |
@@ -123,6 +123,8 @@ DATABASE_URL='postgresql://...' npm run test:pg   # ตรวจ DB ทดสอ
 | `003_registrar_room_types.sql`, `004_registrar_room_types_df.sql` | ตาราง `room_types` และค่าเริ่มต้น (รันซ้ำได้) |
 | `005_map_boundaries_institution.sql` | `map_boundaries.institution_id` |
 | `006_contracts_usecase_title.sql` | แก้ชื่อเมนู `contracts` (ข้อมูลเท่านั้น) |
+| `007_exec_requests_and_search_stats.sql` | เมนูผู้บริหาร: แยกคำร้องออกจากข้อเสนอแนะ และเพิ่มสถิติการค้นหา (ข้อมูลเท่านั้น) |
+| `008_search_logs.sql` | ตาราง `search_logs` เก็บประวัติการค้นหา/นำทาง (รันซ้ำได้) |
 
 ```bash
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/00N_name.sql
@@ -139,7 +141,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/00N_name.sql
 - คำร้อง/แจ้งเตือน: `requests`, `request_quota`, `broadcasts`, `notifications`, `feedback`
 - ข่าว/กิจกรรม: `news`, `events`, `event_interest`, `event_stats` และ view `event_stats_view`
 - การตลาด: `contracts`, `modules`, `institution_access`, `institution_access_modules`, `access_history`
-- Audit/สถิติ: `edit_logs`, `usage`
+- Audit/สถิติ: `edit_logs`, `usage`, `search_logs`
 
 ## API หลัก
 
@@ -156,6 +158,8 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/00N_name.sql
 | `GET/POST/PATCH/DELETE` | `/api/data/:name` | generic collection API (จำกัดสิทธิ์บาง collection ตาม role) |
 | `POST` | `/api/report` | ส่งรายงานปัญหา |
 | `GET` | `/api/stats` | สถิติ dashboard |
+| `POST` | `/api/search-log` | บันทึกการค้นหา/นำทางของผู้ใช้ (`kind` = `search` / `route` / `navigate`) |
+| `GET` | `/api/stats/searches?days=N` | อันดับสถานที่ที่ถูกค้นหามากที่สุด (เฉพาะผู้บริหาร) |
 | `GET` | `/api/osm`, `/api/walknet` | proxy ข้อมูลแผนที่ |
 
 ยกเว้น `/health`, `/api/auth/roles`, `/api/auth/institutions`, `POST /api/auth`, `/api/osm` และ `/api/walknet` ทุก endpoint ต้องมี header `x-session-id`

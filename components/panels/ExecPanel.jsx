@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BarChart, Card, Pill, SearchBar, Status, Table, Tiles, UCHead, useCollection, useStats } from "../ui";
+import { apiFetch } from "../../lib/api";
 import { formatDateTime } from "../../lib/datetime";
 import { contractDaysLeft, datePart } from "./marketing/shared";
 
-// Actor: บริหาร — สถิติภาพรวม · ข้อเสนอแนะจากผู้ใช้ · ตรวจสอบสัญญาบริการ · ประวัติแก้ไขข้อมูลแผนที่
+// Actor: บริหาร — สถิติภาพรวม · ข้อเสนอแนะจากผู้ใช้ · คำร้องจากผู้ใช้ · สถิติการค้นหา · ตรวจสอบสัญญาบริการ · ประวัติแก้ไขข้อมูลแผนที่
 export default function ExecPanel({ uc, user }) {
   if (uc === "overview") return <Overview />;
   if (uc === "feedback") return <Feedback />;
+  if (uc === "exec_requests") return <Requests />;
+  if (uc === "search_stats") return <SearchStats />;
   if (uc === "contracts") return <Contracts user={user} />;
   return <Audit />;
 }
@@ -40,7 +43,7 @@ function Overview() {
           ))}
         </div>
         <BarChart data={stats.usage} labelKey="month" valueKey={metric} />
-        <div style={{ fontSize: 11.5, color: "#5F6368" }}>หน่วย: ครั้ง/คน ต่อเดือน (มี.ค.–ส.ค. 2026)</div>
+        <div style={{ fontSize: 11.5, color: "#5F6368" }}>หน่วย: ครั้ง/คน ต่อเดือน{stats.usage.length ? ` (${stats.usage[0].month} ถึง ${stats.usage[stats.usage.length - 1].month})` : ""}</div>
       </Card>
 
       <Card>
@@ -69,7 +72,7 @@ function Feedback() {
 
   return (
     <>
-      <UCHead title="ตรวจสอบข้อเสนอแนะและคำขอจากผู้ใช้งานทั่วไป" desc="ดูข้อเสนอแนะและคำขอที่ผู้ใช้งานทั่วไปส่งเข้ามาได้อย่างเดียว" />
+      <UCHead title="ตรวจสอบข้อเสนอแนะจากผู้ใช้งานทั่วไป" desc="ดูข้อเสนอแนะที่ผู้ใช้งานทั่วไปส่งเข้ามา (ดูได้อย่างเดียว)" />
       <Tiles items={[
         { label: "ทั้งหมด", value: items.length },
         { label: "ยังไม่ได้ตรวจ", value: items.filter(isNew).length },
@@ -98,6 +101,138 @@ function Feedback() {
           {f.reply ? <div style={{ fontSize: 12.5, color: "#188038", marginTop: 6 }}>ผลการพิจารณา: {f.reply}</div> : null}
         </Card>
       ))}
+    </>
+  );
+}
+
+const REQUEST_STATUSES = [["pending", "รอพิจารณา"], ["processing", "กำลังดำเนินการ"], ["approved", "อนุมัติ"], ["rejected", "ไม่อนุมัติ"], ["cancelled", "ยกเลิก"]];
+
+// คำร้องแก้ไขข้อมูลแผนที่จากผู้ใช้ (ตาราง requests) — แยกจากข้อเสนอแนะ (ตาราง feedback)
+function Requests() {
+  const { items } = useCollection("requests");
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState("all");
+  const rows = items.filter((r) =>
+    (filter === "all" || r.status === filter) &&
+    `${r.subject} ${r.detail ?? ""} ${r.userName ?? ""} ${r.id}`.toLowerCase().includes(q.toLowerCase())
+  );
+
+  return (
+    <>
+      <UCHead title="ตรวจสอบคำร้องจากผู้ใช้งานทั่วไป" desc="ดูคำร้องขอแก้ไขข้อมูลบนแผนที่ที่ผู้ใช้งานทั่วไปส่งเข้ามาและสถานะการดำเนินการ (ดูได้อย่างเดียว)" />
+      <Tiles items={[
+        { label: "ทั้งหมด", value: items.length },
+        ...REQUEST_STATUSES.map(([k, label]) => ({ label, value: items.filter((r) => r.status === k).length })),
+      ]} />
+      <SearchBar value={q} onChange={setQ} placeholder="ค้นหาเรื่อง / รายละเอียด / ผู้ส่ง / รหัสคำร้อง" />
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {[["all", "ทั้งหมด"], ...REQUEST_STATUSES].map(([k, label]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            style={{ border: "1px solid", borderColor: filter === k ? "#1A73E8" : "#DADCE0", background: filter === k ? "#E8F0FE" : "#fff",
+              color: filter === k ? "#1A73E8" : "#5F6368", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {rows.length === 0 ? <div style={{ fontSize: 13, color: "#5F6368" }}>ไม่พบคำร้องตามเงื่อนไข</div> : null}
+      {rows.map((r) => (
+        <Card key={r.id}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <b style={{ fontSize: 14.5, color: "#202124" }}>{r.subject}</b>
+            <Status value={r.status} />
+          </div>
+          {r.detail ? <div style={{ fontSize: 13, color: "#3C4043", marginTop: 6 }}>{r.detail}</div> : null}
+          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 8 }}>โดย {r.userName ?? "-"} · {formatDateTime(r.createdAt)} · {r.id}</div>
+          {r.note ? <div style={{ fontSize: 12.5, color: "#188038", marginTop: 6 }}>ผลการพิจารณา: {r.note}</div> : null}
+        </Card>
+      ))}
+    </>
+  );
+}
+
+// ข้อมูลตัวอย่าง (placeholder) — ใช้แสดงเฉพาะเมื่อตาราง search_logs ยังไม่มีข้อมูลจริง
+const SAMPLE_SEARCHES = [
+  { place: "อาคาร Sc8 (คณะวิศวกรรมศาสตร์นานาชาติ)", searches: 214, navigations: 96 },
+  { place: "ห้องสมุดกลาง", searches: 187, navigations: 81 },
+  { place: "โรงอาหารกลาง", searches: 162, navigations: 70 },
+  { place: "ห้องน้ำ (ทุกอาคาร)", searches: 139, navigations: 52 },
+  { place: "อาคารคณะเทคโนโลยีสารสนเทศ", searches: 118, navigations: 47 },
+  { place: "Coworking Space KDAI", searches: 96, navigations: 33 },
+  { place: "ลานหน้าอาคาร Sc8", searches: 74, navigations: 21 },
+  { place: "ห้อง 107 ชั้น 1 อาคาร Sc8", searches: 58, navigations: 17 },
+];
+const SEARCH_RANGES = [[7, "7 วันล่าสุด"], [30, "30 วันล่าสุด"], [0, "ทั้งหมด"]];
+
+function SearchStats() {
+  const [days, setDays] = useState(30);
+  const [data, setData] = useState(null);     // null = กำลังโหลด
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    setData(null); setError("");
+    apiFetch(`/api/stats/searches?days=${days}`)
+      .then((d) => { if (alive) setData(d); })
+      .catch((e) => { if (alive) setError(e.message || "โหลดข้อมูลไม่สำเร็จ"); });
+    return () => { alive = false; };
+  }, [days]);
+
+  const header = <UCHead title="สถิติการค้นหาอาคารและจุดสนใจ" desc="อันดับอาคารและจุดสนใจที่ผู้ใช้งานค้นหาบ่อยที่สุด เพื่อใช้วางแผนบริหารและปรับปรุงพื้นที่" />;
+  if (error) return <>{header}<div style={{ color: "#D93025", fontSize: 13 }}>{error}</div></>;
+  if (!data) return <>{header}<div style={{ color: "#5F6368", fontSize: 13 }}>กำลังโหลดข้อมูล…</div></>;
+
+  const isSample = data.total === 0;
+  const rows = isSample ? SAMPLE_SEARCHES : data.places;
+  const totalSearches = rows.reduce((n, r) => n + r.searches, 0);
+  const totalNav = rows.reduce((n, r) => n + r.navigations, 0);
+  const max = Math.max(1, ...rows.map((r) => r.searches));
+
+  return (
+    <>
+      {header}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {SEARCH_RANGES.map(([d, label]) => (
+          <button key={d} onClick={() => setDays(d)}
+            style={{ border: "1px solid", borderColor: days === d ? "#1A73E8" : "#DADCE0", background: days === d ? "#E8F0FE" : "#fff",
+              color: days === d ? "#1A73E8" : "#5F6368", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {isSample ? (
+        <Card>
+          <Pill color="#B06000" bg="#FEF7E0">ข้อมูลตัวอย่าง</Pill>
+          <span style={{ fontSize: 12.5, color: "#5F6368", marginLeft: 8 }}>ยังไม่มีประวัติการค้นหาในช่วงเวลานี้ ตัวเลขด้านล่างเป็นค่าตัวอย่างสำหรับแสดงรูปแบบรายงาน</span>
+        </Card>
+      ) : null}
+      <Tiles items={[
+        { label: isSample ? "การค้นหาทั้งหมด (ตัวอย่าง)" : "การค้นหาทั้งหมด", value: totalSearches.toLocaleString() },
+        { label: "เริ่มนำทาง", value: totalNav.toLocaleString() },
+        { label: "จำนวนสถานที่ที่ถูกค้นหา", value: rows.length },
+        { label: "ค้นหามากที่สุด", value: rows[0]?.place.split(" (")[0] ?? "-" },
+      ]} />
+      <Table
+        columns={[
+          { key: "rank", label: "อันดับ", render: (r) => rows.indexOf(r) + 1 },
+          { key: "place", label: "อาคาร / จุดสนใจ" },
+          { key: "searches", label: "จำนวนการค้นหา", render: (r) => r.searches.toLocaleString() },
+          { key: "navigations", label: "เริ่มนำทาง", render: (r) => r.navigations.toLocaleString() },
+          {
+            key: "share", label: "สัดส่วน",
+            render: (r) => (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 140 }}>
+                <div style={{ flex: 1, height: 8, background: "#F1F3F4", borderRadius: 999 }}>
+                  <div style={{ width: `${(r.searches / max) * 100}%`, height: "100%", background: "#1A73E8", borderRadius: 999 }} />
+                </div>
+                <span style={{ fontSize: 11.5, color: "#5F6368" }}>{totalSearches ? ((r.searches / totalSearches) * 100).toFixed(0) : 0}%</span>
+              </div>
+            ),
+          },
+        ]}
+        rows={rows}
+        empty="ยังไม่มีประวัติการค้นหา"
+      />
     </>
   );
 }

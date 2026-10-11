@@ -27,6 +27,7 @@ const refs = {
   map_assets: { floorId: 'floors' },
   map_drafts: { buildingId: 'buildings', savedBy: 'users' },
   requests: { userId: 'users', roomId: 'rooms', nodeId: 'nodes', reviewedBy: 'users' },
+  search_logs: { userId: 'users', buildingId: 'buildings', roomId: 'rooms' },
   request_quota: { updatedBy: 'users' },
   broadcasts: { sentBy: 'users' },
   notifications: { userId: 'users', broadcastId: 'broadcasts' },
@@ -47,7 +48,7 @@ const refs = {
   },
 };
 const tables = [...schema.matchAll(/^CREATE TABLE\s+([a-z_]+)\s*\(/gm)].map(match => match[1]);
-assert.equal(tables.length, 33, 'Normalized schema must contain exactly 33 tables');
+assert.equal(tables.length, 34, 'Normalized schema must contain exactly 34 tables');
 assert.equal(new Set(tables).size, tables.length, 'Duplicate table in schema');
 for (const table of tables) {
   const file = path.join(dir, `${table}.json`);

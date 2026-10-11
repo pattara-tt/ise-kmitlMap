@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { BUILDINGS, KMITL_ALL_NODES } from "../mapConfig";
 import { normalize, getNodeIcon, getNodeTypeLabel } from "./nodePresentation";
+import { logSearch } from "../../lib/searchLog";
 
 export function useBuildingSearch({
   search,
@@ -99,6 +100,7 @@ export function useBuildingSearch({
     if (item.kind === "building") {
       setSearchedNodeId(null);
       const data = BUILDINGS[item.key];
+      logSearch({ kind: "search", placeLabel: item.name, query: search, buildingId: data?.id });
       setOpenKey(item.key);
       setCurFloor("1");
       onChangeRef.current?.({ building: data.name, floor: "1" });
@@ -116,6 +118,7 @@ export function useBuildingSearch({
       const key = roomBuilding?.[0] || openKey;
       const floorNo = String(roomFloor?.floorNo || curFloor || "1");
       const buildingName = roomBuilding?.[1]?.name || b?.name || building;
+      logSearch({ kind: "search", placeLabel: buildingName ? `${item.name} (${buildingName})` : item.name, query: search, buildingId: roomFloor?.buildingId, roomId: room.id });
 
       setOpenKey(key || null);
       setCurFloor(floorNo);
@@ -136,6 +139,7 @@ export function useBuildingSearch({
     }
 
     if (item.kind === "node") {
+      logSearch({ kind: "search", placeLabel: item.name || item.node?.label, query: search });
       setSearchedNodeId(item.id);
       const node = item.node;
       map.setView([node.lat, node.lon], 20, { animate: true });

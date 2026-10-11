@@ -37,5 +37,18 @@
     "nodeId": "ND-0007",
     "before": "{\"name\":\"Coworking Space KDAI\",\"type\":\"พื้นที่ทำงานร่วม\",\"capacity\":60,\"teacher\":\"-\"}",
     "after": "{\"name\":\"Coworking Space KDAI\",\"type\":\"พื้นที่ทำงานร่วม\",\"capacity\":70,\"teacher\":\"-\"}"
+  },
+  {
+    "id": "RQ-1004",
+    "userId": "U007",
+    "subject": "แจ้งแก้ไขข้อมูลสถานที่",
+    "detail": "abcd test",
+    "status": "pending",
+    "createdAt": "2026-10-11T11:52:12.124643+00:00",
+    "note": "",
+    "roomId": null,
+    "nodeId": "ND-0004",
+    "before": "{\"name\":\"ทางเข้าอาคารพระจอมชั้น 1\"}",
+    "after": "{\"name\":\"ทางเข้าอาคารพระจอมชั้น 1\"}"
   }
 ]

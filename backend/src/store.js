@@ -26,7 +26,7 @@ const FILES = {
   requestQuota: "request_quota", broadcasts: "broadcasts", notifications: "notifications", feedback: "feedback",
   news: "news", events: "events", eventInterest: "event_interest", eventStats: "event_stats", contracts: "contracts",
   modules: "modules", institutionAccess: "institution_access", institutionAccessModules: "institution_access_modules",
-  accessHistory: "access_history", editLogs: "edit_logs", usage: "usage",
+  accessHistory: "access_history", editLogs: "edit_logs", usage: "usage", searchLogs: "search_logs",
 };
 
 const PK = { roles: "code", useCases: "key", modules: "code", eventStats: "eventId", usage: "month" };
@@ -112,7 +112,7 @@ export async function withTransaction(operation) {
 }
 export async function list(name) {
   if (USE_PG) return (await pg()).list(name);
-  if (name === "requests") return (db.requests || []).map(unpackRequest);
+  if (name === "requests") return (db.requests || []).map((row) => ({ ...unpackRequest(row), userName: (db.users || []).find((u) => u.id === row.userId)?.name || null }));
   if (name === "rooms") {
     const now = Date.now();
     const active = (db.events || []).filter((e) => e.published && e.roomId && e.temporaryRoomType &&

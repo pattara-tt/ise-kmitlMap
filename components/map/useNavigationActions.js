@@ -3,6 +3,7 @@
 import { CAT, KMITL_ALL_NODES, TURN_EN, roadEN } from "../mapConfig";
 import { bearing, haversine, pointAtDistance, turnAt, turnSide } from "../mapGeo";
 import { speak, speakNow } from "../speech";
+import { logSearch } from "../../lib/searchLog";
 
 export function useNavigationActions({ 
   ctx,
@@ -239,6 +240,7 @@ export function useNavigationActions({
   }
   
   function startNav(i) {
+    logSearch({ kind: "navigate", placeLabel: sTo, fromLabel: sFrom });
     const c = ctx.current,
       L = c.L;
     const r = c.scored?.[i];
@@ -380,6 +382,7 @@ export function useNavigationActions({
       t = sTo.trim();
     setSearchOpen(false);
     setRouteSheetOpen(false);
+    if (t) logSearch({ kind: "route", placeLabel: t, fromLabel: f });
     try {
       apiRef?.current?.showRoutes?.(f || null, t || null);
     } catch (e) {}

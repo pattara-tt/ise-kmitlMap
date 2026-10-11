@@ -19,7 +19,8 @@ const USER_TABS = [
   { id: "map", label: "แผนที่", icon: "svg:map" },
   { id: "events", label: "กิจกรรม", icon: "svg:bullhorn" },
   { id: "notifications", label: "แจ้งเตือน", icon: "svg:notification" },
-  { id: "requests", label: "คำร้องของฉัน", icon: "📋" }
+  { id: "requests", label: "คำร้องของฉัน", icon: "📋" },
+  { id: "feedback", label: "ส่งข้อเสนอแนะ", icon: "✉️" }
 ];
 
 // ความกว้างที่ถือว่าเป็นจอคอม (ใช้เฉพาะตอนอยู่โหมด auto)
