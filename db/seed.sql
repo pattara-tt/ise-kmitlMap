@@ -228,13 +228,13 @@ ON CONFLICT DO NOTHING;
 INSERT INTO rooms ("id", "code", "name", "type", "capacity", "teacher", "node_id", "category_id", "floor_id") VALUES
   ('RM-01', '106', 'ห้อง 106', 'ห้องเรียน', 45, 'อ.ดร. ปรีชา วงศ์ทอง', 'ND-0010', 'CAT-03', 'FL-SC8-1'),
   ('RM-02', '107', 'ห้อง 107', 'ห้องปฏิบัติการ', 40, 'อ.ดร. สุนิสา ภูผา', 'ND-0009', 'CAT-03', 'FL-SC8-1'),
-  ('RM-03', 'KDAI', 'Coworking Space KDAI', 'พื้นที่ทำงานร่วม', 60, '-', 'ND-0007', 'CAT-03', 'FL-SC8-1'),
+  ('RM-03', 'KDAI', 'Coworking Space KDAI', null, 60, '-', 'ND-0007', 'CAT-03', 'FL-SC8-1'),
   ('RM-04', '108', 'ห้อง 108', 'ห้องเรียน', 45, 'อ.ดร. มานพ ศรีสุข', 'ND-0008', 'CAT-03', 'FL-SC8-1')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO map_boundaries ("id", "building_id", "name", "type", "geometry", "status", "updated_at") VALUES
-  ('MB-01', 'UNI_KMITL', 'ขอบเขตวิทยาเขตลาดกระบัง', 'campus', NULL, 'published', '2026-08-01'),
-  ('MB-02', 'BLD-SC8', 'ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)', 'building', NULL, 'published', '2026-08-20')
+INSERT INTO map_boundaries ("id", "building_id", "institution_id", "name", "type", "geometry", "status", "updated_at") VALUES
+('MB-01', NULL, 'INST-01', 'ขอบเขตวิทยาเขตลาดกระบัง', 'campus', NULL, 'published', '2026-08-01'),
+('MB-02', 'BLD-SC8', 'INST-01', 'ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)', 'building', NULL, 'published', '2026-08-20')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO map_assets ("id", "floor_id", "name", "kind", "file", "status", "updated_at") VALUES
@@ -347,4 +347,15 @@ INSERT INTO usage ("month", "active_users", "searches", "routes") VALUES
   ('2026-08', 3120, 16240, 7930)
 ON CONFLICT DO NOTHING;
 
+INSERT INTO room_types ("id","name","icon","color","description") VALUES
+  ('RT-001','ห้องเรียน','🏫','#1A73E8',''),
+  ('RT-002','ห้องน้ำ','🚻','#1A73E8',''),
+  ('RT-003','co-working','💻','#1A73E8',''),
+  ('RT-004','ลิฟต์','🛗','#1A73E8',''),
+  ('RT-005','บันได','🪜','#1A73E8',''),
+  ('RT-006','ห้องพักอาจารย์','👨‍🏫','#1A73E8','')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO use_cases ("key","title","icon","sort_order") VALUES ('room_types','จัดการประเภทห้องและไอคอน','🧩',18) ON CONFLICT DO NOTHING;
+INSERT INTO role_use_cases ("role_code","use_case_key") VALUES ('registrar','room_types') ON CONFLICT DO NOTHING;
 COMMIT;

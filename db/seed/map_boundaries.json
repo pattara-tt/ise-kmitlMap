@@ -1,7 +1,7 @@
 [
   {
     "id": "MB-01",
-    "buildingId": "UNI_KMITL",
+    "buildingId": null,
     "name": "ขอบเขตวิทยาเขตลาดกระบัง",
     "type": "campus",
     "geometry": null,

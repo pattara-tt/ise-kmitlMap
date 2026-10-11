@@ -21,7 +21,7 @@ export const USE_PG = !!(process.env.DATABASE_URL || process.env.INSTANCE_UNIX_S
 const FILES = {
   institutions: "institutions", roles: "roles", useCases: "use_cases", roleUseCases: "role_use_cases",
   users: "users", accountHistory: "account_history", faculties: "faculties", buildings: "buildings",
-  floors: "floors", nodes: "nodes", edges: "edges", categories: "categories", rooms: "rooms",
+  floors: "floors", nodes: "nodes", edges: "edges", categories: "categories", roomTypes: "room_types", rooms: "rooms",
   mapBoundaries: "map_boundaries", mapAssets: "map_assets", mapDrafts: "map_drafts", requests: "requests",
   requestQuota: "request_quota", broadcasts: "broadcasts", notifications: "notifications", feedback: "feedback",
   news: "news", events: "events", eventInterest: "event_interest", eventStats: "event_stats", contracts: "contracts",

@@ -15,10 +15,11 @@ const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
 });
 
 import RegistrarRequestsTab from "./registrar/RequestsTab";
+import RoomTypesManager from "./registrar/RoomTypesManager";
 
 // รับ uc ("rooms" หรือ "floors") จาก app/page.jsx เพื่อกำหนด sub-flow ของ UC16
 // — ถ้าไม่ส่งมา (หรือค่าอื่น) fallback เป็น "rooms" เหมือนเดิม
-export default function RegistrarPanel({ uc, user }) {
+export default function RegistrarPanel({ uc, user, onNavigate }) {
   const [selected, setSelected] = useState({ building: null, floor: "1" });
   const [activeTab, setActiveTab] = useState(uc === "floors" ? "floors" : "rooms"); // 'rooms' หรือ 'floors'
   const [focusRoom, setFocusRoom] = useState(null); // ห้องที่ถูกกดจาก node บนแผนที่ ให้ RoomsManager โฟกัส/แสดงข้อมูลให้
@@ -36,7 +37,8 @@ export default function RegistrarPanel({ uc, user }) {
   const { items: floorItems } = useCollection("floors");
   const { buildings } = useRefData();
 
-  if (uc === "requests") { return <RegistrarRequestsTab user={user} />; }
+  if (uc === "requests") { return <RegistrarRequestsTab user={user} onNavigate={onNavigate} />; }
+  if (uc === "room_types") { return <RoomTypesManager user={user} />; }
 
   const selectedBuilding = buildings.find((b) => b.name === selected.building || b.code === selected.building || b.id === selected.building);
   const currentFloorData = floorItems.find((f) => f.buildingId === selectedBuilding?.id && String(f.floorNo) === String(selected.floor));
@@ -172,9 +174,10 @@ const splitTeacherNames = (value) => {
 const teacherNamesToText = (names) =>
   (Array.isArray(names) ? names : []).map((name) => String(name || "").trim()).filter(Boolean).join(" / ");
 
-const ROOM_TYPE_OPTIONS = ["ห้องเรียน", "Cowork", "ห้องบรรยาย", "ห้องประชุม", "ห้องพักอาจารย์"];
-
 function RoomTypeSelect({ value, onChange, style }) {
+  const { items: roomTypes } = useCollection("roomTypes");
+  const ROOM_TYPE_OPTIONS = roomTypes.map((row) => row.name);
+
   return (
     <select
       value={value}

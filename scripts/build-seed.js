@@ -18,7 +18,7 @@ function sqlValue(v) {
 }
 const order = [
   'institutions','roles','use_cases','role_use_cases','users','account_history',
-  'faculties','buildings','floors','nodes','edges','categories','rooms',
+  'faculties','buildings','floors','nodes','edges','categories','room_types','rooms',
   'map_boundaries','map_assets','map_drafts','request_quota','requests',
   'broadcasts','notifications','feedback','news','events','event_interest','event_stats',
   'contracts','modules','institution_access','institution_access_modules','access_history','edit_logs','usage'

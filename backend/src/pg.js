@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export const TABLES = {
   institutions: "institutions", roles: "roles", useCases: "use_cases", roleUseCases: "role_use_cases", users: "users",
   accountHistory: "account_history", faculties: "faculties", buildings: "buildings", floors: "floors", nodes: "nodes",
-  edges: "edges", categories: "categories", rooms: "rooms", mapBoundaries: "map_boundaries", mapAssets: "map_assets",
+  edges: "edges", categories: "categories", roomTypes: "room_types", rooms: "rooms", mapBoundaries: "map_boundaries", mapAssets: "map_assets",
   mapDrafts: "map_drafts", requests: "requests", requestQuota: "request_quota", broadcasts: "broadcasts",
   notifications: "notifications", feedback: "feedback", news: "news", events: "events", eventInterest: "event_interest",
   eventStats: "event_stats", contracts: "contracts", modules: "modules", institutionAccess: "institution_access",
@@ -20,7 +20,7 @@ const ORDER = {
   institutions: "created_at DESC", roles: "code ASC", useCases: "sort_order ASC", roleUseCases: "role_code ASC, use_case_key ASC",
   users: "created_at DESC", accountHistory: "changed_at DESC", faculties: "name ASC", buildings: "code ASC",
   floors: "building_id ASC, floor_no ASC", nodes: "floor_id ASC, node_key ASC", edges: "from_node_id ASC, to_node_id ASC, id ASC",
-  categories: "name ASC", rooms: "created_at DESC", mapBoundaries: "updated_at DESC", mapAssets: "updated_at DESC",
+  categories: "name ASC", roomTypes: "name ASC", rooms: "created_at DESC", mapBoundaries: "updated_at DESC", mapAssets: "updated_at DESC",
   mapDrafts: "saved_at DESC", requests: "created_at DESC", requestQuota: "updated_at DESC", broadcasts: "created_at DESC",
   notifications: "created_at DESC", feedback: "created_at DESC", news: "created_at DESC", events: "start_at DESC NULLS LAST",
   eventInterest: "created_at DESC", contracts: "created_at DESC", modules: "code ASC", institutionAccess: "updated_at DESC",

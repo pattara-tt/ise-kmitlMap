@@ -130,5 +130,11 @@
     "title": "เข้าสู่ระบบด้วย E-mail",
     "icon": null,
     "sortOrder": 21
+  },
+  {
+    "key": "room_types",
+    "title": "จัดการประเภทห้องและไอคอน",
+    "icon": "🧩",
+    "sortOrder": 18
   }
 ]

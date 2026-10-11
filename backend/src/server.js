@@ -16,7 +16,7 @@ const MARKETING_COLLECTIONS = new Set(MARKETING_COLLECTION_LIST);
 const LOGGED_COLLECTIONS = new Set(Object.keys(EDIT_TARGET_FK));
 const ALLOWED = new Set([
   "institutions","roles","useCases","roleUseCases","users","accountHistory","faculties","buildings","floors","nodes","edges",
-  "categories","rooms","mapBoundaries","mapAssets","mapDrafts","requests","requestQuota","broadcasts","notifications","feedback",
+  "categories","roomTypes","rooms","mapBoundaries","mapAssets","mapDrafts","requests","requestQuota","broadcasts","notifications","feedback",
   "news","events","eventInterest","eventStats","contracts","modules","institutionAccess","institutionAccessModules","accessHistory","editLogs","usage"
 ]);
 const ACCESS_STATUS = new Set(ACCESS_STATUS_LIST);
@@ -156,6 +156,7 @@ app.get("/api/data/:name", requireSession, wrap(async(req,res)=>{
 app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
+  if (name === "roomTypes" && req.session.role !== ROLE.REGISTRAR) return res.status(403).json({ok:false,error:"เฉพาะฝ่ายทะเบียนที่จัดการประเภทห้องได้"});
   const { _actor, ...item } = req.body || {};
   if (MARKETING_COLLECTIONS.has(name) && req.session.role !== ROLE.MARKETING)
     return res.status(403).json({ ok: false, error: "เฉพาะฝ่ายการตลาดเท่านั้นที่แก้ไขข้อมูลชุดนี้ได้" });
@@ -190,6 +191,7 @@ app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
 app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
+  if (name === "roomTypes" && req.session.role !== ROLE.REGISTRAR) return res.status(403).json({ok:false,error:"เฉพาะฝ่ายทะเบียนที่จัดการประเภทห้องได้"});
   const { id, _actor, ...rawPatch } = req.body || {};
   const auditReason = name === "users" ? (rawPatch.reason || null) : null;
   const patch = { ...rawPatch };
@@ -263,6 +265,7 @@ app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
 app.delete("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
+  if (name === "roomTypes" && req.session.role !== ROLE.REGISTRAR) return res.status(403).json({ok:false,error:"เฉพาะฝ่ายทะเบียนที่จัดการประเภทห้องได้"});
   let id = req.query.id;
   if (typeof id === "string" && id.startsWith("{")) {
     try { id = JSON.parse(id); } catch { return res.status(400).json({ ok: false, error: "รูปแบบ ID ไม่ถูกต้อง" }); }

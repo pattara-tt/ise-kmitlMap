@@ -247,6 +247,16 @@ export function useCollection(name) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // A different mounted useCollection instance may edit the same collection.
+  // Keep map markers/popups in sync with the registrar editor without page reload.
+  useEffect(() => {
+    const onChanged = (event) => {
+      if (event.detail?.name === name) reload();
+    };
+    window.addEventListener("scimap:collection-changed", onChanged);
+    return () => window.removeEventListener("scimap:collection-changed", onChanged);
+  }, [name, reload]);
+
   // const create = useCallback(async (item, actor) => {
   //   await apiFetch("/api/data/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, _actor: actor }) });
   //   await reload();
@@ -274,6 +284,7 @@ export function useCollection(name) {
       }
 
       await reload();
+      window.dispatchEvent(new CustomEvent("scimap:collection-changed", { detail: { name } }));
       return j.item;
     }, [name, reload]);
 
@@ -296,12 +307,14 @@ export function useCollection(name) {
     }
 
     await reload();
+    window.dispatchEvent(new CustomEvent("scimap:collection-changed", { detail: { name } }));
     return j.item;
   }, [name, reload]);
 
   const destroy = useCallback(async (id, actor) => {
     await apiFetch(`/api/data/${name}?id=${encodeURIComponent(id)}&actor=${encodeURIComponent(actor?.name || "")}`, { method: "DELETE" });
     await reload();
+    window.dispatchEvent(new CustomEvent("scimap:collection-changed", { detail: { name } }));
   }, [name, reload]);
 
   return { items, loading, reload, create, patch, destroy };
