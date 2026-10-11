@@ -1,94 +1,74 @@
 # SciMap
 
-SciMap เป็นระบบแผนที่และนำทางภายในมหาวิทยาลัย แยกเป็น Next.js frontend, Express backend และ PostgreSQL 16 โดย frontend ไม่ต่อฐานข้อมูลโดยตรง ทุก `/api/*` จะผ่าน `app/api/[...path]/route.js` ไป backend
+ระบบแผนที่และนำทางภายในมหาวิทยาลัย (KMITL) แบ่งเป็น 3 ส่วน: Next.js frontend, Express backend และ PostgreSQL 16
 
-## โครงสร้างหลัก
+```
+Browser → Next.js (:3000) → app/api/[...path]/route.js → Express (:4000) → PostgreSQL
+                                                                         └→ หรือ mock in-memory (ไม่ตั้ง DATABASE_URL)
+```
 
-- `app/`, `components/`, `lib/` — frontend Next.js
-- `backend/src/server.js` — API หลัก
-- `backend/src/store.js` — data layer แบบ mock in-memory
-- `backend/src/pg.js` — data layer PostgreSQL ด้วย interface เดียวกับ mock
-- `db/schema.sql` — normalized schema (32 tables)
-- `db/seed/*.json` — แหล่งข้อมูล seed ชุดเดียว
-- `scripts/build-seed.js` — สร้าง `db/seed.sql` จาก JSON และ hash รหัสผ่านเริ่มต้นด้วย bcrypt
-- `db/migrations/001_normalize.sql` — migration จาก schema เดิมเป็น schema normalized
-- `components/mapConfig.js` — config การแสดงผลแผนที่; อาคาร/ชั้น/node/edge ถูกโหลดจาก backend
+Frontend ไม่ต่อฐานข้อมูลโดยตรง ทุก `/api/*` ถูกส่งต่อไป backend โดย `app/api/[...path]/route.js` ซึ่งอ่าน `BACKEND_URL` ตอน request (ค่าเริ่มต้น `http://localhost:4000`)
 
-## ติดตั้ง dependency
+## โครงสร้างโปรเจกต์
 
-ต้องติดตั้งทั้ง frontend และ backend:
+| Path | หน้าที่ |
+|---|---|
+| `app/` | `page.jsx` (login → เลือก panel ตาม role), `layout.jsx`, `api/[...path]/route.js` (proxy) |
+| `components/UserApp.jsx` | แอปผู้ใช้ทั่วไป: แผนที่ · กิจกรรม · แจ้งเตือน · แจ้งปัญหา |
+| `components/MapView.jsx`, `components/map/` | แผนที่หลัก: `layout/*Panel.jsx` (UI), `hooks/useMapEffect*.js` (effect ของแผนที่), `use*Actions.js` (ตรรกะนำทาง/สถานที่/รายงาน) |
+| `components/Buildingfloorpicker.jsx`, `components/building/` | แผนที่ภายในอาคารและเลือกชั้น |
+| `components/mapConfig.js`, `mapGeo.js`, `mapBaseLayer.js` | config การแสดงผล, คำนวณเรขาคณิต/เส้นทาง, base layer (อาคาร/ชั้น/node/edge โหลดจาก backend) |
+| `components/panels/` | panel ของแต่ละ role: `Exec`, `Marketing`, `Gis`, `Admin`, `Pr`, `Registrar` (โฟลเดอร์ย่อย `admin/ gis/ marketing/ registrar/` เก็บแท็บ) |
+| `components/ui.jsx` | UI kit, ไอคอน และ hook `useCollection` (เรียก `/api/data/:name`) |
+| `lib/` | `api.js` (fetch wrapper), `useRefData.js`, `useMapData.js`, `datetime.js`, `schedule.js`, `constants.js` |
+| `backend/src/server.js` | routes, ตรวจ session/role, audit log |
+| `backend/src/store.js` | data layer แบบ mock in-memory (โหลดจาก `db/seed/*.json`) |
+| `backend/src/pg.js` | data layer PostgreSQL ใช้ interface เดียวกับ `store.js` และแปลง `snake_case` ↔ `camelCase` |
+| `backend/src/auth.js`, `account.js`, `overpass.js`, `constants.js` | session/idle timeout · ผลข้างเคียงของบัญชี · proxy OSM/walknet · enum ของ role และสถานะ |
+| `db/schema.sql`, `db/SCHEMA.md` | schema ปัจจุบัน (33 ตาราง + view `event_stats_view`) และเอกสารอธิบายทุกตาราง/FK/ER diagram |
+| `db/seed/*.json` | ข้อมูล seed ต้นทาง (หนึ่งไฟล์ต่อตาราง) |
+| `db/seed.sql` | **สร้างอัตโนมัติ** จาก JSON ด้วย `scripts/build-seed.js` อย่าแก้ด้วยมือ |
+| `db/migrations/` | migration สำหรับ DB ที่มีอยู่แล้ว (ดูหัวข้อ Migration) |
+| `scripts/` | seed builder, test/verify scripts, สคริปต์สำรวจข้อมูล GIS |
+| `public/data/` | dataset GIS แบบ static (ร่มเงา, น้ำท่วม, ไฟถนน ฯลฯ) |
+| `deploy/` | คู่มือและสคริปต์ deploy (ดู `deploy/DEPLOY.md`) |
+
+> `db/components/` เป็นสำเนาเก่าของ component ไม่ถูกใช้งานโดยแอป
+
+## ติดตั้ง
 
 ```bash
 npm install
-cd backend
-npm install
-cd ..
+cd backend && npm install
 ```
 
-ถ้าได้รับโปรเจกต์เป็น ZIP ไม่ควรใช้ `node_modules` ที่ติดมาจากเครื่องอื่น เพราะ native package ของ Next.js อาจไม่ตรง OS ให้ลบแล้ว `npm install` ใหม่
+ถ้าได้โปรเจกต์เป็น ZIP ให้ลบ `node_modules` และ `.next` แล้วติดตั้งใหม่ เพราะ native package ของ Next.js ผูกกับ OS
 
-## สร้าง seed
+## รันแบบพัฒนา
 
-แก้ข้อมูลต้นทางใน `db/seed/*.json` แล้ว generate SQL ใหม่ด้วย:
+### โหมด mock (ไม่ต้องมีฐานข้อมูล)
+
+ไม่ตั้ง `DATABASE_URL` ข้อมูลโหลดจาก `db/seed/*.json` และรีเซ็ตทุกครั้งที่ backend restart
 
 ```bash
+# เทอร์มินัล 1
+cd backend && npm run dev     # http://localhost:4000
+# เทอร์มินัล 2
+npm run dev                   # http://localhost:3000
+curl http://localhost:4000/health   # {"ok":true,"backend":"scimap","storage":"memory"}
+```
+
+### โหมด PostgreSQL ผ่าน Docker Compose
+
+```bash
+cp .env.example .env          # เปลี่ยน POSTGRES_PASSWORD
 node scripts/build-seed.js
+docker compose up -d --build  # เปิด http://localhost
 ```
 
-`backend/src/store.js` อ่าน JSON ชุดเดียวกันโดยตรง จึงไม่ต้องแก้ mock ซ้ำอีกชุด รหัสผ่านของบัญชี seed คือ `1234` แต่ `db/seed.sql` และ mock เก็บ/ใช้งานเป็น bcrypt hash ไม่ใช่ plaintext column
-
-ตรวจความสอดคล้องของ seed และทดสอบ data layer แบบ mock โดยไม่ต้องเปิดฐานข้อมูล:
-
-```bash
-npm run test:seed       # 32 ตาราง, uniqueness, 311 FK references ของ seed ปัจจุบัน
-npm run test:mock       # hash / composite key / audit log / cascade / quota
-npm run test:source     # parse JS/JSX และตรวจ path ของ local imports
-```
-
-`test:source` ต้องติดตั้ง Next.js dependency ก่อน ส่วน `test:mock` ต้องติดตั้ง `bcryptjs` ที่ `backend/` ก่อน ทดสอบนี้ไม่ใช่การยืนยันว่า PostgreSQL migration หรือทุก browser flow ผ่าน
-
-## โหมด 1: Mock in-memory
-
-ไม่ต้องตั้ง `DATABASE_URL` ข้อมูลจะโหลดจาก `db/seed/*.json` และรีเซ็ตเมื่อ backend restart
-
-เทอร์มินัล 1:
-
-```bash
-cd backend
-npm run dev
-```
-
-เทอร์มินัล 2:
-
-```bash
-npm run dev
-```
-
-เปิด `http://localhost:3000` และตรวจ backend ได้ที่:
-
-```bash
-curl http://localhost:4000/health
-# {"ok":true,"backend":"scimap","storage":"memory"}
-```
-
-## โหมด 2: PostgreSQL
-
-### Docker Compose
-
-```bash
-cp .env.example .env
-# เปลี่ยน POSTGRES_PASSWORD ก่อนใช้งาน
-node scripts/build-seed.js
-docker compose up -d --build
-```
-
-เปิด `http://localhost` ฐานข้อมูลใหม่จะรัน `db/schema.sql` และ `db/seed.sql` อัตโนมัติในครั้งแรกที่สร้าง volume
-
-> ถ้าแก้ schema/seed แล้วต้องการสร้าง DB ใหม่ ให้ใช้ `docker compose down -v` ก่อน `docker compose up -d --build` ซึ่งจะลบข้อมูลใน volume เดิมทั้งหมด
+`db/schema.sql` และ `db/seed.sql` ถูกรันอัตโนมัติ **เฉพาะตอนสร้าง volume ครั้งแรก** ถ้าแก้ schema/seed แล้วต้องการเริ่มใหม่ใช้ `docker compose down -v` (ลบข้อมูลใน volume ทั้งหมด)
 
 ### PostgreSQL ที่ติดตั้งเอง
-
-ตั้ง `DATABASE_URL` ให้ backend เช่น:
 
 ```bash
 export DATABASE_URL='postgresql://user:password@localhost:5432/kmitlmap'
@@ -96,87 +76,101 @@ export SESSION_IDLE_MINUTES=30
 cd backend && npm start
 ```
 
-## Migration จาก DB เดิม
+## Workflow การใช้งานของระบบ
 
-สำรองฐานข้อมูลก่อนทุกครั้ง และ **ทดลองกับสำเนา DB ก่อน production** โดยต้องมี PostgreSQL 16 และ extension `pgcrypto` migration จะ rollback เมื่อข้อมูลสำคัญลดจำนวนลง ไม่ควรรัน migration ซ้ำหลังสำเร็จแล้ว:
+1. ผู้ใช้ login/สมัครที่ `AuthPage` → `POST /api/auth` ได้ `sessionId` ส่งใน header `x-session-id` ทุกครั้ง
+2. `lib/useRefData.js` โหลด role และเมนู (`/api/ref/roles`, `/api/ref/use-cases`) ตามสิทธิ์ของ role
+3. `app/page.jsx` เลือก panel ตาม role ผู้ใช้ทั่วไปเข้า `UserApp`
+4. ข้อมูลทั่วไปอ่าน/เขียนผ่าน `/api/data/:name` (`useCollection`); ข้อมูลแผนที่ผ่าน `/api/map/*`
+5. การแก้ข้อมูลถูกบันทึก audit: `edit_logs` (แผนที่/ข่าว/กิจกรรม/คำร้อง ฯลฯ), `access_history` (ฝ่ายการตลาด), `account_history` (บัญชีผู้ใช้)
+
+## แก้ไขระบบอย่างไร
+
+| งาน | ทำที่ไหน |
+|---|---|
+| แก้ข้อมูล seed | แก้ `db/seed/*.json` → `node scripts/build-seed.js` → `npm run test:seed` |
+| เพิ่ม/เปลี่ยน schema | เพิ่ม `db/migrations/00N_*.sql`, แก้ `db/schema.sql` ให้ตรงกัน, แก้ทั้ง `store.js` และ `pg.js` |
+| เพิ่ม API/collection | `backend/src/server.js` + data layer ทั้งสอง + เรียกผ่าน `useCollection` / `lib/api.js` |
+| เพิ่ม role หรือเมนู | `db/seed/roles.json`, `use_cases.json`, `role_use_cases.json` + `PANELS` ใน `app/page.jsx` |
+| แก้พฤติกรรมแผนที่ | `components/map/hooks/`, `components/map/layout/` |
+
+`store.js` และ `pg.js` ต้องทำงานเหมือนกัน ทุกครั้งที่แก้ data layer ให้รันทั้ง `test:mock` และ `test:pg`
+
+## ทดสอบและตรวจคุณภาพ
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/001_normalize.sql
+npm run lint          # ESLint (app components lib)
+npm run test:seed     # ตรวจ seed: ตาราง, unique, FK
+npm run test:mock     # data layer แบบ mock (ต้องติดตั้ง backend deps ก่อน)
+npm run test:source   # parse JS/JSX, ตรวจ import/export
+npm run test:basemap  # base layer ของแผนที่
+npm run build         # production build ของ Next.js
+
+DATABASE_URL='postgresql://...' npm run test:pg   # ตรวจ DB ทดสอบที่รัน schema+seed แล้ว
 ```
 
-migration ทำงานใน transaction เดียว และย้ายข้อมูลจาก schema เดิมเข้าสู่ตาราง normalized รวมถึง `map_edits -> edit_logs`, module array -> `institution_access_modules`, ประวัติ suspend/restore -> `account_history` และ plaintext password เดิม -> bcrypt hash
+`scripts/test-registrar.mjs` ทดสอบส่วนของ registrar/room types (ยังไม่มี npm script)
 
-หลัง migration ควรตรวจจำนวนข้อมูลสำคัญ:
+## Migration
 
-```sql
-SELECT count(*) FROM users;
-SELECT count(*) FROM requests;
-SELECT count(*) FROM news;
-SELECT count(*) FROM events;
-SELECT count(*) FROM edit_logs;
-```
+`db/migrations/` เป็นไฟล์สำหรับ DB ที่สร้างไปแล้ว (DB ใหม่ใช้ `schema.sql` อย่างเดียว) สำรองข้อมูลและลองกับสำเนาก่อนเสมอ:
 
-รันการตรวจโครงสร้างและ bcrypt / role / FK ของ audit / สถิติกิจกรรมในฐานข้อมูลทดสอบ:
+| ไฟล์ | เนื้อหา |
+|---|---|
+| `001_normalize.sql` | แปลง schema 20 ตารางเดิมเป็น normalized (รันครั้งเดียว ใน transaction; มี row-count guard ก่อน drop ตารางเก่า) |
+| `002_event_room_type_override.sql` | `events.room_id`, `events.temporary_room_type` |
+| `002_request_process.sql` | เพิ่มสถานะ `processing` ให้ `requests` |
+| `003_registrar_room_types.sql`, `004_registrar_room_types_df.sql` | ตาราง `room_types` และค่าเริ่มต้น (รันซ้ำได้) |
+| `005_map_boundaries_institution.sql` | `map_boundaries.institution_id` |
+| `006_contracts_usecase_title.sql` | แก้ชื่อเมนู `contracts` (ข้อมูลเท่านั้น) |
 
 ```bash
-DATABASE_URL='postgresql://...' npm run test:pg
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/00N_name.sql
 ```
 
-คำสั่งนี้ไม่ได้ทดแทนการเปรียบเทียบจำนวนแถวก่อน–หลัง migration ที่ต้องบันทึกจาก DB เดิมก่อนรันจริง
+บน Windows มี `scripts/migrate-normalized.ps1` สำหรับ 001 กับ container `scimap-db` (ตรวจ → สำรอง `pg_dump` ไว้ที่ `backups/` → migrate) และ `scripts/verify-normalized-db.sql` สำหรับตรวจผล
 
-## Schema overview
+## Schema
 
-ตารางแบ่งเป็นกลุ่มดังนี้:
+กลุ่มตาราง:
 
 - ผู้ใช้/สิทธิ์: `institutions`, `roles`, `use_cases`, `role_use_cases`, `users`, `account_history`
-- แผนที่: `faculties`, `buildings`, `floors`, `nodes`, `edges`, `categories`, `rooms`, `map_boundaries`, `map_assets`, `map_drafts`
+- แผนที่: `faculties`, `buildings`, `floors`, `nodes`, `edges`, `categories`, `rooms`, `room_types`, `map_boundaries`, `map_assets`, `map_drafts`
 - คำร้อง/แจ้งเตือน: `requests`, `request_quota`, `broadcasts`, `notifications`, `feedback`
 - ข่าว/กิจกรรม: `news`, `events`, `event_interest`, `event_stats` และ view `event_stats_view`
 - การตลาด: `contracts`, `modules`, `institution_access`, `institution_access_modules`, `access_history`
-- Audit/statistics: `edit_logs`, `usage`
+- Audit/สถิติ: `edit_logs`, `usage`
 
-ชื่อฝั่ง DB ใช้ `snake_case`; data layer แปลงเป็น `camelCase` ที่ `backend/src/pg.js`
-
-## API สำคัญ
-
-API ที่ต้องมี session จะส่ง session id ใน header `x-session-id`
+## API หลัก
 
 | Method | Path | หน้าที่ |
 |---|---|---|
+| `GET` | `/health` | สถานะ backend และ storage (`memory`/`postgres`) |
+| `GET` | `/api/auth/roles`, `/api/auth/institutions` | ข้อมูลสำหรับหน้าสมัคร (ไม่ต้อง login) |
 | `POST` | `/api/auth` | register / login |
 | `GET` | `/api/auth/session` | ตรวจ session |
-| `GET` | `/api/ref/roles` | role reference |
-| `GET` | `/api/ref/use-cases` | เมนูตาม role ปัจจุบัน |
-| `GET` | `/api/ref/modules` | module reference |
-| `GET` | `/api/ref/faculties` | faculty reference |
+| `GET` | `/api/ref/roles`, `/modules`, `/faculties`, `/use-cases` | reference data (`use-cases` ตาม role ปัจจุบัน) |
 | `GET` | `/api/map/buildings` | อาคารพร้อมชั้น |
 | `GET` | `/api/map/floors/:floorId/graph` | node/edge ของชั้น |
 | `GET` | `/api/map/graph?building=<id>` | graph ทั้งอาคารรวม edge ข้ามชั้น |
-| `GET/POST/PATCH/DELETE` | `/api/data/:name` | generic collection API |
-| `GET` | `/api/stats` | dashboard statistics จาก backend |
-| `GET` | `/api/osm`, `/api/walknet` | map proxy |
+| `GET/POST/PATCH/DELETE` | `/api/data/:name` | generic collection API (จำกัดสิทธิ์บาง collection ตาม role) |
+| `POST` | `/api/report` | ส่งรายงานปัญหา |
+| `GET` | `/api/stats` | สถิติ dashboard |
+| `GET` | `/api/osm`, `/api/walknet` | proxy ข้อมูลแผนที่ |
 
-การแก้ `nodes`, `edges`, ห้อง/ชั้น/ขอบเขต/asset, ข่าว, event, category, broadcast, request และ feedback จะเขียน `edit_logs` ตามชนิดข้อมูล ส่วนข้อมูลฝ่ายการตลาดใช้ `access_history` และการแก้บัญชีใช้ `account_history`
+ยกเว้น `/health`, `/api/auth/roles`, `/api/auth/institutions`, `POST /api/auth`, `/api/osm` และ `/api/walknet` ทุก endpoint ต้องมี header `x-session-id`
 
 ## บัญชี seed
 
-บัญชี role หลักมี `exec@kmitl.ac.th`, `marketing@kmitl.ac.th`, `gis@kmitl.ac.th`, `admin@kmitl.ac.th`, `pr@kmitl.ac.th`, `registrar@kmitl.ac.th`, `student@kmitl.ac.th` และ `somchai@kmitl.ac.th` โดยรหัสผ่านเริ่มต้นคือ `1234` สถานะและชื่อจริงให้ยึด `db/seed/users.json` เป็นแหล่งข้อมูลหลัก
+`exec@`, `marketing@`, `gis@`, `admin@`, `pr@`, `registrar@`, `student@` และ `somchai@kmitl.ac.th` รหัสผ่านเริ่มต้นคือ `1234` (เก็บเป็น bcrypt hash) สถานะและชื่อจริงดูที่ `db/seed/users.json` **ใช้เพื่อพัฒนา/ทดสอบเท่านั้น ห้ามใช้ seed นี้ใน production**
 
-## Build / lint
+## Deploy
 
-```bash
-npm run lint
-npm run build
-cd backend && npm start
-```
+ดู [deploy/DEPLOY.md](deploy/DEPLOY.md) (Docker Compose บน VM, backup, HTTPS)
 
-ถ้าเจอ `next: Permission denied` หรือ SWC binary ไม่ตรง platform หลังแตก ZIP ให้ลบ `node_modules`/`.next` แล้วติดตั้ง dependency ใหม่บนเครื่องปลายทาง
+## ข้อควรระวังด้านความปลอดภัย
 
-## Security / environment
-
-- `.env` ถูก ignore และต้องไม่ commit
-- `.env.example` ใช้ placeholder เท่านั้น
-- `SESSION_IDLE_MINUTES` ค่าเริ่มต้น 30 นาที
-- หากรหัสผ่าน PostgreSQL เคยถูก commit ในประวัติ Git ให้เปลี่ยนรหัสผ่านจริง (rotate credential) แม้ไฟล์ `.env` จะถูกถอดออกจาก tracking แล้ว
-
-ดูรายละเอียดการ refactor และผลตรวจสอบล่าสุดที่ `REFACTOR_REPORT.md`
+- `.env` ถูก ignore ห้าม commit; `.env.example` มีแต่ placeholder
+- ถ้ารหัสผ่าน PostgreSQL เคยอยู่ใน Git history ให้เปลี่ยนรหัสจริงทันที (การถอดไฟล์ออกจาก tracking ไม่ลบจากประวัติ)
+- `POST /api/auth` ยอมรับ `role` จาก client ตอนสมัคร และ generic `/api/data/:name` มีการจำกัดสิทธิ์เพียงบาง collection จึงต้องออกแบบสิทธิ์ใหม่ก่อนใช้งานจริง
+- `SESSION_IDLE_MINUTES` (ค่าเริ่มต้น 30) กำหนดเวลา idle timeout ของ session

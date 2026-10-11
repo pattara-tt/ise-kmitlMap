@@ -60,9 +60,11 @@ function Feedback() {
   const { items } = useCollection("feedback");
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
+  // ข้อเสนอแนะที่ผู้ใช้ส่งใหม่มีสถานะ "open" ส่วน seed เดิมใช้ "new" — ถือเป็นสถานะ "ยังไม่ได้ตรวจ" เหมือนกัน
+  const isNew = (f) => f.status === "new" || f.status === "open";
   const rows = items.filter((f) =>
-    (filter === "all" || f.status === filter) &&
-    (f.topic + f.detail + f.userName).toLowerCase().includes(q.toLowerCase())
+    (filter === "all" || (filter === "new" ? isNew(f) : f.status === filter)) &&
+    `${f.topic} ${f.detail} ${f.userName ?? ""}`.toLowerCase().includes(q.toLowerCase())
   );
 
   return (
@@ -70,7 +72,7 @@ function Feedback() {
       <UCHead title="ตรวจสอบข้อเสนอแนะและคำขอจากผู้ใช้งานทั่วไป" desc="ดูข้อเสนอแนะและคำขอที่ผู้ใช้งานทั่วไปส่งเข้ามาได้อย่างเดียว" />
       <Tiles items={[
         { label: "ทั้งหมด", value: items.length },
-        { label: "ยังไม่ได้ตรวจ", value: items.filter((f) => f.status === "new").length },
+        { label: "ยังไม่ได้ตรวจ", value: items.filter(isNew).length },
         { label: "ตรวจแล้ว", value: items.filter((f) => f.status === "reviewed").length },
       ]} />
       <SearchBar value={q} onChange={setQ} placeholder="ค้นหาหัวข้อ / เนื้อหา / ผู้ส่ง" />
@@ -111,7 +113,7 @@ function Contracts({ user }) {
   return (
     <>
       <UCHead
-        title="ตรวจสอบสัญญาที่ฝ่ายการตลาดทำกับฝ่ายการตลาด"
+        title="ตรวจสอบสัญญา"
         desc="แสดงข้อมูลสัญญาของมหาวิทยาลัยตนเองเท่านั้น"
       />
       <Table
@@ -137,11 +139,57 @@ function Contracts({ user }) {
   );
 }
 
+// ── แปลงค่า before/after ของ edit log (เก็บเป็น JSON ทั้งแถว) ให้อ่านง่าย ──
+const ENTITY_LABEL = {
+  nodes: "จุดนำทาง", edges: "เส้นทาง", floors: "ชั้น", rooms: "ห้อง", mapBoundaries: "ขอบเขตแผนผัง", mapAssets: "ข้อมูลประกอบแผนผัง",
+  news: "ข่าวสาร", events: "กิจกรรม", categories: "หมวดหมู่", broadcasts: "ประกาศ", requestQuota: "โควตาคำร้อง", requests: "คำร้อง", feedback: "ข้อเสนอแนะ",
+};
+const VERB_LABEL = { CREATE: "เพิ่ม", UPDATE: "แก้ไข", DELETE: "ลบ" };
+const FIELD_LABEL = {
+  name: "ชื่อ", title: "หัวข้อ", code: "รหัส", type: "ประเภท", status: "สถานะ", subject: "เรื่อง", detail: "รายละเอียด", body: "เนื้อหา",
+  capacity: "ความจุ", teacher: "อาจารย์", published: "เผยแพร่", startAt: "เริ่ม", endAt: "สิ้นสุด", publishAt: "เริ่มเผยแพร่", expireAt: "หมดอายุ",
+  placeName: "สถานที่", audience: "กลุ่มเป้าหมาย", reply: "ตอบกลับ", note: "หมายเหตุ", color: "สี", kind: "ชนิด", floorNo: "ชั้นที่",
+  x: "พิกัด X", y: "พิกัด Y", distance: "ระยะทาง", accessible: "เข้าถึงได้", perUserPerDay: "ต่อวัน", perUserPerMonth: "ต่อเดือน",
+};
+const SUMMARY_KEYS = ["name", "title", "subject", "code", "type", "status"];   // ฟิลด์ที่เลือกแสดงตอนเพิ่ม/ลบ
+const SKIP_KEYS = new Set(["id", "createdAt", "updatedAt", "editedAt", "savedAt", "userId", "authorId", "reviewedBy", "updatedBy", "sentBy"]);
+const BULKY_KEYS = new Set(["svg", "geometry", "outline", "bounds", "file"]);   // ข้อมูลก้อนใหญ่ แสดงแค่ว่ามีการเปลี่ยน
+
+function parseLogValue(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "object") return v;
+  const t = String(v).trim();
+  if (!t.startsWith("{")) return null;
+  try { const o = JSON.parse(t); return o && typeof o === "object" ? o : null; } catch { return null; }
+}
+const showVal = (v) => (v === null || v === undefined || v === "" ? "-" : typeof v === "boolean" ? (v ? "ใช่" : "ไม่") : typeof v === "object" ? "(ข้อมูลซับซ้อน)" : String(v));
+const fieldName = (k) => FIELD_LABEL[k] || k;
+
+function actionLabel(action) {
+  const m = /^(CREATE|UPDATE|DELETE)_(.+)$/.exec(String(action || ""));
+  return m ? `${VERB_LABEL[m[1]]}${ENTITY_LABEL[m[2]] || m[2]}` : action;
+}
+
+function changeSummary(r) {
+  const before = parseLogValue(r.before);
+  const after = parseLogValue(r.after);
+  if (!before && !after) return r.after == null || r.after === "" ? "-" : String(r.after);   // ข้อความธรรมดา (เช่น ข้อมูล seed)
+  if (before && after) {
+    const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+      .filter((k) => !SKIP_KEYS.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+    if (!keys.length) return "ไม่มีการเปลี่ยนแปลงค่า";
+    return keys.map((k) => BULKY_KEYS.has(k) ? `${fieldName(k)}: มีการแก้ไข` : `${fieldName(k)}: ${showVal(before[k])} → ${showVal(after[k])}`).join(" · ");
+  }
+  const row = after || before;
+  const parts = SUMMARY_KEYS.filter((k) => row[k] != null && row[k] !== "").map((k) => `${fieldName(k)}: ${showVal(row[k])}`);
+  return parts.length ? parts.join(" · ") : "-";
+}
+
 function Audit() {
   const { items } = useCollection("editLogs");
   const [q, setQ] = useState("");
   const rows = items.filter((r) =>
-  [r.id, r.action, r.targetLabel, r.userName]
+  [r.id, r.action, actionLabel(r.action), r.targetLabel, r.userName, changeSummary(r)]
     .map((v) => String(v ?? ""))
     .join(" ")
     .toLowerCase()
@@ -157,16 +205,12 @@ function Audit() {
           { key: "id", label: "ID" },
           { key: "editedAt", label: "เวลา", render: (r) => formatDateTime(r.editedAt) },
           { key: "userName", label: "ผู้แก้ไข" },
-          { key: "action", label: "การกระทำ" },
+          { key: "action", label: "การกระทำ", render: (r) => actionLabel(r.action) },
           { key: "targetLabel", label: "รายการ" },
           {
             key: "after",
-            label: "ค่าหลังแก้ไข",
-            render: (r) => (
-              <span style={{ color: "#5F6368" }}>
-                {String(r.after).slice(0, 60)}
-              </span>
-            ),
+            label: "รายละเอียดการเปลี่ยนแปลง",
+            render: (r) => <span style={{ color: "#5F6368" }}>{changeSummary(r)}</span>,
           },
         ]}
         rows={rows}

@@ -21,7 +21,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO use_cases ("key", "title", "icon", "sort_order") VALUES
   ('overview', 'ดูรายงานและสถิติภาพรวมระบบ', 'svg:growth_graph', 0),
   ('feedback', 'ตรวจสอบข้อเสนอแนะและคำขอจากผู้ใช้งานทั่วไป', 'svg:Chat_search_light', 1),
-  ('contracts', 'ตรวจสอบสัญญาที่ฝ่ายการตลาดทำกับฝ่ายการตลาด', 'svg:Folder_search_light', 2),
+  ('contracts', 'ตรวจสอบสัญญา', 'svg:Folder_search_light', 2),
   ('audit', 'ตรวจสอบบันทึกประวัติการแก้ไขข้อมูลแผนที่', 'svg:Map_light', 3),
   ('broadcast', 'ส่งข้อความแจ้งเตือนระบบถึงมหาวิทยาลัยในระบบ', 'svg:bullhorn', 4),
   ('access', 'จัดการสิทธิ์การเข้าถึงระดับสถาบัน', 'svg:dataflow', 5),
@@ -339,12 +339,12 @@ INSERT INTO edit_logs ("id", "user_id", "action", "before", "after", "edited_at"
 ON CONFLICT DO NOTHING;
 
 INSERT INTO usage ("month", "active_users", "searches", "routes") VALUES
-  ('2026-03', 1820, 9120, 4310),
-  ('2026-04', 2110, 10480, 5020),
-  ('2026-05', 2450, 12240, 6110),
-  ('2026-06', 1980, 8830, 3990),
-  ('2026-07', 2680, 13910, 6840),
-  ('2026-08', 3120, 16240, 7930)
+  ('2026-03', 3, 41, 19),
+  ('2026-04', 4, 52, 25),
+  ('2026-05', 5, 63, 31),
+  ('2026-06', 4, 48, 22),
+  ('2026-07', 6, 70, 36),
+  ('2026-08', 7, 82, 41)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO room_types ("id","name","icon","color","description") VALUES
