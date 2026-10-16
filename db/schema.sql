@@ -133,6 +133,7 @@ CREATE TABLE map_boundaries (
   type        TEXT,
   geometry    JSONB,
   status      TEXT NOT NULL DEFAULT 'draft',
+  selectable_for_assets BOOLEAN NOT NULL DEFAULT false,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

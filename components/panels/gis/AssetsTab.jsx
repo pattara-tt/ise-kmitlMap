@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useMapData } from "../../../lib/useMapData";
+import { useEffect, useMemo, useState } from "react";
+import { useMapData, clearMapDataCache } from "../../../lib/useMapData";
 import { MAX_SVG_BYTES } from "../../../lib/constants";
 import { SC8_CENTER } from "../../mapConfig";
 import { Btn, Card, Field, Input, Pill, Select, Status, UCHead, useCollection } from "../../ui";
 import { formatDate, formatDateTime } from "../../../lib/datetime";
 import FloorplanEditor from "./FloorplanEditor";
 import { DEFAULT_PLACEMENT, todayStr } from "./shared";
+import BoundaryPointEditor from "./BoundaryPointEditor";
+import Boundary from "./BoundaryTab";
 
 export default function Assets({
   user
@@ -15,13 +17,24 @@ export default function Assets({
   const {
     data: mapData
   } = useMapData();
-  const buildings = mapData?.buildings || [];
+  
+  const allBuildings = mapData?.buildings || [];
+
   const {
     items,
     create,
     patch,
     destroy
   } = useCollection("mapAssets");
+
+  const {
+    items: boundaries = [],
+    patch: patchBoundary
+  } = useCollection("mapBoundaries");
+
+  const buildingsApi = useCollection("buildings");
+  const floorsApi = useCollection("floors");
+
   const [form, setForm] = useState({
     name: "",
     kind: "floorplan",
@@ -29,32 +42,134 @@ export default function Assets({
     floorId: "",
     file: ""
   });
-  const selectedBuilding = buildings.find(b => b.id === form.buildingId) || mapData?.building || buildings[0];
+  
+  const buildings = useMemo(() => {
+    const eligibleBoundaries = boundaries.filter(
+      boundary =>
+        boundary.type === "building" &&
+        boundary.selectableForAssets !== false
+    );
+
+    const existingBuildings = allBuildings.filter(building =>
+      eligibleBoundaries.some(boundary =>
+        boundary.buildingId
+          ? boundary.buildingId === building.id
+          : boundary.name === building.name
+      )
+    );
+
+    const customBuildings = eligibleBoundaries
+      .filter(boundary =>
+        !allBuildings.some(building =>
+          boundary.buildingId
+            ? building.id === boundary.buildingId
+            : building.name === boundary.name
+        )
+      )
+      .map(boundary => ({
+        id: boundary.buildingId || `boundary:${boundary.id}`,
+        name: boundary.name,
+        floors: [],
+        boundaryId: boundary.id,
+        boundaryOnly: true
+      }));
+
+    const combined = [...existingBuildings, ...customBuildings];
+
+    return combined.filter(
+      (building, index, list) =>
+        list.findIndex(item => item.id === building.id) === index
+    );
+  }, [allBuildings, boundaries]);
+
+
+  const selectedBuilding = buildings.find(b => b.id === form.buildingId) ||  buildings[0];
   const selectedFloors = selectedBuilding?.floors || [];
+
+  /* -----------------------------------------
+     ทำให้ข้อมูลที่ "พิมพ์เอง" เป็นข้อมูลจริงเหมือนตอนเลือกจากลิสต์
+     - สร้างแถวใน buildings / floors (ถ้ายังไม่มี)
+     - ผูก boundary.buildingId และ asset.floorId ให้ชี้ไปที่แถวจริง
+     ทำให้ UC9 (NodeEdgeTab) และส่วนอื่นเห็นข้อมูลชุดเดียวกัน
+  ----------------------------------------- */
+
+  const stripFloor = s => String(s || "").trim().replace(/^ชั้น\s*/, "");
+
+  async function ensureBuilding(sel) {
+    if (!sel) throw new Error("ไม่พบอาคาร");
+    if (!sel.boundaryOnly) return sel.id; // เป็นอาคารจริงอยู่แล้ว
+
+    let id = allBuildings.find(b => b.name === sel.name)?.id;
+    if (!id) {
+      id = `BU-${Date.now()}`;
+      await buildingsApi.create({
+        id,
+        code: `B${Date.now().toString(36).toUpperCase()}`, // ปรับให้ตรงกับ schema ของ buildings
+        name: sel.name
+      }, user);
+    }
+    if (sel.boundaryId) {
+      await patchBoundary(sel.boundaryId, { buildingId: id }, user);
+    }
+    return id;
+  }
+
+  async function ensureFloor(buildingId, label) {
+    const no = stripFloor(label);
+    if (!no) throw new Error("กรุณาระบุชั้น");
+
+    const existing = allBuildings
+      .find(b => b.id === buildingId)?.floors
+      ?.find(f => String(f.floorNo) === no || f.name === String(label).trim());
+    if (existing) return existing.id;
+
+    const id = `FL-${Date.now()}`;
+    await floorsApi.create({
+      id,
+      buildingId,
+      floorNo: no, // ถ้า floors.floor_no เป็น integer ต้องปรับ schema หรือแปลงค่า
+      name: /^\d+$/.test(no) ? `ชั้น ${no}` : String(label).trim()
+    }, user);
+    return id;
+  }
+
+  async function resolveTarget(floorIdValue, customFloor) {
+    const buildingId = await ensureBuilding(selectedBuilding);
+    const floorId = floorIdValue === "custom"
+      ? await ensureFloor(buildingId, customFloor)
+      : floorIdValue;
+    return { buildingId, floorId };
+  }
+
   useEffect(() => {
-    if (!selectedBuilding) return;
+    if (buildings.length === 0) return;
     setForm(current => {
-      const buildingId = current.buildingId || selectedBuilding.id;
-      const building = buildings.find(b => b.id === buildingId) || selectedBuilding;
+      const building = buildings.find(b => b.id === current.buildingId) || buildings[0];
       const floors = building.floors || [];
+      const floorId = 
+        floors.length === 0 ? "custom"
+        : floors.some(f => f.id === current.floorId) ? current.floorId
+        : floors[0].id;
+      if(current.buildingId === building.id && current.floorId ===floorId) return current;
+      return {...current, buildingId: building.id, floorId};
 
-      if(floors.length === 0) {
-        return {
-          ...current,
-          buildingId,
-          floorId: "custom"
-        };
-      }
+      // if(floors.length === 0) {
+      //   return {
+      //     ...current,
+      //     buildingId,
+      //     floorId: "custom"
+      //   };
+      // }
       
-      const validFloor = floors.some(f => f.id === current.floorId);
+      // const validFloor = floors.some(f => f.id === current.floorId);
 
-      return {
-        ...current,
-        buildingId,
-        floorId: validFloor ? current.floorId : floors[0]?.id || ""
-      };
+      // return {
+      //   ...current,
+      //   buildingId,
+      //   floorId: validFloor ? current.floorId : floors[0]?.id || ""
+      // };
     });
-  }, [buildings, selectedBuilding?.id]);
+  }, [buildings]);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -137,8 +252,20 @@ export default function Assets({
       file: form.file,
       buildingName: selectedBuilding?.name || "อาคาร",
       floorNo: floorRow?.floorNo || "",
-      __new: true
+      __new: true,
+      boundaryId: 
+        selectedBuilding?.boundaryId || 
+        boundaries.find(boundary =>
+        boundary.type === "building" &&
+        boundary.selectableForAssets !== false &&
+        (boundary.buildingId === selectedBuilding?.id ||
+          (!boundary.buildingId &&
+            boundary.name === selectedBuilding?.name))
+        )?.id || null,
+
+        customFloor: form.customFloor || "",
     });
+
     setDraftPlacement({
       ...DEFAULT_PLACEMENT,
       center: [...SC8_CENTER]
@@ -178,21 +305,26 @@ export default function Assets({
 
   const saveNewAsset = async placement => {
     try {
+      const { floorId } = await resolveTarget(editingAsset.floorId, editingAsset.customFloor);
       const asset = {
         name: editingAsset.name,
         kind: editingAsset.kind,
         file: editingAsset.file,
-        floorId: editingAsset.floorId || null,
+        floorId: floorId || null,
+        customFloor: null, // มีชั้นจริงแล้ว ไม่ต้องเก็บชื่อชั้นแบบพิมพ์เอง
+        boundaryId: editingAsset.boundaryId || null,
+        buildingName: editingAsset.buildingName || "อาคาร",
         placement,
         updatedAt: new Date().toISOString(),
         status: "draft"
       };
       await create(asset, user);
+      clearMapDataCache();
       setForm({
         name: "",
         kind: "floorplan",
         buildingId: selectedBuilding?.id || "",
-        floorId: selectedFloors?.[0]?.id || "",
+        floorId: selectedFloors?.[0]?.id || "custom",
         file: ""
       });
       setSelectedFile(null);
@@ -202,7 +334,7 @@ export default function Assets({
       setDraftPlacement(null);
     } catch (err) {
       console.error(err);
-      alert("บันทึกไฟล์ไม่สำเร็จ");
+      alert(err?.message || "บันทึกไฟล์ไม่สำเร็จ");
     }
   };
 
@@ -263,10 +395,6 @@ export default function Assets({
         <div style={{
         marginTop: 8
       }}>
-          {/* <Field label="ชื่อรายการ">
-            <Input value={form.name} onChange={set("name")} placeholder="เช่น ผังชั้น 3 อาคาร Sc8" />
-          </Field> */}
-
           <Field label="ประเภท">
             <div>
               ผังชั้น (SVG)
@@ -276,13 +404,15 @@ export default function Assets({
           {form.kind === "floorplan" ? <>
               {/* ส่วนของอาคาร : เลือกได้เฉพาะที่มีในลิสต์เท่านั้น ไม่มีการพิมพ์เพิ่มเติม */}
               <Field label="อาคาร">
-                <Select value={form.buildingId} onChange={e => {
+                <Select 
+                value={form.buildingId} 
+                onChange={e => {
                 const buildingId = e.target.value;
                 const building = buildings.find(b => b.id === buildingId);
                 setForm(current => ({
                   ...current,
                   buildingId,
-                  floorId: building?.floors?.[0]?.id || ""
+                  floorId: building?.floors?.[0]?.id || "custom"
                 }));
               }}>              
                   {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -419,18 +549,34 @@ export default function Assets({
             if (!form.file.trim()) {
               return alert("กรุณาอัปโหลดไฟล์ .svg ก่อน");
             }
-            await create({
-              ...form,
-              updatedAt: todayStr(),
-              status: "draft"
-            }, user);
-            setForm({
+            try {
+              const { floorId } = await resolveTarget(form.floorId, form.customFloor);
+              await create({
+                name: form.name,
+                kind: form.kind,
+                file: form.file,
+                floorId: floorId || null,
+                customFloor: null,
+                boundaryId: selectedBuilding?.boundaryId || null,
+                buildingName: selectedBuilding?.name || "อาคาร",
+                updatedAt: new Date().toISOString(),
+                status: "draft"
+              }, user);
+              clearMapDataCache();
+            } catch (err) {
+              console.error(err);
+              return alert(err?.message || "บันทึกไฟล์ไม่สำเร็จ");
+            }
+            setForm(f => ({
+              ...f,
               name: "",
-              kind: "floorplan",
-              building: "Sc8",
-              floor: "1",
-              file: ""
-            });
+              file:""
+              // name: "",
+              // kind: "floorplan",
+              // building: "Sc8",
+              // floor: "1",
+              // file: ""
+            }));
             setSelectedFile(null);
             setUploadError("");
           }}>
@@ -505,10 +651,16 @@ export default function Assets({
                 {a.kind === "floorplan" ? <Pill>
                     {(() => {
                 const fr = buildings.flatMap(b => b.floors || []).find(f => f.id === a.floorId);
-                const br = buildings.find(b => b.id === fr?.buildingId);
-                return `${br?.name || "อาคาร"} · ชั้น ${fr?.floorNo || "?"}`;
+                const br = buildings.find(b => b.floors?.some(f => f.id === a.floorId));
+                const floorLabel = a.customFloor? a.customFloor: fr?.floorNo ?? fr?.name ?? "?";
+
+                return `${br?.name || a.buildingName || "อาคาร"} · ${
+                  String(floorLabel).startsWith("ชั้น")
+                  ? floorLabel
+                  :  `ชั้น ${floorLabel}`
+                }`;
               })()}
-                  </Pill> : null}
+                </Pill> : null}
 
                 <Status value={a.status || "draft"} />
 

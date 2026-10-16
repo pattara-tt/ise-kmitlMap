@@ -16,19 +16,23 @@ function Boundary({
   const {
     data: mapData
   } = useMapData();
+
   const buildings = mapData?.buildings || [];
+
   const {
     items = [],
     create,
     patch,
     destroy
   } = useCollection("mapBoundaries");
+
   const [form, setForm] = useState({
     name: "custom",
     customName: "",
     type: "building",
     buildingId: ""
   });
+  
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingBoundary, setEditingBoundary] = useState(null);
   const [draftPoints, setDraftPoints] = useState([]);
@@ -41,14 +45,21 @@ function Boundary({
   // (ถ้าผู้ใช้เลือก "พิมพ์ระบุเอง" ไว้แล้วจะไม่ไปแทนที่ค่า เว้นแต่ยังไม่มีอาคารในระบบเลยจริง ๆ)
   useEffect(() => {
     if (form.type !== "building") return;
+
+    if(form.buildingId === "custom") return;
     const hasRealSelection = buildings.some(b => b.id === form.buildingId);
+
     if (hasRealSelection) return;
+
     if (buildings.length > 0) {
       setForm(current => ({ ...current, buildingId: buildings[0].id }));
-    } else if (form.buildingId !== "custom") {
-      setForm(current => ({ ...current, buildingId: "custom" }));
+    } else {
+      setForm(current => ({
+        ...current,
+        buildingId: "custom"
+      }));
     }
-  }, [form.type, buildings]);
+  },  [form.type, form.buildingId, buildings]);
 
   // รายชื่อขอบเขตที่เคยถูกสร้างไว้แล้ว เฉพาะประเภทที่เลือกอยู่ (ใช้กับ ประเภท = วิทยาเขต / โซน ที่ไม่มีลิสต์กลางให้เชื่อม)
   const existingNames = [...new Set(items.filter(it => it.type === form.type).map(it => it.name).filter(Boolean))];
@@ -92,6 +103,7 @@ function Boundary({
     if (points.length < 3) {
       return alert("กรุณาเลือกอย่างน้อย 3 จุด");
     }
+
     const newBoundary = {
       id: `MB-${Date.now()}`,
       name: nameValue,
@@ -101,7 +113,8 @@ function Boundary({
       // geometry เก็บเป็น [lat, lon] ตามพฤติกรรมเดิมของ editor
       geometry: points,
       updatedAt: new Date().toISOString(),
-      status: "draft"
+      status: "draft",
+      selectableForAssets: form.type=="building"
     };
     await create(newBoundary, user);
     setForm({
@@ -126,7 +139,10 @@ function Boundary({
       geometry: points,
       updatedAt: new Date().toISOString(),
       // แก้ไขแล้วกลับไปเป็น draft
-      status: "draft"
+      status: "draft",
+      selectableForAssets:
+      editingBoundary.selectableForAssets !== false &&
+      editingBoundary.type == "building"
     }, user);
     setEditingBoundary(null);
     setDraftPoints([]);
@@ -300,14 +316,16 @@ function Boundary({
 
                 {/* Publish / Draft */}
                 {r.status === "draft" ? <Btn kind="ok" onClick={() => patch(r.id, {
-          status: "published",
-          updatedAt: new Date().toISOString()
-        }, user)}>
+                  status: "published",
+                  selectableForAssets: r.type == "building",
+                  updatedAt: new Date().toISOString()
+                }, user)}>
                     เผยแพร่
                   </Btn> : <Btn kind="ghost" onClick={() => patch(r.id, {
-          status: "draft",
-          updatedAt: new Date().toISOString()
-        }, user)}>
+                    status: "draft",
+                    selectableForAssets: false,
+                    updatedAt: new Date().toISOString()
+                  }, user)}>
                     ถอนกลับร่าง
                   </Btn>}
 

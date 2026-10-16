@@ -28,31 +28,105 @@ function nodeLabel(n) {
   return `${t?.icon || "📍"} ${t?.label || n.type || "node"}${pos}`;
 }
 
-export default function NodeEdgeTab({ user, mapData, onPageChange}) {
+export default function NodeEdgeTab({ user, mapData, onPageChange }) {
   const nodesApi = useCollection("nodes");
   const edgesApi = useCollection("edges");
   const { items: assets = [] } = useCollection("mapAssets");
-  const buildings = mapData?.buildings || [];
-  const [buildingId, setBuildingId] = useState(mapData?.building?.id || "");
+  const { items: boundaries = [] } = useCollection("mapBoundaries");
+
+  const allBuildings = mapData?.buildings || [];
+
+  // แสดงเฉพาะแผนผังภายในอาคารที่มีไฟล์จริงจาก UC8
+  const floorplanAssets = useMemo(
+    () =>
+      assets.filter(
+        asset =>
+          asset.file &&
+          (asset.kind || "floorplan") === "floorplan"
+      ),
+    [assets]
+  );
+
+  // อาคารที่มีแผนผังใน UC8 แล้วเท่านั้น
+  const buildings = useMemo(() => {
+    return allBuildings
+      .map(building => {
+        const floors = (building.floors || []).filter(floor =>
+          floorplanAssets.some(
+            asset =>
+              asset.floorId === floor.id ||
+              (
+                asset.buildingId === building.id &&
+                String(asset.floorNo) === String(floor.floorNo)
+              )
+          )
+        );
+
+        return { ...building, floors };
+      })
+      .filter(building => building.floors.length > 0);
+  }, [allBuildings, floorplanAssets]);
+
+  // ประเภทพื้นที่ที่เลือก
+  const [selectedCategory, setSelectedCategory] = useState("building");
+
+  // รายการพื้นที่จาก UC7
+  const availableBoundaries = useMemo(
+    () =>
+      boundaries.filter(
+        boundary =>
+          boundary.type === selectedCategory &&
+          boundary.status !== "deleted"
+      ),
+    [boundaries, selectedCategory]
+  );
+
+  const [selectedBoundaryId, setSelectedBoundaryId] = useState("");
+
+  const [buildingId, setBuildingId] = useState("");
   const [floorId, setFloorId] = useState("");
+
   const [nodeForm, setNodeForm] = useState(EMPTY_NODE);
   const [edgeForm, setEdgeForm] = useState(EMPTY_EDGE);
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState("select");
-  const [mode, setMode] = useState("node"); // "node" = ปักหมุด, "edge" = กำหนดเส้นทาง
+  const [mode, setMode] = useState("node");
 
-  const building = buildings.find((b) => b.id === buildingId) || buildings[0] || null;
+  const building =
+    buildings.find(b => b.id === buildingId) || null;
+
   const floors = building?.floors || [];
-  const floor = floors.find((f) => f.id === floorId) || null;
+  const floor = floors.find(f => f.id === floorId) || null;
+
+  // โค้ดส่วนอื่นด้านล่างให้คงไว้ก่อน
 
   useEffect(() => {
-    if (!buildingId && mapData?.building?.id) setBuildingId(mapData.building.id);
-  }, [buildingId, mapData?.building?.id]);
+  if (selectedCategory !== "building") {
+    setBuildingId("");
+    setFloorId("");
+    return;
+  }
 
-  useEffect(() => {
-    if (!floors.length) { setFloorId(""); return; }
-    if (!floors.some((f) => f.id === floorId)) setFloorId(floors[0].id);
-  }, [floors, floorId]);
+  if (!buildings.length) {
+    setBuildingId("");
+    setFloorId("");
+    return;
+  }
+
+  const currentBuilding = buildings.find(
+    building => building.id === buildingId
+  );
+
+  if (!currentBuilding) {
+    setBuildingId(buildings[0].id);
+    setFloorId(currentBuilding?.floors?.[0]?.id || "");
+    return;
+  }
+
+  if (!currentBuilding.floors.some(floor => floor.id === floorId)) {
+    setFloorId(currentBuilding.floors[0]?.id || "");
+  }
+}, [selectedCategory, buildings, buildingId, floorId]);
 
   useEffect(() => { onPageChange?.(page); }, [page, onPageChange]);
 
@@ -191,28 +265,153 @@ export default function NodeEdgeTab({ user, mapData, onPageChange}) {
   /* ---------- หน้า 1: เลือกอาคาร / ชั้น ---------- */
 
   if (page === "select") return (
-    <Card>
-      <div style={{ marginBottom: 14 }}>
-        <b style={{ fontSize: 16 }}>เลือกอาคารและชั้นสำหรับปักหมุด</b>
-        <div style={{ fontSize: 12, color: "#5F6368", marginTop: 4 }}>เลือกพื้นที่ที่ต้องการจัดการ Node / Edge ก่อนเข้าสู่หน้าแผนที่</div>
+  <Card>
+    <div style={{ marginBottom: 14 }}>
+      <b style={{ fontSize: 16 }}>
+        เลือกประเภทและพื้นที่สำหรับปักหมุด
+      </b>
+
+      <div style={{
+        fontSize: 12,
+        color: "#5F6368",
+        marginTop: 4
+      }}>
+        เลือกพื้นที่ที่ต้องการจัดการ Node / Edge ก่อนเข้าสู่หน้าแผนที่
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
-        <Field label="อาคาร">
-          <Select value={building?.id || ""} onChange={(e) => { setBuildingId(e.target.value); setFloorId(""); resetNode(); resetEdge(); }}>
-            {buildings.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
+    </div>
+
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+      gap: 12
+    }}>
+      <Field label="ประเภท">
+        <Select
+          value={selectedCategory}
+          onChange={e => {
+            setSelectedCategory(e.target.value);
+            setSelectedBoundaryId("");
+            setBuildingId("");
+            setFloorId("");
+            resetNode();
+            resetEdge();
+          }}
+        >
+          <option value="building">อาคาร</option>
+          <option value="campus">วิทยาเขต</option>
+          <option value="zone">โซน/พื้นที่ย่อย</option>
+        </Select>
+      </Field>
+
+      {selectedCategory === "building" ? (
+        <>
+          <Field label="อาคาร">
+            <Select
+              value={buildingId}
+              onChange={e => {
+                const id = e.target.value;
+                const selected = buildings.find(b => b.id === id);
+
+                setBuildingId(id);
+                setFloorId(selected?.floors?.[0]?.id || "");
+                resetNode();
+                resetEdge();
+              }}
+            >
+              <option value="">— เลือกอาคาร —</option>
+              {buildings.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.code ? `${b.code} · ` : ""}{b.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="ชั้น">
+            <Select
+              value={floorId}
+              onChange={e => {
+                setFloorId(e.target.value);
+                resetNode();
+                resetEdge();
+              }}
+            >
+              <option value="">— เลือกชั้น —</option>
+              {floors.map(f => (
+                <option key={f.id} value={f.id}>
+                  {f.name || `ชั้น ${f.floorNo}`}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </>
+      ) : (
+        <Field label={
+          selectedCategory === "campus"
+            ? "วิทยาเขต"
+            : "โซน/พื้นที่ย่อย"
+        }>
+          <Select
+            value={selectedBoundaryId}
+            onChange={e => setSelectedBoundaryId(e.target.value)}
+          >
+            <option value="">— เลือกพื้นที่ —</option>
+            {availableBoundaries.map(boundary => (
+              <option key={boundary.id} value={boundary.id}>
+                {boundary.name}
+              </option>
+            ))}
           </Select>
         </Field>
-        <Field label="ชั้น">
-          <Select value={floorId} onChange={(e) => { setFloorId(e.target.value); resetNode(); resetEdge(); }}>
-            {floors.map((f) => <option key={f.id} value={f.id}>{f.name || `ชั้น ${f.floorNo}`}</option>)}
-          </Select>
-        </Field>
+      )}
+    </div>
+
+    {(
+      selectedCategory === "building"
+        ? buildings.length === 0
+        : availableBoundaries.length === 0
+    ) && (
+      <div style={{
+        marginTop: 12,
+        padding: 10,
+        background: "#FFF8E1",
+        borderRadius: 8,
+        fontSize: 13
+      }}>
+        {selectedCategory === "building"
+          ? "ยังไม่มีอาคารที่เพิ่มแผนผังภายในใน UC8"
+          : "ยังไม่มีพื้นที่ประเภทนี้ที่สร้างไว้ใน UC7"}
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-        <Btn disabled={!building || !floorId} onClick={() => { setMode("node"); setPage("editor"); }}>ไปยังหน้าแผนที่ →</Btn>
-      </div>
-    </Card>
-  );
+    )}
+
+    <div style={{
+      display: "flex",
+      justifyContent: "flex-end",
+      marginTop: 14
+    }}>
+      <Btn
+        disabled={
+          selectedCategory === "building"
+            ? !building || !floorId
+            : !selectedBoundaryId
+        }
+        onClick={() => {
+          if (selectedCategory !== "building") {
+            alert(
+              "ส่วนแสดงแผนที่และจัดการ Node/Edge สำหรับวิทยาเขตและโซนยังต้องพัฒนาเพิ่มเติม"
+            );
+            return;
+          }
+
+          setMode("node");
+          setPage("editor");
+        }}
+      >
+        ไปยังหน้าแผนที่ →
+      </Btn>
+    </div>
+  </Card>
+);
 
   /* ---------- หน้า 2: แผนที่ปักหมุด ---------- */
 

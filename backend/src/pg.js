@@ -35,12 +35,37 @@ export const rowOut = (r) => r ? Object.fromEntries(Object.entries(r).map(([k,v]
 const ASSET_FILE_PREFIX = "__SCIMAP_ASSET_V1__:";
 function unpackAsset(row) {
   if (!row || typeof row.file !== "string" || !row.file.startsWith(ASSET_FILE_PREFIX)) return row;
-  try { const meta = JSON.parse(row.file.slice(ASSET_FILE_PREFIX.length)); return { ...row, file: meta.file || "", placement: meta.placement || null }; } catch { return row; }
+  try { 
+    const meta = JSON.parse(row.file.slice(ASSET_FILE_PREFIX.length));
+     return { 
+      ...row, 
+      file: meta.file || "",
+      placement: meta.placement || null,
+      customFloor: meta.customFloor?? null,
+      boundaryId: meta.boundaryId ?? null,
+      buildingName: meta.buildingName ?? null,
+     }; 
+  } catch { return row; }
 }
+
 function packAsset(row) {
-  if (!row || !("placement" in row)) return row;
-  const { placement, ...rest } = row;
-  return { ...rest, file: ASSET_FILE_PREFIX + JSON.stringify({ file: rest.file || "", placement: placement || null }) };
+  if (!row) return row;
+  const { 
+    placement,
+    customFloor,
+    boundaryId,
+    buildingName,
+     ...rest } = row;
+  return { 
+    ...rest, 
+    file: ASSET_FILE_PREFIX + JSON.stringify({ 
+      file: rest.file || "", 
+      placement: placement || null,
+      customFloor: customFloor ?? null,
+      boundaryId: boundaryId ?? null,
+      buildingName: buildingName?? null,
+    }),
+  };
 }
 
 
@@ -154,29 +179,96 @@ export async function insert(name,item) {
   const out = unpackJson(name, rowOut(rows[0]));
   return name === "requests" ? unpackRequest(out) : name === "mapAssets" ? unpackAsset(out) : out;
 }
+
 function whereFor(name,id,start=1) {
   const keys=COMPOSITE[name];
   if(keys){ if(!id||typeof id!=="object") throw new Error(`${name} ต้องใช้ composite key object`); return {sql:keys.map((k,i)=>`"${k}"=$${start+i}`).join(" AND "), vals:keys.map(k=>id[camel(k)])}; }
   const pk=PK[name]||"id"; return {sql:`"${snake(pk)}"=$${start}`,vals:[id]};
 }
-export async function update(name,id,patch) {
-  if (name === "requests") patch = packRequest(patch);
-  patch = packJson(name, patch);
-  if (name === "mapAssets" && Object.prototype.hasOwnProperty.call(patch, "placement")) {
-    const { rows } = await query(`SELECT * FROM map_assets WHERE id=$1`, [id]);
-    const current = unpackAsset(rowOut(rows[0]));
-    patch = packAsset({ ...current, ...patch });
-    delete patch.id;
-    delete patch.floorId;
-    delete patch.name;
-    delete patch.kind;
-    delete patch.status;
-    delete patch.updatedAt;
+
+
+export async function update(name, id, patch) {
+  if (name === "requests") {
+    patch = packRequest(patch);
   }
-  const pk=PK[name]||"id"; const blocked=new Set([pk,...(COMPOSITE[name]||[]).map(camel)]); const keys=Object.keys(patch).filter(k=>patch[k]!==undefined&&!blocked.has(k));
-  if(!keys.length) return null; const sets=keys.map((k,i)=>`"${snake(k)}"=$${i+1}`).join(", "); const w=whereFor(name,id,keys.length+1);
-  const {rows}=await query(`UPDATE ${table(name)} SET ${sets} WHERE ${w.sql} RETURNING *`,[...keys.map(k=>patch[k]),...w.vals]); const out=unpackJson(name, rowOut(rows[0]||null)); return name === "requests" ? unpackRequest(out) : name === "mapAssets" ? unpackAsset(out) : out;
+
+  patch = packJson(name, patch);
+
+  if (name === "mapAssets") {
+    const { rows } = await query(
+      `SELECT * FROM map_assets WHERE id=$1`,
+      [id]
+    );
+
+    if (!rows[0]) return null;
+
+    const current = unpackAsset(rowOut(rows[0]));
+    const merged = { ...current, ...patch };
+
+    const assetMetadataKeys = [
+      "placement",
+      "customFloor",
+      "boundaryId",
+      "buildingName",
+      "file",
+    ];
+
+    const metadataChanged = assetMetadataKeys.some((key) =>
+      Object.prototype.hasOwnProperty.call(patch, key)
+    );
+
+    const packed = packAsset(merged);
+
+    const nextPatch = { ...patch };
+
+    // ฟิลด์เหล่านี้ไม่ได้เป็นคอลัมน์ใน map_assets
+    delete nextPatch.placement;
+    delete nextPatch.customFloor;
+    delete nextPatch.boundaryId;
+    delete nextPatch.buildingName;
+    delete nextPatch.id;
+
+    // ถ้ามีการเปลี่ยนไฟล์หรือตำแหน่ง ให้บันทึกข้อมูลรวมลง file
+    if (metadataChanged) {
+      nextPatch.file = packed.file;
+    }
+
+    patch = nextPatch;
+  }
+
+  const pk = PK[name] || "id";
+  const blocked = new Set([
+    pk,
+    ...(COMPOSITE[name] || []).map(camel),
+  ]);
+
+  const keys = Object.keys(patch).filter(
+    (key) => patch[key] !== undefined && !blocked.has(key)
+  );
+
+  if (!keys.length) return null;
+
+  const sets = keys
+    .map((key, index) => `"${snake(key)}"=$${index + 1}`)
+    .join(", ");
+
+  const where = whereFor(name, id, keys.length + 1);
+
+  const { rows } = await query(
+    `UPDATE ${table(name)} SET ${sets} WHERE ${where.sql} RETURNING *`,
+    [...keys.map((key) => patch[key]), ...where.vals]
+  );
+
+  const out = unpackJson(name, rowOut(rows[0] || null));
+
+  return name === "requests"
+    ? unpackRequest(out)
+    : name === "mapAssets"
+      ? unpackAsset(out)
+      : out;
 }
+
+
 export async function remove(name,id) { const w=whereFor(name,id,1); const r=await query(`DELETE FROM ${table(name)} WHERE ${w.sql}`,w.vals); return r.rowCount>0; }
 
 const TARGET_FK={nodes:"node_id",edges:"edge_id",floors:"floor_id",rooms:"room_id",mapBoundaries:"map_boundary_id",mapAssets:"map_asset_id",news:"news_id",events:"event_id",categories:"category_id",broadcasts:"broadcast_id",requestQuota:"request_quota_id",requests:"request_id",feedback:"feedback_id"};

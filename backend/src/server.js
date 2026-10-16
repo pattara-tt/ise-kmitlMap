@@ -9,7 +9,7 @@ import { ROLE, MARKETING_COLLECTIONS as MARKETING_COLLECTION_LIST, ACCESS_STATUS
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "4mb" }));
 const wrap = (fn) => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
 
 const MARKETING_COLLECTIONS = new Set(MARKETING_COLLECTION_LIST);
