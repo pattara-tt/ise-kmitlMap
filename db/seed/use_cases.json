@@ -7,21 +7,21 @@
   },
   {
     "key": "feedback",
-    "title": "ตรวจสอบข้อเสนอแนะและคำขอจากผู้ใช้งานทั่วไป",
+    "title": "ตรวจสอบข้อเสนอแนะจากผู้ใช้งานทั่วไป",
     "icon": "svg:Chat_search_light",
     "sortOrder": 1
   },
   {
     "key": "contracts",
-    "title": "ตรวจสอบสัญญาที่ฝ่ายการตลาดทำกับฝ่ายการตลาด",
+    "title": "ตรวจสอบสัญญา",
     "icon": "svg:Folder_search_light",
-    "sortOrder": 2
+    "sortOrder": 3
   },
   {
     "key": "audit",
     "title": "ตรวจสอบบันทึกประวัติการแก้ไขข้อมูลแผนที่",
     "icon": "svg:Map_light",
-    "sortOrder": 3
+    "sortOrder": 4
   },
   {
     "key": "broadcast",
@@ -130,5 +130,23 @@
     "title": "เข้าสู่ระบบด้วย E-mail",
     "icon": null,
     "sortOrder": 21
+  },
+  {
+    "key": "room_types",
+    "title": "จัดการประเภทห้องและไอคอน",
+    "icon": "🧩",
+    "sortOrder": 18
+  },
+  {
+    "key": "exec_requests",
+    "title": "ตรวจสอบคำร้องจากผู้ใช้งานทั่วไป",
+    "icon": "📋",
+    "sortOrder": 2
+  },
+  {
+    "key": "search_stats",
+    "title": "สถิติการค้นหาอาคารและจุดสนใจ",
+    "icon": "svg:growth",
+    "sortOrder": 5
   }
 ]

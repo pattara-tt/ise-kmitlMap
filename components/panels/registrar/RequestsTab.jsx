@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Card, Field, Input, SearchBar, Select, Status, Table, Textarea, useCollection, formatDateTime } from "../../ui";
+import { Btn, Card, Field, Input, SearchBar, Select, Status, Table, Textarea, useCollection} from "../../ui";
+import { formatDateTime } from "../../../lib/datetime";
 
 const FIELD_LABEL = {
   name: "ชื่อห้อง",
@@ -10,7 +11,7 @@ const FIELD_LABEL = {
   teacher: "อาจารย์",
 };
 
-export default function RegistrarRequestsTab({ user }) {
+export default function RegistrarRequestsTab({ user, onNavigate }) {
   const {
     items: requests,
     reload: reloadRequests,
@@ -25,6 +26,8 @@ export default function RegistrarRequestsTab({ user }) {
     items: rooms,
     patch: patchRoom,
   } = useCollection("rooms");
+
+  const { items: roomTypes, loading: roomTypesLoading, reload: reloadRoomTypes } = useCollection("roomTypes");
 
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [q, setQ] = useState("");
@@ -61,6 +64,10 @@ export default function RegistrarRequestsTab({ user }) {
         rooms={rooms}
         patchRequest={patchRequest}
         patchRoom={patchRoom}
+        roomTypes={roomTypes}
+        roomTypesLoading={roomTypesLoading}
+        reloadRoomTypes={reloadRoomTypes}
+        onNavigate={onNavigate}
         user={user}
         onBack={async () => {
           await reloadRequests();
@@ -142,7 +149,7 @@ export default function RegistrarRequestsTab({ user }) {
    รายละเอียดคำร้องของ Registrar
    ========================================================= */
 
-function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom, user, onBack, }) {
+function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom, roomTypes, roomTypesLoading, reloadRoomTypes, onNavigate, user, onBack, }) {
   const parseData = (value) => {
     if (!value) return {};
 
@@ -169,6 +176,18 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
   const requestUser = users.find((u) => u.id === request.userId);
   const room = rooms.find((r) => r.id === request.roomId);
 
+  // Room type names are the current linkage used by existing rooms/markers.
+  const proposedType = String(form.type ?? room?.type ?? "").trim();
+  const knownType = !proposedType || roomTypes.some((type) =>
+    String(type.name || "").trim().toLocaleLowerCase() === proposedType.toLocaleLowerCase()
+  );
+  const missingType = !roomTypesLoading && !knownType;
+  const [actionError, setActionError] = useState("");
+
+  const navigateToTypes = () => {
+    if (typeof onNavigate === "function") onNavigate("room_types");
+  };
+
   const setValue = (key) => (e) => {
     setForm((current) => ({
       ...current,
@@ -179,6 +198,12 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
   async function approve() {
     if (!request.roomId) return;
 
+    // Re-read catalog so a newly-created type can be approved without page reload.
+    setActionError("");
+    if (missingType || roomTypesLoading) {
+      setActionError("ยังไม่สามารถอนุมัติได้: ต้องเลือกประเภทห้องที่มีในระบบก่อน");
+      return;
+    }
     setSaving(true);
 
     try {
@@ -202,6 +227,8 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
       );
 
       await onBack();
+    } catch (error) {
+      setActionError(error?.message || "บันทึกและอนุมัติคำร้องไม่สำเร็จ");
     } finally {
       setSaving(false);
     }
@@ -348,6 +375,15 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
         </div>
       </Card>
 
+      {missingType && (
+        <div role="alert" style={{padding:14,border:"1px solid #F3C989",borderRadius:10,background:"#FFF8E9",marginBottom:14}}>
+          <strong>ยังไม่มีประเภทห้อง “{proposedType}” ในระบบ</strong>
+          <p style={{margin:"7px 0",fontSize:13}}>ต้องสร้างประเภทและกำหนดรูปไอคอนก่อน จึงจะอนุมัติคำร้องเพื่ออัปเดต Marker/Popup ได้</p>
+          <Btn onClick={navigateToTypes}>ไปสร้างประเภทห้องและไอคอน</Btn>
+        </div>
+      )}
+      {actionError && <p role="alert" style={{color:"#B3261E"}}>{actionError}</p>}
+
       {/* หมายเหตุ */}
       <Card>
         <Field label="หมายเหตุ">
@@ -377,7 +413,7 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
             ไม่อนุมัติ
           </Btn>
 
-          <Btn kind="ok" disabled={saving} onClick={approve}>
+          <Btn kind="ok" disabled={saving || roomTypesLoading || missingType} onClick={approve}>
             {saving ? "กำลังบันทึก..." : "บันทึกและอนุมัติ"}
           </Btn>
         </div>

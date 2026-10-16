@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { KMITL_ALL_NODES, KMITL_NODE_FLOOR } from "../mapConfig";
 import { suggestPlaces } from "../mapGeo";
+import { logSearch } from "../../lib/searchLog";
 
 const normalizeSearch = text => String(text || "").trim().toLowerCase().replace(/\s+/g, "");
 
@@ -107,6 +108,7 @@ export default function SearchPlaceInput({
     }, 250);
   };
   const choose = item => {
+    logSearch({ kind: "search", placeLabel: item.name, query: value });
     onChange(item.name);
     setOpen(false);
     onPick(item);

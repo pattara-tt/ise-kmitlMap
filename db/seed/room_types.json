@@ -1,0 +1,44 @@
+[
+  {
+    "id": "RT-001",
+    "name": "ห้องเรียน",
+    "icon": "🏫",
+    "color": "#1A73E8",
+    "description": ""
+  },
+  {
+    "id": "RT-002",
+    "name": "ห้องน้ำ",
+    "icon": "🚻",
+    "color": "#1A73E8",
+    "description": ""
+  },
+  {
+    "id": "RT-003",
+    "name": "co-working",
+    "icon": "💻",
+    "color": "#1A73E8",
+    "description": ""
+  },
+  {
+    "id": "RT-004",
+    "name": "ลิฟต์",
+    "icon": "🛗",
+    "color": "#1A73E8",
+    "description": ""
+  },
+  {
+    "id": "RT-005",
+    "name": "บันได",
+    "icon": "🪜",
+    "color": "#1A73E8",
+    "description": ""
+  },
+  {
+    "id": "RT-006",
+    "name": "ห้องพักอาจารย์",
+    "icon": "👨‍🏫",
+    "color": "#1A73E8",
+    "description": ""
+  }
+]

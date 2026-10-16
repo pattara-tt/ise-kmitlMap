@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useMapData } from "../../../lib/useMapData";
-import { Btn, Card, Field, Input, Status, Textarea, UCHead, useCollection, formatDateTime } from "../../ui";
+import { Btn, Card, Field, Input, Select, Status, Textarea, UCHead, useCollection } from "../../ui";
+import { formatDateTime } from "../../../lib/datetime";
 import NodeEdgeTab from "./NodeEdgeTab";
+import { todayStr } from "./shared";
 
 /* =========================================================
    UC9 : บันทึกข้อมูลแผนที่
@@ -32,12 +34,46 @@ function SaveMap({
     name: "",
     note: ""
   });
+
+  const [mapPage, setMapPage] = useState("select");
+
+  // ตัวกรองหมวดของรายการรอเผยแพร่ (UC7 ขอบเขต / UC8 แผนผังภายในอาคาร)
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
   const set = k => e => setForm(f => ({
     ...f,
     [k]: e.target.value
   }));
-  const draftAssets = assets.filter(a => a.status === "draft");
-  const draftBoundaries = boundaries.filter(b => b.status === "draft");
+
+  /* -----------------------------------------
+     ตัวช่วยกรอง / เรียง
+  ----------------------------------------- */
+
+  const statusOf = row => row.status || "draft";
+  const newestFirst = (a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+
+  // floorId → { ...floor, building }  (asset ผูกกับอาคารผ่าน floor เท่านั้น)
+  const floorById = new Map(
+    (mapData?.buildings || []).flatMap(b =>
+      (b.floors || []).map(f => [f.id, { ...f, building: b }])
+    )
+  );
+
+  // รายการรอเผยแพร่ = เฉพาะ draft (กดเผยแพร่แล้วจะกลายเป็น published และหายจากรายการนี้)
+  // ส่วนรายการให้เลือกอาคาร/ชั้น/พื้นที่ใน NodeEdgeTab แสดงทุกสถานะอยู่แล้ว
+  const draftAssets = assets.filter(a => statusOf(a) === "draft");
+  const draftBoundaries = boundaries.filter(b => statusOf(b) === "draft");
+
+  // ขอบเขตจาก UC7 : เฉพาะ draft ตามหมวดที่เลือก
+  const filteredBoundaries = draftBoundaries
+    .filter(b => selectedCategory === "all" || b.type === selectedCategory)
+    .sort(newestFirst);
+
+  // แผนผังภายในอาคารจาก UC8 : นับเป็นหมวด "อาคาร" เสมอ
+  const filteredAssets = (selectedCategory === "all" || selectedCategory === "building")
+    ? [...draftAssets].sort(newestFirst)
+    : [];
+
   const handlePublish = async draftId => {
     if (!confirm("ยืนยันการเผยแพร่ข้อมูลแผนที่ ขอบเขต และไฟล์ประกอบทั้งหมดขึ้นระบบจริง?")) return;
     try {
@@ -48,7 +84,7 @@ function SaveMap({
         try {
           await patchAsset(asset.id, {
             status: "published",
-            updatedAt: new Date().toISOString()
+            updatedAt: todayStr()
           }, user);
         } catch (e) {
           console.warn(`Publish asset ${asset.id} failed:`, e);
@@ -58,7 +94,7 @@ function SaveMap({
         try {
           await patchBoundary(boundary.id, {
             status: "published",
-            updatedAt: new Date().toISOString()
+            updatedAt: todayStr()
           }, user);
         } catch (e) {
           console.warn(`Publish boundary ${boundary.id} failed:`, e);
@@ -71,26 +107,49 @@ function SaveMap({
     }
   };
   return <>
-      <UCHead code="UC9" title="บันทึกข้อมูลแผนที่" desc="บันทึกการเปลี่ยนแปลงเป็นฉบับร่างก่อน แล้วจึงยืนยันเผยแพร่ขึ้นระบบจริง" />
+      <UCHead title="บันทึกข้อมูลแผนที่" desc="บันทึกการเปลี่ยนแปลงเป็นฉบับร่างก่อน แล้วจึงยืนยันเผยแพร่ขึ้นระบบจริง" />
 
-      <NodeEdgeTab user={user} mapData={mapData} />
+      <NodeEdgeTab user={user} mapData={mapData} onPageChange={setMapPage} />
+      
+      <Card>
+        <Field label="เลือกหมวดข้อมูล">
+          <Select
+            value={selectedCategory}
+            onChange={e => setSelectedCategory(e.target.value)}
+          >
+            <option value="all">ทั้งหมด</option>
+            <option value="campus">วิทยาเขต</option>
+            <option value="building">อาคาร</option>
+            <option value="zone">โซน/พื้นที่ย่อย</option>
+          </Select>
+        </Field>
+      </Card>
+
+      {mapPage === "select" && <>
 
       <Card>
         <b style={{
         fontSize: 13.5,
         color: "#202124"
       }}>
-          รายการฉบับร่าง (Draft)
-          ที่รอเผยแพร่ขึ้นระบบจริง
+          รายการฉบับร่างที่รอเผยแพร่
         </b>
 
         <div style={{
         marginTop: 8,
+        marginBottom: 6,
+        fontSize: 12,
+        color: "#5F6368"
+      }}>
+          รอเผยแพร่: ขอบเขต {draftBoundaries.length} รายการ · แผนผัง {draftAssets.length} รายการ
+        </div>
+
+        <div style={{
         marginBottom: 14,
         fontSize: 13,
         color: "#5F6368"
       }}>
-          {draftBoundaries.length === 0 && draftAssets.length === 0 ? <div style={{
+          {filteredBoundaries.length === 0 && filteredAssets.length === 0 ? <div style={{
           padding: "10px",
           background: "#F8F9FA",
           borderRadius: 6,
@@ -106,47 +165,37 @@ function SaveMap({
           flexDirection: "column",
           gap: 6
         }}>
-              {draftBoundaries.map(b => <div key={b.id} style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "8px 12px",
-            background: "#F8F9FA",
-            borderRadius: 6,
-            border: "1px solid #DADCE0"
-          }}>
+              {filteredBoundaries.map(b => <div key={b.id} style={rowStyle}>
                     <span>
                       📍{" "}
                       <b>
-                        [ขอบเขตแผนผังอาคาร: ]
+                        [ขอบเขต{TYPE_LABEL[b.type] || ""}]
                       </b>{" "}
-                      {b.name}{" "}
-                      ({b.type})
+                      {b.name || "ไม่ระบุชื่อ"}
                     </span>
 
-                    <Status value="draft" />
+                    <Status value={statusOf(b)} />
                   </div>)}
 
-              {draftAssets.map(a => <div key={a.id} style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "8px 12px",
-            background: "#F8F9FA",
-            borderRadius: 6,
-            border: "1px solid #DADCE0"
-          }}>
+              {filteredAssets.map(a => {
+                const fl = floorById.get(a.floorId);
+                const buildingName = fl?.building?.name || "อาคาร";
+                const floorLabel = fl ? (fl.name || `ชั้น ${fl.floorNo}`) : "";
+
+                return (
+                  <div key={a.id} style={rowStyle}>
                     <span>
-                      📁{" "}
-                      <b>
-                        [แผนผังภายในอาคาร: ]
-                      </b>{" "}
-                      {a.name}{" "}
-                      ({a.kind})
+                      📁 <b>[แผนผังภายในอาคาร]</b>{" "}
+                      {buildingName}
+                      {floorLabel ? ` · ${floorLabel}` : ""}
+                      {" — "}
+                      {a.name}
+                      {a.kind ? ` (${a.kind})` : ""}
                     </span>
-
-                    <Status value="draft" />
-                  </div>)}
+                    <Status value={statusOf(a)} />
+                  </div>
+                );
+              })}
             </div>}
         </div>
 
@@ -229,11 +278,29 @@ function SaveMap({
               </Btn>}
           </div>
         </Card>)}
+        </>}
     </>;
 }
 
 /* =========================================================
    Small Components / Styles
 ========================================================= */
+
+const TYPE_LABEL = {
+  campus: "วิทยาเขต",
+  building: "อาคาร",
+  zone: "โซน"
+};
+
+const rowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 8,
+  padding: "8px 12px",
+  background: "#F8F9FA",
+  borderRadius: 6,
+  border: "1px solid #DADCE0"
+};
 
 export default SaveMap;

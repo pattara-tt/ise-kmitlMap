@@ -6,7 +6,7 @@
 ┌──────────── VM (Compute Engine) ────────────┐
 │                                             │
 │  frontend  :80 → :3000   Next.js            │
-│      │ rewrite /api/*                       │
+│      │ proxy /api/* (app/api/[...path])     │
 │      ▼                                      │
 │  backend   :4000 (ภายใน)  Express API       │
 │      │                                      │
@@ -136,8 +136,12 @@ crontab -e
   ในเครือข่ายเดียวกัน ไม่หลุดออกอินเทอร์เน็ต
 - ทั้งสอง image รันด้วย user ที่ไม่ใช่ root
 - `.env` ห้าม commit ขึ้น git (มี `.gitignore` ครอบไว้แล้ว)
-- **ยังต้องทำก่อนใช้จริง:** `users.password` เก็บเป็น plaintext ตาม mock
-  ควรเปลี่ยนเป็น bcrypt hash ใน `backend/src/server.js`
+- รหัสผ่านผู้ใช้เก็บเป็น bcrypt hash (`users.password_hash`) แต่บัญชี seed ใช้รหัส `1234`
+  **ต้องเปลี่ยนรหัสผ่านหรือไม่โหลด seed บัญชีทดสอบ** ก่อนเปิดใช้งานจริง
+- ฐานข้อมูลที่สร้างจาก schema เก่าต้องรัน `db/migrations/` ตามลำดับ (ดู README) —
+  SQL ใน `docker-entrypoint-initdb.d` รันเฉพาะตอนสร้าง volume ครั้งแรก
+- ทางเลือกที่ไม่ใช้ Docker: `deploy/setup-vm.sh` (ติดตั้ง PostgreSQL + systemd `kmitlmap.service` + nginx),
+  `deploy/backup-db.sh` (สำรองรายวัน เก็บ 14 วัน) — ใช้กับการติดตั้งแบบนั้นเท่านั้น
 
 ## รันบนเครื่องตัวเองโดยไม่ใช้ Docker
 

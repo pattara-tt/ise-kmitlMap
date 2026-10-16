@@ -3,6 +3,7 @@
 import BuildingFloorPickerLayout from "./building/BuildingFloorPickerLayout";
 import { useBuildingSearch } from "./building/useBuildingSearch";
 import { normalize, getNodeIcon, getNodeTypeLabel, isExteriorNode } from "./building/nodePresentation";
+import { resolveRoomNodeIcon } from "./building/roomTypeIcon";
 import { useBuildingEffect06 } from "./building/hooks/useBuildingEffect06";
 import { useBuildingEffect08 } from "./building/hooks/useBuildingEffect08";
 import { useBuildingEffect09 } from "./building/hooks/useBuildingEffect09";
@@ -85,6 +86,7 @@ export default function BuildingFloorPicker({
   // ข้อมูลผังจากฝ่ายแผนที่ + รายละเอียดห้องจากฝ่ายทะเบียน 
   const { items: floorRecords } = useCollection("floors");
   const { items: allRooms } = useCollection("rooms");
+  const { items: roomTypes } = useCollection("roomTypes");
   const { items: mapAssets } = useCollection("mapAssets");
   const b = openKey ? BUILDINGS[openKey] : null;
 
@@ -362,6 +364,8 @@ export default function BuildingFloorPicker({
 
   /* สร้าง html ของ popup + tooltip จาก node/room ปัจจุบัน — ใช้ทั้งตอนสร้าง marker ครั้งแรก
      และตอนอัปเดตเนื้อหา popup ที่เปิดค้างอยู่ทันทีที่ข้อมูลห้องถูกแก้ไข */
+  const iconForRoom = (node, room) => resolveRoomNodeIcon(room, roomTypes, getNodeIcon(node));
+
   const buildPopupContent = (id, node, room, icon, typeLabel) => {
     const tooltipText = room
         ? `${room.name || `ห้อง ${room.code || ""}`}`
@@ -383,7 +387,7 @@ export default function BuildingFloorPicker({
                     color:#202124;
                   "
                 >
-                  🚪 ${
+                  ${icon.html} ${
                     escapePopupText(room.name || `ห้อง ${room.code || ""}`)
                   }
                 </div>
@@ -435,7 +439,7 @@ export default function BuildingFloorPicker({
     focusedNodeId: focusedNodeKey,
     searchedNodeId: activeSearchNodeId,
     setSearchedNodeId,
-    getNodeIcon,
+    getNodeIcon: iconForRoom,
     getNodeTypeLabel,
     isExteriorNode,
     onCloseRoomPopupRef,
@@ -455,7 +459,7 @@ export default function BuildingFloorPicker({
     floorNodes,
     focusedNodeId: focusedNodeKey,
     searchedNodeId: activeSearchNodeId,
-    getNodeIcon,
+    getNodeIcon: iconForRoom,
     getNodeTypeLabel,
     isExteriorNode,
     openKey,

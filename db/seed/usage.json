@@ -1,38 +1,38 @@
 [
   {
     "month": "2026-03",
-    "activeUsers": 1820,
-    "searches": 9120,
-    "routes": 4310
+    "activeUsers": 3,
+    "searches": 41,
+    "routes": 19
   },
   {
     "month": "2026-04",
-    "activeUsers": 2110,
-    "searches": 10480,
-    "routes": 5020
+    "activeUsers": 4,
+    "searches": 52,
+    "routes": 25
   },
   {
     "month": "2026-05",
-    "activeUsers": 2450,
-    "searches": 12240,
-    "routes": 6110
+    "activeUsers": 5,
+    "searches": 63,
+    "routes": 31
   },
   {
     "month": "2026-06",
-    "activeUsers": 1980,
-    "searches": 8830,
-    "routes": 3990
+    "activeUsers": 4,
+    "searches": 48,
+    "routes": 22
   },
   {
     "month": "2026-07",
-    "activeUsers": 2680,
-    "searches": 13910,
-    "routes": 6840
+    "activeUsers": 6,
+    "searches": 70,
+    "routes": 36
   },
   {
     "month": "2026-08",
-    "activeUsers": 3120,
-    "searches": 16240,
-    "routes": 7930
+    "activeUsers": 7,
+    "searches": 82,
+    "routes": 41
   }
 ]

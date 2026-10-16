@@ -150,5 +150,17 @@
   {
     "roleCode": "user",
     "useCaseKey": "common_2"
+  },
+  {
+    "roleCode": "registrar",
+    "useCaseKey": "room_types"
+  },
+  {
+    "roleCode": "exec",
+    "useCaseKey": "exec_requests"
+  },
+  {
+    "roleCode": "exec",
+    "useCaseKey": "search_stats"
   }
 ]

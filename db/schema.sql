@@ -102,6 +102,15 @@ CREATE TABLE categories (
   "desc" TEXT
 );
 
+CREATE TABLE room_types (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL UNIQUE,
+  icon        TEXT NOT NULL DEFAULT '🏫',
+  color       TEXT NOT NULL DEFAULT '#1A73E8',
+  description TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE rooms (
   id          TEXT PRIMARY KEY,
   floor_id    TEXT NOT NULL REFERENCES floors(id) ON DELETE CASCADE,
@@ -119,10 +128,12 @@ CREATE TABLE rooms (
 CREATE TABLE map_boundaries (
   id          TEXT PRIMARY KEY,
   building_id TEXT REFERENCES buildings(id) ON DELETE CASCADE,
+  institution_id TEXT REFERENCES institutions(id) ON DELETE SET NULL,
   name        TEXT NOT NULL,
   type        TEXT,
   geometry    JSONB,
   status      TEXT NOT NULL DEFAULT 'draft',
+  selectable_for_assets BOOLEAN NOT NULL DEFAULT false,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -332,3 +343,18 @@ CREATE TABLE usage (
   searches     INTEGER NOT NULL DEFAULT 0,
   routes       INTEGER NOT NULL DEFAULT 0
 );
+
+-- ===== ประวัติการค้นหา/นำทาง (ใช้ทำสถิติให้ผู้บริหาร) =====
+CREATE TABLE search_logs (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT REFERENCES users(id) ON DELETE SET NULL,
+  kind        TEXT NOT NULL CHECK (kind IN ('search','route','navigate')),
+  query       TEXT,
+  building_id TEXT REFERENCES buildings(id) ON DELETE SET NULL,
+  room_id     TEXT REFERENCES rooms(id) ON DELETE SET NULL,
+  place_label TEXT NOT NULL,
+  from_label  TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_search_logs_created_at ON search_logs(created_at DESC);
+CREATE INDEX idx_search_logs_place ON search_logs(place_label);

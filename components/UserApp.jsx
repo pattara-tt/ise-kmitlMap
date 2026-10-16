@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Btn, Card, Field, Icon, Input, Pill, Status, Textarea, UCHead, useCollection, formatDateTime } from "./ui";
+import { Btn, Card, Field, Icon, Input, Pill, Status, Textarea, UCHead, useCollection} from "./ui";
+import { formatDateTime } from "../lib/datetime";
+import FeedbackPage from "./FeedbackPage";
 import { EVENT_STATE_LABEL, eventState, fmt, newsState } from "../lib/schedule";
 import { dayKey, monthKey, todayKey } from "../lib/datetime";
 
@@ -470,55 +472,6 @@ function MyRequests({ user }) {
           ))
         )}
       </div>
-    </div>
-  );
-}
-
-// ── ส่งข้อเสนอแนะหรือแจ้งปัญหาการใช้ระบบ ───────────
-function FeedbackPage({ user }) {
-  const { items, create } = useCollection("feedback");
-  const { items: quota } = useCollection("requestQuota");
-  const [form, setForm] = useState({ topic: "การใช้งานแผนที่", detail: "" });
-  const mine = items.filter((f) => f.userId === user.id);
-  const limit = quota[0]?.perUserPerDay ?? 3;
-  const todayCount = mine.filter((f) => dayKey(f.createdAt) === todayKey()).length;
-
-  async function send() {
-    if (!form.detail.trim()) return alert("กรุณากรอกรายละเอียด");
-    if (todayCount >= limit) return alert(`ส่งได้สูงสุด ${limit} เรื่องต่อวัน (ตามที่ฝ่ายดูแลระบบกำหนด)`);
-    await create({ ...form, userId: user.id, status: "open", reply: "" }, user);
-    setForm({ topic: form.topic, detail: "" });
-    alert("ส่งข้อเสนอแนะเรียบร้อย");
-  }
-
-  return (
-    <div className="bdi-page">
-      <div className="bdi-page-inner">
-      <UCHead title="ส่งข้อเสนอแนะหรือแจ้งปัญหาการใช้ระบบ" desc={`ส่งได้สูงสุด ${limit} เรื่องต่อวัน · วันนี้ส่งแล้ว ${todayCount} เรื่อง`} />
-      <Card>
-        <Field label="หัวข้อ">
-          <Input value={form.topic} onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))} placeholder="เช่น ปัญหาการใช้ระบบ" />
-        </Field>
-        <Field label="รายละเอียด">
-          <Textarea value={form.detail} onChange={(e) => setForm((f) => ({ ...f, detail: e.target.value }))} placeholder="อธิบายปัญหาหรือข้อเสนอแนะของคุณ" />
-        </Field>
-        <Btn onClick={send}>ส่งข้อเสนอแนะ</Btn>
-      </Card>
-
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#202124", margin: "14px 0 8px" }}>ประวัติที่ฉันส่ง</div>
-      {mine.length === 0 ? <div style={{ fontSize: 13, color: "#5F6368" }}>ยังไม่มีประวัติ</div> : null}
-      {mine.map((f) => (
-        <Card key={f.id}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <b style={{ fontSize: 14, color: "#202124" }}>{f.topic}</b>
-            <Status value={f.status} />
-          </div>
-          <div style={{ fontSize: 13, color: "#3C4043", marginTop: 4 }}>{f.detail}</div>
-          {f.reply ? <div style={{ fontSize: 12.5, color: "#188038", marginTop: 6 }}>ตอบกลับ: {f.reply}</div> : null}
-          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 6 }}>{formatDateTime(f.createdAt)} · {f.id}</div>
-        </Card>
-      ))}
-    </div>
     </div>
   );
 }

@@ -208,6 +208,7 @@ CREATE TABLE rooms (
 
 CREATE TABLE map_boundaries (
   id          TEXT PRIMARY KEY,
+  institution_id TEXT REFERENCES institutions(id) ON DELETE SET NULL,
   building_id TEXT REFERENCES buildings(id) ON DELETE CASCADE,
   name        TEXT NOT NULL,
   type        TEXT,
@@ -665,10 +666,14 @@ SELECT r.id,f.id,n.id,r.category_id,r.code,r.name,r.type,r.capacity,r.teacher,r.
 FROM legacy_rooms r JOIN floors f ON f.floor_no=r.floor JOIN buildings b ON b.id=f.building_id AND upper(b.code)=upper(r.building)
 LEFT JOIN nodes n ON n.node_key=r.node_id ON CONFLICT DO NOTHING;
 
-INSERT INTO map_boundaries(id,building_id,name,type,geometry,status,updated_at)
-SELECT m.id, (SELECT b.id FROM buildings b WHERE m.type='building'
-              AND m.name ILIKE '%' || b.code || '%' ORDER BY length(b.code) DESC LIMIT 1),
-       m.name,m.type,m.geometry,m.status,m.updated_at::timestamptz
+INSERT INTO map_boundaries(
+  id, institution_id, building_id,
+  name, type, geometry, status, updated_at
+)
+SELECT m.id,(SELECT i.id FROM institutions i WHERE i.short_name = 'KMITL' ORDER BY i.id LIMIT 1),
+  ( SELECT b.id FROM buildings b WHERE m.type = 'building' AND m.name ILIKE '%' || b.code || '%' ORDER BY length(b.code) DESC LIMIT 1),
+  m.name, m.type, m.geometry, m.status, m.updated_at::timestamptz
+FROM legacy_map_boundaries m ON CONFLICT DO NOTHING;
 FROM legacy_map_boundaries m ON CONFLICT DO NOTHING;
 INSERT INTO map_assets(id,floor_id,name,kind,file,status,updated_at)
 SELECT a.id,f.id,a.name,a.kind,a.file,a.status,a.updated_at::timestamptz FROM legacy_map_assets a

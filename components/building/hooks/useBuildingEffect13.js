@@ -32,7 +32,7 @@ export function useBuildingEffect13({
               type: node.type === "path" || !node.type ? "exit": node.type,
             }
           : node;
-      const icon = getNodeIcon(effectiveNode);
+      const icon = getNodeIcon(effectiveNode, room);
       const typeLabel = exterior ? "ทางเข้า / ทางออก" : getNodeTypeLabel(node);
   
       const { tooltipText, popupHtml } = buildPopupContent(id, node, room, icon, typeLabel);
@@ -70,6 +70,7 @@ export function useBuildingEffect13({
     curFloor,
     floorNodes,
     roomByNode,
+    getNodeIcon,
     b,
     focusedNodeId,
     searchedNodeId,

@@ -49,7 +49,7 @@ export function useBuildingEffect12({
             }
           : node;
   
-      const icon = getNodeIcon(effectiveNode);
+      const icon = getNodeIcon(effectiveNode, room);
       const typeLabel = exterior ? "ทางเข้า / ทางออก" : getNodeTypeLabel(node);
   
       // ขนาด icon 

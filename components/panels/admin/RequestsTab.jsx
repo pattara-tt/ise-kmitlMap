@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Field, SearchBar, Select, Status, Table, useCollection, formatDateTime } from "../../ui";
+import { Btn, Field, SearchBar, Select, Status, Table, useCollection} from "../../ui";
+import { formatDateTime } from "../../../lib/datetime";
 import RequestDetail from "./RequestDetail";
 
 // ── UC11 ค้นหาและเรียกดูข้อมูลคำร้อง ──────────────────────

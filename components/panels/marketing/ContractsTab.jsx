@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, Tiles, UCHead, useCollection, formatDateTime } from "../../ui";
+import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, Tiles, UCHead, useCollection} from "../../ui";
+import { formatDateTime } from "../../../lib/datetime";
 import { contractDaysLeft, contractDisplayStatus, datePart, todayLocalISO } from "./shared";
 import { todayKey } from "../../../lib/datetime";
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { useCollection, formatDateTime } from "../ui";
+import { useCollection} from "../ui";
+import { formatDateTime } from "../../lib/datetime";
 import { KMITL_BOUNDS, WALKWAY_NODE_TYPES, getNodeType } from "../mapConfig";
 
 export function useMapReferenceData(mapData) {

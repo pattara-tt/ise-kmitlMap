@@ -13,6 +13,7 @@ export default function BoundaryPointEditor({
   onSave
 }) {
   const viewportRef = useRef(null);
+  const [error, setError] = useState("");
   const [zoom, setZoom] = useState(18);
   const [center, setCenter] = useState(Array.isArray(SC8_CENTER) ? SC8_CENTER : [13.729721, 100.780099]);
   const [points, setPoints] = useState(Array.isArray(initialPoints) ? initialPoints.filter(p => Array.isArray(p) && p.length >= 2).map(p => [Number(p[0]), Number(p[1])]) : []);
@@ -132,9 +133,14 @@ export default function BoundaryPointEditor({
       return;
     }
     setSaving(true);
+    setError("");
     try {
+      if(typeof onSave !== "function") throw new Error("ไม่ได้ส่ง onSave เข้ามาใน component");
       await onSave(points);
-    } finally {
+    }catch(err) {
+      console.error("save boundary failed:", err);
+      setError(err?.message || "บันทึกไม่สำเร็จ")
+    }finally {
       setSaving(false);
     }
   };
@@ -305,6 +311,8 @@ export default function BoundaryPointEditor({
             <div>
               • กดบันทึกเพื่อเก็บพิกัด
             </div>
+            
+            {error ? <div style={{ color: "#D93025", fontSize: 12 }}>{error}</div> : null}
           </div>
 
           {/* ==================================

@@ -10,14 +10,14 @@ import { ROLE, MARKETING_COLLECTIONS as MARKETING_COLLECTION_LIST, ACCESS_STATUS
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "4mb" }));
 const wrap = (fn) => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
 
 const MARKETING_COLLECTIONS = new Set(MARKETING_COLLECTION_LIST);
 const LOGGED_COLLECTIONS = new Set(Object.keys(EDIT_TARGET_FK));
 const ALLOWED = new Set([
   "institutions","roles","useCases","roleUseCases","users","accountHistory","faculties","buildings","floors","nodes","edges",
-  "categories","rooms","mapBoundaries","mapAssets","mapDrafts","requests","requestQuota","broadcasts","notifications","feedback",
+  "categories","roomTypes","rooms","mapBoundaries","mapAssets","mapDrafts","requests","requestQuota","broadcasts","notifications","feedback",
   "news","events","eventInterest","eventStats","contracts","modules","institutionAccess","institutionAccessModules","accessHistory","editLogs","usage"
 ]);
 const ACCESS_STATUS = new Set(ACCESS_STATUS_LIST);
@@ -175,6 +175,7 @@ app.get("/api/data/:name", requireSession, wrap(async(req,res)=>{
 app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
+  if (name === "roomTypes" && req.session.role !== ROLE.REGISTRAR) return res.status(403).json({ok:false,error:"เฉพาะฝ่ายทะเบียนที่จัดการประเภทห้องได้"});
   const { _actor, ...item } = req.body || {};
   if (MARKETING_COLLECTIONS.has(name) && req.session.role !== ROLE.MARKETING)
     return res.status(403).json({ ok: false, error: "เฉพาะฝ่ายการตลาดเท่านั้นที่แก้ไขข้อมูลชุดนี้ได้" });
@@ -209,6 +210,7 @@ app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
 app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
+  if (name === "roomTypes" && req.session.role !== ROLE.REGISTRAR) return res.status(403).json({ok:false,error:"เฉพาะฝ่ายทะเบียนที่จัดการประเภทห้องได้"});
   const { id, _actor, ...rawPatch } = req.body || {};
   const auditReason = name === "users" ? (rawPatch.reason || null) : null;
   const patch = { ...rawPatch };
@@ -282,6 +284,7 @@ app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
 app.delete("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
   const { name } = req.params;
+  if (name === "roomTypes" && req.session.role !== ROLE.REGISTRAR) return res.status(403).json({ok:false,error:"เฉพาะฝ่ายทะเบียนที่จัดการประเภทห้องได้"});
   let id = req.query.id;
   if (typeof id === "string" && id.startsWith("{")) {
     try { id = JSON.parse(id); } catch { return res.status(400).json({ ok: false, error: "รูปแบบ ID ไม่ถูกต้อง" }); }
@@ -322,10 +325,60 @@ app.post("/api/report", requireSession, wrap(async (req, res) => {
 }));
 
 app.get("/api/stats", requireSession, wrap(async(_req,res)=>{
+<<<<<<< HEAD
   res.set("Cache-Control", "no-store");
   const [users,requests,feedback,news,events,eventStats,rooms,contracts,usage,buildings]=await Promise.all(["users","requests","feedback","news","events","eventStats","rooms","contracts","usage","buildings"].map(list));
+=======
+  const [users,requests,feedback,news,events,eventStats,rooms,contracts,usageRows,buildings,eventInterest,editLogs,searchLogs]=await Promise.all(["users","requests","feedback","news","events","eventStats","rooms","contracts","usage","buildings","eventInterest","editLogs","searchLogs"].map(list));
+  // ผู้ใช้ที่ใช้งานรายเดือน: นับจากกิจกรรมจริงของผู้ใช้/เจ้าหน้าที่ (คำร้อง ข้อเสนอแนะ ความสนใจกิจกรรม การแก้ไขแผนที่)
+  // เดือนที่ไม่มีกิจกรรมเลยจะใช้ค่าจากตาราง usage แทน และไม่ให้เกินจำนวนผู้ใช้ทั้งหมด
+  const monthOf=v=>{const d=v?new Date(v):null;return d&&!isNaN(d)?d.toISOString().slice(0,7):null;};
+  const activeByMonth=new Map();
+  for(const [rows,uid,at] of [[requests,"userId","createdAt"],[feedback,"userId","createdAt"],[eventInterest,"userId","createdAt"],[editLogs,"userId","editedAt"]])
+    for(const r of rows){const m=monthOf(r[at]);if(m&&r[uid]){if(!activeByMonth.has(m))activeByMonth.set(m,new Set());activeByMonth.get(m).add(r[uid]);}}
+  // ค้นหา/นำทางรายเดือน: เดือนที่มี search_logs จริงใช้ค่าจาก log (navigate = นำทาง, อื่นๆ = ค้นหา) เดือนที่ไม่มี log ใช้ค่าจากตาราง usage
+  const logByMonth=new Map();
+  for(const r of searchLogs){const m=monthOf(r.createdAt);if(!m)continue;const c=logByMonth.get(m)||{searches:0,routes:0};if(r.kind==="navigate")c.routes++;else c.searches++;logByMonth.set(m,c);}
+  const baseUsage=[...usageRows,...[...logByMonth.keys()].filter(m=>!usageRows.some(u=>u.month===m)).map(month=>({month,activeUsers:0,searches:0,routes:0}))].sort((a,b)=>String(a.month).localeCompare(String(b.month)));
+  const usage=baseUsage.map(u=>({...u,...(logByMonth.get(u.month)||{}),activeUsers:Math.min(users.length,activeByMonth.has(u.month)?activeByMonth.get(u.month).size:(u.activeUsers||0))}));
+>>>>>>> 943bb2d0b30e672201e4cb32de209bf2eaebcc5e
   const last=usage[usage.length-1]||{}; const byStatus=requests.reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{}); const byType=requests.reduce((a,r)=>{const k=r.subject||"อื่นๆ";a[k]=(a[k]||0)+1;return a;},{}); const daysLeft=d=>d?Math.ceil((new Date(d)-new Date())/86400000):null;
   res.json({ok:true,overview:{totalUsers:users.length,activeUsers:last.activeUsers||0,suspendedUsers:users.filter(u=>u.status!=="active").length,searches:last.searches||0,routes:last.routes||0,pendingRequests:requests.filter(r=>r.status==="pending").length,newFeedback:feedback.filter(f=>f.status==="new"||f.status==="open").length,publishedNews:news.filter(n=>n.published).length,buildings:buildings.length,rooms:rooms.length},usage,requestsByStatus:byStatus,requestsByType:byType,contracts:contracts.map(c=>({...c,daysLeft:daysLeft(c.endDate)})),eventStats:eventStats.map(s=>({...s,title:events.find(e=>e.id===s.eventId)?.name||s.eventId}))});
+}));
+
+const SEARCH_LOG_KINDS = new Set(["search", "route", "navigate"]);
+const clipText = (v, n) => (v == null || String(v).trim() === "" ? null : String(v).trim().slice(0, n));
+// บันทึกการค้นหา/นำทางของผู้ใช้ (ทุก role ที่ล็อกอินเรียกได้) — userId มาจาก session เท่านั้น
+//   kind: search = เลือกผลค้นหา · route = ค้นหาเส้นทาง A→B · navigate = เริ่มนำทาง
+app.post("/api/search-log", requireSession, wrap(async (req, res) => {
+  const b = req.body || {};
+  const kind = String(b.kind || "");
+  const placeLabel = clipText(b.placeLabel, 200);
+  if (!SEARCH_LOG_KINDS.has(kind) || !placeLabel) return res.status(400).json({ ok: false, error: "ข้อมูลบันทึกการค้นหาไม่ถูกต้อง" });
+  await insert("searchLogs", {
+    userId: req.session.userId, kind, query: clipText(b.query, 200), buildingId: clipText(b.buildingId, 64), roomId: clipText(b.roomId, 64),
+    placeLabel, fromLabel: clipText(b.fromLabel, 200), createdAt: new Date().toISOString(),
+  });
+  res.json({ ok: true });
+}));
+
+// สถิติอาคาร/จุดสนใจที่ถูกค้นหามากที่สุด — เฉพาะผู้บริหาร (?days=N จำกัดช่วงเวลา, 0/ไม่ส่ง = ทั้งหมด)
+//   อันดับนับ kind search + route (ครั้งที่ผู้ใช้เลือก/ค้นหาสถานที่นั้น) ส่วน navigate แยกนับเป็น "เริ่มนำทาง"
+app.get("/api/stats/searches", requireSession, wrap(async (req, res) => {
+  if (req.session.role !== ROLE.EXEC) return res.status(403).json({ ok: false, error: "เฉพาะฝ่ายบริหารเท่านั้น" });
+  const days = Math.max(0, Math.min(3650, parseInt(req.query.days, 10) || 0));
+  const since = days ? Date.now() - days * 86400000 : 0;
+  const rows = (await list("searchLogs")).filter((r) => !since || new Date(r.createdAt).getTime() >= since);
+  const byPlace = new Map();
+  for (const r of rows) {
+    const p = byPlace.get(r.placeLabel) || { place: r.placeLabel, searches: 0, navigations: 0, lastAt: null };
+    if (r.kind === "navigate") p.navigations++; else p.searches++;
+    if (!p.lastAt || new Date(r.createdAt) > new Date(p.lastAt)) p.lastAt = r.createdAt;
+    byPlace.set(r.placeLabel, p);
+  }
+  const places = [...byPlace.values()].sort((a, b) => (b.searches - a.searches) || (b.navigations - a.navigations) || a.place.localeCompare(b.place)).slice(0, 20);
+  res.json({ ok: true, days, total: rows.length, totalSearches: rows.filter((r) => r.kind !== "navigate").length,
+    totalNavigations: rows.filter((r) => r.kind === "navigate").length, places });
 }));
 
 app.get("/api/osm",osmHandler); app.get("/api/walknet",walknetHandler);
