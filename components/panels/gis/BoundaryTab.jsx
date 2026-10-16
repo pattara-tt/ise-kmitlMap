@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMapData } from "../../../lib/useMapData";
+import { useMapData, clearMapDataCache } from "../../../lib/useMapData";
 import { Btn, Card, Field, Input, Pill, Select, Status, Table, UCHead, useCollection } from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
 import BoundaryPointEditor from "./BoundaryPointEditor";
@@ -19,6 +19,9 @@ function Boundary({
 
   const buildings = mapData?.buildings || [];
 
+  const buildingsApi = useCollection("buildings");
+  const floorsApi = useCollection("floors");
+
   const {
     items = [],
     create,
@@ -30,7 +33,8 @@ function Boundary({
     name: "custom",
     customName: "",
     type: "building",
-    buildingId: ""
+    buildingId: "",
+    floorCount: ""
   });
   
   const [editorOpen, setEditorOpen] = useState(false);
@@ -72,9 +76,52 @@ function Boundary({
   // ==========================================
   // เพิ่ม Boundary ใหม่
   // ==========================================
+  // จำนวนชั้น: เว้นว่างได้ (= ไม่สร้างชั้นให้) ถ้ากรอกต้องเป็นจำนวนเต็ม 1-99
+  const floorCountText = String(form.floorCount ?? "").trim();
+  const floorCountNum = Number(floorCountText);
+  const floorCountValid =
+    floorCountText === "" ||
+    (Number.isInteger(floorCountNum) && floorCountNum >= 1 && floorCountNum <= 99);
+
+  // สร้างอาคาร (ถ้ายังไม่มี) และชั้น 1..count ที่ยังไม่มี ให้เป็นข้อมูลจริงในระบบ
+  // เพื่อให้ UC8 เลือกอาคาร/ชั้นได้เหมือนข้อมูลที่มีอยู่เดิม
+  const ensureBuildingWithFloors = async ({ buildingId, name, count }) => {
+    let id = buildingId || buildings.find(b => b.name === name)?.id;
+
+    if (!id) {
+      id = `BU-${Date.now()}`;
+      await buildingsApi.create({
+        id,
+        code: `B${Date.now().toString(36).toUpperCase()}`, // ปรับให้ตรงกับ schema ของ buildings
+        name
+      }, user);
+    }
+
+    const existingNos = new Set(
+      (buildings.find(b => b.id === id)?.floors || []).map(f => String(f.floorNo))
+    );
+    const stamp = Date.now();
+
+    for (let n = 1; n <= count; n++) {
+      if (existingNos.has(String(n))) continue; // มีชั้นนี้อยู่แล้ว ไม่สร้างซ้ำ
+      await floorsApi.create({
+        id: `FL-${stamp}-${n}`,
+        buildingId: id,
+        floorNo: n,
+        name: `ชั้น ${n}`
+      }, user);
+    }
+
+    clearMapDataCache();
+    return id;
+  };
+
   const openNewBoundaryEditor = () => {
     if (!nameValue) {
       return alert("กรุณาระบุชื่อขอบเขต");
+    }
+    if (form.type === "building" && !floorCountValid) {
+      return alert("จำนวนชั้นต้องเป็นจำนวนเต็มตั้งแต่ 1 ถึง 99");
     }
     setEditingBoundary(null);
     setDraftPoints([]);
@@ -104,12 +151,28 @@ function Boundary({
       return alert("กรุณาเลือกอย่างน้อย 3 จุด");
     }
 
+    // เชื่อมกับอาคารจริงเมื่อเลือกจากลิสต์ ส่วนอาคารที่พิมพ์เองจะได้ buildingId
+    // ก็ต่อเมื่อระบุจำนวนชั้น (ระบบสร้างอาคารและชั้นให้)
+    let buildingId = form.type === "building" && form.buildingId !== "custom" ? form.buildingId : null;
+
+    if (form.type === "building" && floorCountText !== "") {
+      try {
+        buildingId = await ensureBuildingWithFloors({
+          buildingId,
+          name: nameValue,
+          count: floorCountNum
+        });
+      } catch (err) {
+        console.error(err);
+        return alert(err?.message || "สร้างอาคาร/ชั้นไม่สำเร็จ");
+      }
+    }
+
     const newBoundary = {
       id: `MB-${Date.now()}`,
       name: nameValue,
       type: form.type,
-      // เชื่อมกับอาคารจริงเฉพาะตอนประเภท = อาคาร และเลือกจากลิสต์ (ไม่ใช่พิมพ์เอง)
-      buildingId: form.type === "building" && form.buildingId !== "custom" ? form.buildingId : null,
+      buildingId,
       // geometry เก็บเป็น [lat, lon] ตามพฤติกรรมเดิมของ editor
       geometry: points,
       updatedAt: new Date().toISOString(),
@@ -121,7 +184,8 @@ function Boundary({
       name: "custom",
       customName: "",
       type: "building",
-      buildingId: ""
+      buildingId: "",
+      floorCount: ""
     });
     setDraftPoints([]);
     setEditorOpen(false);
@@ -185,7 +249,8 @@ function Boundary({
               type,
               name: "custom",
               customName: "",
-              buildingId: ""
+              buildingId: "",
+              floorCount: ""
             }));
           }}>
               <option value="campus">
@@ -228,6 +293,19 @@ function Boundary({
                   />
                 </Field>
               )}
+
+              {/* จำนวนชั้น: ระบบจะสร้างชั้น 1..N ให้เลือกใน UC8 (ยังพิมพ์เพิ่มชั้นเองใน UC8 ได้) */}
+              <Field label="จำนวนชั้น (เพื่อให้ไปแสดงให้เลือกเมื่อเพิ่มแผนผัง)">
+                <Input
+                  type="number"
+                  min="1"
+                  max="99"
+                  step="1"
+                  value={form.floorCount}
+                  onChange={set("floorCount")}
+                  placeholder="เช่น 8"
+                />
+              </Field>
             </> : <>
               {/* ประเภท = วิทยาเขต / โซน : ใช้ชื่อขอบเขตที่เคยสร้างไว้ หรือพิมพ์เอง */}
               <Field label="ชื่อขอบเขต">
