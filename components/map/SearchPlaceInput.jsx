@@ -63,7 +63,12 @@ export default function SearchPlaceInput({
 
     const eventItems = events.flatMap(event => {
       const category = event.categoryId ? categoryById.get(event.categoryId) : null;
-      const words = [event.name, event.detail, event.placeName, category?.name].filter(Boolean);
+      const temporaryCategory = event.tempPlaceCategoryId ? categoryById.get(event.tempPlaceCategoryId) : null;
+      const now = Date.now();
+      const activeTemporaryPlace = event.published && temporaryCategory &&
+        (!event.startAt || new Date(event.startAt).getTime() <= now) &&
+        (!event.endAt || now < new Date(event.endAt).getTime());
+      const words = [event.name, event.detail, event.placeName, category?.name, activeTemporaryPlace ? temporaryCategory.name : null].filter(Boolean);
       const matched = words.some(word => {
         const normalizedWord = normalizeSearch(word);
         return normalizedWord.includes(q) || q.includes(normalizedWord);
@@ -76,7 +81,7 @@ export default function SearchPlaceInput({
         src: "event",
         event,
         icon: "🎪",
-        subtitle: [category?.name, event.placeName].filter(Boolean).join(" · ")
+        subtitle: [category?.name, activeTemporaryPlace ? temporaryCategory.name : null, event.placeName].filter(Boolean).join(" · ")
       }];
     });
 

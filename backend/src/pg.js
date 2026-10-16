@@ -121,8 +121,46 @@ async function generateId(name) {
   if(name==="requests") { const {rows}=await query(`SELECT id FROM requests WHERE id ~ '^RQ-[0-9]+$' ORDER BY CAST(SUBSTRING(id FROM 4) AS INTEGER) DESC LIMIT 1`); const n=rows[0]?.id?Number(rows[0].id.slice(3))+1:1001; return `RQ-${n}`; }
   return `${name.slice(0,2).toUpperCase()}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
 }
+// PR writes contain view-only properties after JOINs and MapPicker selections.
+// Keep only database columns; normalize empty optional values before SQL generation.
+const PR_COLUMNS = {
+  news: new Set(["id", "authorId", "replacedFrom", "title", "body", "publishAt", "expireAt", "published", "createdAt"]),
+  events: new Set(["id", "authorId", "categoryId", "tempPlaceCategoryId", "roomId", "temporaryRoomType", "replacedFrom", "name", "detail", "startAt", "endAt", "placeName", "lat", "lon", "published", "createdAt"]),
+};
+const PR_OPTIONAL = {
+  news: new Set(["authorId", "replacedFrom", "publishAt", "expireAt"]),
+  events: new Set(["authorId", "categoryId", "tempPlaceCategoryId", "roomId", "temporaryRoomType", "replacedFrom", "startAt", "endAt", "placeName", "lat", "lon"]),
+};
+function prTimestamp(value, field) {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) return value.toISOString();
+  const s = String(value);
+  // A date-only news expiration means the END of the selected Bangkok day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const suffix = field === "expireAt" ? "T23:59:59.999+07:00" : "T00:00:00+07:00";
+    const d = new Date(s + suffix);
+    if (!Number.isFinite(d.getTime())) throw new Error(`Invalid ${field}`);
+    return d.toISOString();
+  }
+  const local = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(s);
+  const d = new Date(local ? `${s}+07:00` : s);
+  if (!Number.isFinite(d.getTime())) throw new Error(`Invalid ${field}`);
+  return d.toISOString();
+}
+function normalizePrWrite(name, data) {
+  if (!PR_COLUMNS[name]) return data;
+  const out = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!PR_COLUMNS[name].has(key) || value === undefined) continue;
+    if (["publishAt", "expireAt", "startAt", "endAt"].includes(key)) out[key] = prTimestamp(value, key);
+    else if (PR_OPTIONAL[name].has(key) && value === "") out[key] = null;
+    else out[key] = value;
+  }
+  return out;
+}
+
 export async function insert(name,item) {
-  const row=name === "mapAssets" ? packAsset({...item}) : name === "requests" ? packRequest({...item}) : {...item}; const pk=PK[name]||"id";
+  const row=name === "mapAssets" ? packAsset({...item}) : name === "requests" ? packRequest({...item}) : normalizePrWrite(name, {...item}); const pk=PK[name]||"id";
   if(!COMPOSITE[name] && pk==="id" && !row.id) row.id=await generateId(name);
   const keys=Object.keys(row).filter(k=>row[k]!==undefined); if(!keys.length) throw new Error("ไม่มีข้อมูลสำหรับ insert");
   const cols=keys.map(k=>`"${snake(k)}"`).join(", "); const ph=keys.map((_,i)=>`$${i+1}`).join(", "); const vals=keys.map(k=>row[k]);
@@ -138,6 +176,7 @@ function whereFor(name,id,start=1) {
   const pk=PK[name]||"id"; return {sql:`"${snake(pk)}"=$${start}`,vals:[id]};
 }
 export async function update(name,id,patch) {
+  patch = normalizePrWrite(name, patch);
   if (name === "requests") patch = packRequest(patch);
   if (name === "mapAssets" && Object.prototype.hasOwnProperty.call(patch, "placement")) {
     const { rows } = await query(`SELECT * FROM map_assets WHERE id=$1`, [id]);

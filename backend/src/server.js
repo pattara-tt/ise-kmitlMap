@@ -1,3 +1,4 @@
+import { query as pgQuery } from "./pg.js";
 import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
@@ -120,6 +121,24 @@ app.get("/api/map/graph", requireSession, wrap(async(req,res)=>{
   const buildingId=String(req.query.building||""); const [floors,nodes,edges]=await Promise.all([list("floors"),list("nodes"),list("edges")]);
   const fids=new Set(floors.filter(f=>f.buildingId===buildingId).map(f=>f.id)); const ns=nodes.filter(n=>fids.has(n.floorId)); const nids=new Set(ns.map(n=>n.id));
   res.json({ok:true,nodes:ns,edges:edges.filter(e=>nids.has(e.fromNodeId)&&nids.has(e.toNodeId))});
+}));
+
+// Increment searches atomically when a user selects an event from map search.
+app.post("/api/events/:id/search", requireSession, wrap(async (req, res) => {
+  const event = (await list("events")).find(e => e.id === req.params.id);
+  const now = Date.now();
+  if (!event || !event.published || (event.endAt && new Date(event.endAt).getTime() <= now))
+    return res.status(404).json({ ok: false, error: "ไม่พบกิจกรรมที่เผยแพร่" });
+  if (USE_PG) {
+    await pgQuery(`INSERT INTO event_stats (event_id, searched) VALUES ($1, 1)
+      ON CONFLICT (event_id) DO UPDATE SET searched = event_stats.searched + 1`, [event.id]);
+  } else {
+    const current = (await list("eventStats")).find(row => row.eventId === event.id);
+    if (current) await update("eventStats", event.id, { searched: Number(current.searched || 0) + 1 });
+    else await insert("eventStats", { eventId: event.id, searched: 1 });
+  }
+  res.set("Cache-Control", "no-store");
+  res.json({ ok: true, eventId: event.id });
 }));
 
 app.get("/api/data/:name", requireSession, wrap(async(req,res)=>{
@@ -303,6 +322,7 @@ app.post("/api/report", requireSession, wrap(async (req, res) => {
 }));
 
 app.get("/api/stats", requireSession, wrap(async(_req,res)=>{
+  res.set("Cache-Control", "no-store");
   const [users,requests,feedback,news,events,eventStats,rooms,contracts,usage,buildings]=await Promise.all(["users","requests","feedback","news","events","eventStats","rooms","contracts","usage","buildings"].map(list));
   const last=usage[usage.length-1]||{}; const byStatus=requests.reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{}); const byType=requests.reduce((a,r)=>{const k=r.subject||"อื่นๆ";a[k]=(a[k]||0)+1;return a;},{}); const daysLeft=d=>d?Math.ceil((new Date(d)-new Date())/86400000):null;
   res.json({ok:true,overview:{totalUsers:users.length,activeUsers:last.activeUsers||0,suspendedUsers:users.filter(u=>u.status!=="active").length,searches:last.searches||0,routes:last.routes||0,pendingRequests:requests.filter(r=>r.status==="pending").length,newFeedback:feedback.filter(f=>f.status==="new"||f.status==="open").length,publishedNews:news.filter(n=>n.published).length,buildings:buildings.length,rooms:rooms.length},usage,requestsByStatus:byStatus,requestsByType:byType,contracts:contracts.map(c=>({...c,daysLeft:daysLeft(c.endDate)})),eventStats:eventStats.map(s=>({...s,title:events.find(e=>e.id===s.eventId)?.name||s.eventId}))});

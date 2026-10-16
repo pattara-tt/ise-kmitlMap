@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { apiFetch } from "../../lib/api";
 import {
   Btn, Card, Confirm, Field, Input, Modal, Note, Pill, SearchBar, Select,
   Status, Tabs, Table, Textarea, Tiles, UCHead, useCollection, useStats,
 } from "../ui";
+import { isoToInput } from "../../lib/datetime";
 import { EVENT_STATE_LABEL, NEWS_STATE_LABEL, eventState, fmt, localNow, newsState, validateRange } from "../../lib/schedule";
 
 const MapPicker = dynamic(() => import("../MapPicker"), {
@@ -23,7 +25,7 @@ export default function PrPanel({ uc, user }) {
 
 /* ═══════════════════════════ ข้อมูลข่าวสาร ═══════════════════════════ */
 
-const emptyNews = () => ({ title: "", body: "", publishAt: localNow(false), expireAt: "" });
+const emptyNews = () => ({ title: "", body: "", publishAt: localNow(true), expireAt: "" });
 
 function NewsModule({ user }) {
   const { items, create, patch, destroy } = useCollection("news");
@@ -38,7 +40,6 @@ function NewsModule({ user }) {
 
   return (
     <>
-      <UCHead title="ข้อมูลข่าวสาร" desc="จัดการข่าวประชาสัมพันธ์ของภาควิชา ทั้งข่าวที่กำลังเผยแพร่ รอเผยแพร่ตามกำหนดการ และข่าวที่หมดอายุแล้ว" />
       <Tabs
         value={sub}
         onChange={setSub}
@@ -54,9 +55,13 @@ function NewsModule({ user }) {
         <NewsForm
           mode="create"
           onSubmit={async (data, publishNow) => {
-            await create({ ...data, published: publishNow || data.publishNow === true, authorId: user.id }, user);
-            alert(publishNow ? "เผยแพร่ข่าวสารเรียบร้อย" : "บันทึกข่าวสารเรียบร้อย");
-            setSub("overview");
+            try {
+              await create({ ...data, published: true, authorId: user.id }, user);
+              alert(publishNow ? "เผยแพร่ข่าวสารเรียบร้อย" : "บันทึกข่าวสารเรียบร้อย");
+              setSub("overview");
+            } catch (error) {
+              alert(`บันทึกข่าวสารไม่สำเร็จ: ${error.message}`);
+            }
           }}
         />
       )}
@@ -67,14 +72,13 @@ function NewsModule({ user }) {
           user={user}
           onClose={() => setEditing(null)}
           onSave={async (data, { republish }) => {
-            if (republish) {
-              // ข่าวที่เผยแพร่ไปแล้ว: ลบฉบับเดิม แล้วเผยแพร่ฉบับใหม่ตามกำหนดการที่ระบุ
-              await destroy(editing.id, user);
-              await create({ ...data, published: true, authorId: user.id, replacedFrom: editing.id }, user);
-            } else {
+            try {
+              // Update in place: never delete the original before a successful save.
               await patch(editing.id, data, user);
+              setEditing(null);
+            } catch (error) {
+              alert(`บันทึกข่าวไม่สำเร็จ: ${error.message}`);
             }
-            setEditing(null);
           }}
         />
       ) : null}
@@ -83,6 +87,7 @@ function NewsModule({ user }) {
 }
 
 function NewsOverview({ grouped, onEdit, onPatch, onDelete, user }) {
+  const safePatch = async (id, data) => { try { await onPatch(id, data, user); } catch (e) { alert(`ดำเนินการไม่สำเร็จ: ${e.message}`); } };
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
   const order = ["live", "scheduled", "expired", "draft"];
@@ -118,12 +123,12 @@ function NewsOverview({ grouped, onEdit, onPatch, onDelete, user }) {
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <Btn kind="ghost" onClick={() => onEdit(n)}>แก้ไข</Btn>
                   {newsState(n) === "draft" || newsState(n) === "scheduled" ? (
-                    <Btn kind="ok" onClick={() => onPatch(n.id, { published: true, publishAt: localNow(false) }, user)}>เผยแพร่ทันที</Btn>
+                    <Btn kind="ok" onClick={() => safePatch(n.id, { published: true, publishAt: new Date().toISOString(), expireAt: n.expireAt && new Date(n.expireAt).getTime() <= Date.now() ? null : n.expireAt })}>เผยแพร่ทันที</Btn>
                   ) : null}
                   {newsState(n) === "live" ? (
-                    <Btn kind="ghost" onClick={() => onPatch(n.id, { expireAt: localNow(false) }, user)}>สิ้นสุดการเผยแพร่</Btn>
+                    <Btn kind="ghost" onClick={() => safePatch(n.id, { expireAt: new Date().toISOString() })}>สิ้นสุดการเผยแพร่</Btn>
                   ) : null}
-                  <Btn kind="danger" onClick={() => confirm(`ลบข่าว “${n.title}” ?`) && onDelete(n.id, user)}>ลบ</Btn>
+                  <Btn kind="danger" onClick={() => { if (confirm(`ลบข่าว “${n.title}” ?`)) onDelete(n.id, user).catch(e => alert(`ลบข่าวไม่สำเร็จ: ${e.message}`)); }}>ลบ</Btn>
                 </div>
               </Card>
             ))}
@@ -144,9 +149,10 @@ function NewsForm({ mode, initial, onSubmit }) {
   function submit(publishNow) {
     if (!form.title.trim()) return alert("กรุณาระบุหัวข้อข่าว");
     if (!form.body.trim()) return alert("กรุณาระบุรายละเอียดข่าว");
-    const err = validateRange(publishNow ? localNow(false) : form.publishAt, form.expireAt, { labelStart: "วันที่เผยแพร่", labelEnd: "วันสิ้นสุดการเผยแพร่" });
+    const start = publishNow ? new Date().toISOString() : form.publishAt;
+    const err = validateRange(start, form.expireAt, { labelStart: "วันที่เผยแพร่", labelEnd: "วันสิ้นสุดการเผยแพร่" });
     if (err) return alert(err);
-    onSubmit({ ...form, publishAt: publishNow ? localNow(false) : form.publishAt }, publishNow);
+    onSubmit({ ...form, publishAt: start }, publishNow);
   }
 
   return (
@@ -154,8 +160,8 @@ function NewsForm({ mode, initial, onSubmit }) {
       <Field label="หัวข้อข่าว"><Input value={form.title} onChange={set("title")} placeholder="เช่น ประกาศตารางสอบกลางภาค" /></Field>
       <Field label="รายละเอียด"><Textarea value={form.body} onChange={set("body")} style={{ minHeight: 120 }} /></Field>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 180px" }}><Field label="วันที่เผยแพร่"><Input type="date" value={form.publishAt || ""} onChange={set("publishAt")} /></Field></div>
-        <div style={{ flex: "1 1 180px" }}><Field label="วันสิ้นสุดการเผยแพร่"><Input type="date" value={form.expireAt || ""} onChange={set("expireAt")} /></Field></div>
+        <div style={{ flex: "1 1 180px" }}><Field label="วันที่เผยแพร่"><Input type="datetime-local" value={form.publishAt || ""} onChange={set("publishAt")} /></Field></div>
+        <div style={{ flex: "1 1 180px" }}><Field label="วันสิ้นสุดการเผยแพร่"><Input type="datetime-local" value={form.expireAt || ""} onChange={set("expireAt")} /></Field></div>
       </div>
       <Note>ถ้ากำหนดวันที่เผยแพร่ไว้ในอนาคต ข่าวจะอยู่ในสถานะ “รอเผยแพร่” และขึ้นให้ผู้ใช้เห็นเองเมื่อถึงกำหนด</Note>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -168,13 +174,13 @@ function NewsForm({ mode, initial, onSubmit }) {
 
 function NewsEditModal({ item, onClose, onSave }) {
   const wasPublished = Boolean(item.published);
-  const [form, setForm] = useState({ title: item.title, body: item.body, publishAt: item.publishAt || "", expireAt: item.expireAt || "" });
+  const [form, setForm] = useState({ title: item.title, body: item.body, publishAt: isoToInput(item.publishAt, true), expireAt: isoToInput(item.expireAt, true) });
   const [confirmOpen, setConfirmOpen] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   function attemptSave(publishNow) {
     if (!form.title.trim() || !form.body.trim()) return alert("กรุณากรอกหัวข้อและรายละเอียดให้ครบ");
-    const publishAt = publishNow ? localNow(false) : form.publishAt;
+    const publishAt = publishNow ? new Date().toISOString() : form.publishAt;
     const err = validateRange(publishAt, form.expireAt, { labelStart: "วันที่เผยแพร่", labelEnd: "วันสิ้นสุดการเผยแพร่" });
     if (err) return alert(err);
     const data = { ...form, publishAt, published: publishNow ? true : item.published };
@@ -191,20 +197,20 @@ function NewsEditModal({ item, onClose, onSave }) {
           {!wasPublished ? <Btn onClick={() => attemptSave(false)}>บันทึกการแก้ไข</Btn> : null}
         </>}>
         <div style={{ marginBottom: 10 }}><Status value={newsState(item)} /></div>
-        {wasPublished ? <Note tone="warn">ข่าวนี้กำลังเผยแพร่อยู่ การแก้ไขจะเป็นการถอนฉบับเดิมออกและเผยแพร่ฉบับใหม่ตามกำหนดการที่ระบุ</Note> : null}
+        {wasPublished ? <Note tone="warn">ข่าวนี้เผยแพร่อยู่ การบันทึกจะอัปเดตข้อมูลเดิมโดยไม่ลบรายการ</Note> : null}
         <Field label="หัวข้อข่าว"><Input value={form.title} onChange={set("title")} /></Field>
         <Field label="รายละเอียด"><Textarea value={form.body} onChange={set("body")} style={{ minHeight: 120 }} /></Field>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 180px" }}><Field label="วันที่เผยแพร่"><Input type="date" value={form.publishAt} onChange={set("publishAt")} /></Field></div>
-          <div style={{ flex: "1 1 180px" }}><Field label="วันสิ้นสุดการเผยแพร่"><Input type="date" value={form.expireAt} onChange={set("expireAt")} /></Field></div>
+          <div style={{ flex: "1 1 180px" }}><Field label="วันที่เผยแพร่"><Input type="datetime-local" value={form.publishAt} onChange={set("publishAt")} /></Field></div>
+          <div style={{ flex: "1 1 180px" }}><Field label="วันสิ้นสุดการเผยแพร่"><Input type="datetime-local" value={form.expireAt} onChange={set("expireAt")} /></Field></div>
         </div>
       </Modal>
 
       <Confirm
         open={!!confirmOpen}
         title="ยืนยันการแก้ไขข้อมูลที่เผยแพร่แล้ว"
-        message={`ข่าว “${item.title}” ถูกเผยแพร่ไปแล้ว\n\nหากยืนยัน ระบบจะลบข้อมูลฉบับเดิมออกจากระบบ และเผยแพร่ฉบับใหม่ตามวันที่ที่กำหนดไว้\n\nต้องการแก้ไขข้อมูลที่เผยแพร่ไปแล้วใช่หรือไม่?`}
-        confirmLabel="ใช่ แก้ไขและเผยแพร่ใหม่"
+        message={`ข่าว “${item.title}” ถูกเผยแพร่ไปแล้ว\n\nหากยืนยัน ระบบจะอัปเดตข้อมูลเดิมตามวันที่ที่กำหนดไว้ โดยไม่ลบรายการ\n\nต้องการแก้ไขข้อมูลที่เผยแพร่ไปแล้วใช่หรือไม่?`}
+        confirmLabel="ยืนยันการบันทึก"
         tone="danger"
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => { const d = confirmOpen; setConfirmOpen(false); onSave(d, { republish: true }); }}
@@ -221,6 +227,15 @@ const emptyEvent = () => ({
   placeName: "", lat: "", lon: "", roomId: null, roomType: null, temporaryRoomType: "", tempPlaceCategoryId: "",
 });
 
+// Publishing immediately starts the event now, regardless of its previously scheduled start.
+// Preserve a valid future end time; clear an end time that has already passed.
+function immediateEventPatch(event = {}) {
+  const now = new Date();
+  const end = event.endAt ? new Date(event.endAt).getTime() : NaN;
+  return { published: true, startAt: now.toISOString(),
+    endAt: Number.isFinite(end) && end <= now.getTime() ? null : (event.endAt || null) };
+}
+
 function EventModule({ user }) {
   const { items, create, patch, destroy } = useCollection("events");
   const { items: cats } = useCollection("categories");
@@ -228,14 +243,16 @@ function EventModule({ user }) {
   const [editing, setEditing] = useState(null);
 
   const grouped = useMemo(() => {
-    const g = { ongoing: [], upcoming: [], ended: [], draft: [] };
-    for (const e of items) g[eventState(e)]?.push(e);
+    const g = { ongoing: [], upcoming: [], ended: [] };
+    for (const e of items) {
+      const state = eventState(e);
+      g[state === "draft" ? "upcoming" : state]?.push(e);
+    }
     return g;
   }, [items]);
 
   return (
     <>
-      <UCHead title="ข้อมูลกิจกรรม" desc="จัดการกิจกรรมของภาควิชา พร้อมกำหนดสถานที่จัดงานบนแผนที่และหมวดหมู่สถานที่ชั่วคราวระหว่างจัดกิจกรรม" />
       <Tabs
         value={sub}
         onChange={setSub}
@@ -251,9 +268,13 @@ function EventModule({ user }) {
         <EventForm
           cats={cats}
           onSubmit={async (data, publishNow) => {
-            await create({ ...data, published: !!publishNow, authorId: user.id }, user);
-            alert(publishNow ? "เผยแพร่กิจกรรมเรียบร้อย" : "บันทึกกิจกรรมเรียบร้อย");
-            setSub("overview");
+            try {
+              await create({ ...data, ...(publishNow ? immediateEventPatch(data) : { published: false }), authorId: user.id }, user);
+              alert(publishNow ? "เผยแพร่กิจกรรมเรียบร้อย" : "บันทึกกิจกรรมเรียบร้อย");
+              setSub("overview");
+            } catch (error) {
+              alert(`บันทึกกิจกรรมไม่สำเร็จ: ${error.message}`);
+            }
           }}
         />
       )}
@@ -264,13 +285,12 @@ function EventModule({ user }) {
           cats={cats}
           onClose={() => setEditing(null)}
           onSave={async (data, { republish }) => {
-            if (republish) {
-              await destroy(editing.id, user);
-              await create({ ...data, published: true, authorId: user.id, replacedFrom: editing.id }, user);
-            } else {
+            try {
               await patch(editing.id, data, user);
+              setEditing(null);
+            } catch (error) {
+              alert(`บันทึกกิจกรรมไม่สำเร็จ: ${error.message}`);
             }
-            setEditing(null);
           }}
         />
       ) : null}
@@ -279,9 +299,10 @@ function EventModule({ user }) {
 }
 
 function EventOverview({ grouped, cats, onEdit, onPatch, onDelete, user }) {
+  const safePatch = async (id, data) => { try { await onPatch(id, data, user); } catch (e) { alert(`ดำเนินการไม่สำเร็จ: ${e.message}`); } };
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
-  const order = ["ongoing", "upcoming", "ended", "draft"];
+  const order = ["ongoing", "upcoming", "ended"];
   const match = (e) => (e.name + e.detail + (e.placeName || "")).toLowerCase().includes(q.toLowerCase());
 
   return (
@@ -309,7 +330,7 @@ function EventOverview({ grouped, cats, onEdit, onPatch, onDelete, user }) {
                 <Card key={e.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                     <b style={{ fontSize: 14.5, color: "#202124" }}>{e.name}</b>
-                    <Status value={state} />
+                    <Status value={state === "draft" ? "upcoming" : state} />
                   </div>
                   <div style={{ fontSize: 13, color: "#3C4043", marginTop: 5 }}>{e.detail}</div>
                   <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 8 }}>
@@ -322,8 +343,9 @@ function EventOverview({ grouped, cats, onEdit, onPatch, onDelete, user }) {
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                     <Btn kind="ghost" onClick={() => onEdit(e)}>แก้ไข</Btn>
-                    {state === "draft" ? <Btn kind="ok" onClick={() => onPatch(e.id, { published: true }, user)}>เผยแพร่ทันที</Btn> : null}
-                    <Btn kind="danger" onClick={() => confirm(`ลบกิจกรรม “${e.name}” ?`) && onDelete(e.id, user)}>ลบ</Btn>
+                    {state === "draft" ? <Btn kind="ok" onClick={() => safePatch(e.id, immediateEventPatch(e))}>เผยแพร่ทันที</Btn> : null}
+                    {state === "ongoing" ? <Btn kind="ghost" onClick={() => safePatch(e.id, { endAt: new Date().toISOString() })}>สิ้นสุดกิจกรรม</Btn> : null}
+                    <Btn kind="danger" onClick={() => { if (confirm(`ลบกิจกรรม “${e.name}” ?`)) onDelete(e.id, user).catch(err => alert(`ลบกิจกรรมไม่สำเร็จ: ${err.message}`)); }}>ลบ</Btn>
                   </div>
                 </Card>
               );
@@ -370,7 +392,7 @@ function EventFields({ form, setForm, cats }) {
         <div style={{ marginTop: 14 }}>
           {form.roomId && form.roomType ? (
             <>
-              <Field label="ประเภทห้องเดิม (rooms.type)">
+              <Field label="ประเภทห้องเดิม">
                 <Input value={form.roomType} readOnly />
               </Field>
               <Field label="ประเภทห้องชั่วคราวระหว่างจัดกิจกรรม">
@@ -380,7 +402,6 @@ function EventFields({ form, setForm, cats }) {
                   placeholder={`เช่น ห้องจัดกิจกรรม (เดิม: ${form.roomType})`}
                 />
               </Field>
-              <Note tone="warn">หากระบุ ระบบจะแสดง rooms.type เป็นค่านี้เฉพาะช่วงที่กิจกรรมเผยแพร่และกำลังจัดอยู่ เมื่อสิ้นสุดกิจกรรมจะกลับเป็นค่าเดิม “{form.roomType}” อัตโนมัติ โดยไม่เขียนทับค่าเดิมในห้อง</Note>
             </>
           ) : (
             <>
@@ -421,7 +442,7 @@ function EventForm({ cats, onSubmit }) {
     <Card>
       <EventFields form={form} setForm={setForm} cats={cats} />
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-        <Btn onClick={() => submit(false)}>บันทึกเป็นฉบับร่าง</Btn>
+        <Btn onClick={() => submit(false)}>บันทึก</Btn>
         <Btn kind="ok" onClick={() => submit(true)}>เผยแพร่ทันที</Btn>
       </div>
     </Card>
@@ -430,13 +451,14 @@ function EventForm({ cats, onSubmit }) {
 
 function EventEditModal({ item, cats, onClose, onSave }) {
   const wasPublished = Boolean(item.published);
-  const [form, setForm] = useState({ ...item });
+  const [form, setForm] = useState({ ...item, startAt: isoToInput(item.startAt, true), endAt: isoToInput(item.endAt, true) });
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   function attemptSave(publishNow) {
     const err = validateEvent(form);
     if (err) return alert(err);
-    const data = { ...form, lat: Number(form.lat), lon: Number(form.lon), published: publishNow ? true : item.published };
+    const data = { ...form, lat: Number(form.lat), lon: Number(form.lon),
+      ...(publishNow ? immediateEventPatch(form) : { published: item.published }) };
     if (wasPublished) { setConfirmOpen(data); return; }
     onSave(data, { republish: false });
   }
@@ -450,15 +472,15 @@ function EventEditModal({ item, cats, onClose, onSave }) {
           {!wasPublished ? <Btn onClick={() => attemptSave(false)}>บันทึกการแก้ไข</Btn> : null}
         </>}>
         <div style={{ marginBottom: 10 }}><Status value={eventState(item)} /></div>
-        {wasPublished ? <Note tone="warn">กิจกรรมนี้เผยแพร่อยู่ การแก้ไขจะเป็นการถอนฉบับเดิมออกและเผยแพร่ฉบับใหม่ตามกำหนดการที่ระบุ</Note> : null}
+        {wasPublished ? <Note tone="warn">กิจกรรมนี้เผยแพร่อยู่ การบันทึกจะอัปเดตข้อมูลเดิมโดยไม่ลบรายการ</Note> : null}
         <EventFields form={form} setForm={setForm} cats={cats} />
       </Modal>
 
       <Confirm
         open={!!confirmOpen}
         title="ยืนยันการแก้ไขข้อมูลที่เผยแพร่แล้ว"
-        message={`กิจกรรม “${item.name}” ถูกเผยแพร่ไปแล้ว\n\nหากยืนยัน ระบบจะลบข้อมูลฉบับเดิมออกจากระบบ และเผยแพร่ฉบับใหม่ตามวัน-เวลาที่กำหนดไว้\n\nต้องการแก้ไขข้อมูลที่เผยแพร่ไปแล้วใช่หรือไม่?`}
-        confirmLabel="ใช่ แก้ไขและเผยแพร่ใหม่"
+        message={`กิจกรรม “${item.name}” ถูกเผยแพร่ไปแล้ว\n\nหากยืนยัน ระบบจะอัปเดตข้อมูลเดิมตามวัน-เวลาที่กำหนดไว้ โดยไม่ลบรายการ\n\nต้องการแก้ไขข้อมูลที่เผยแพร่ไปแล้วใช่หรือไม่?`}
+        confirmLabel="ยืนยันการบันทึก"
         tone="danger"
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => { const d = confirmOpen; setConfirmOpen(false); onSave(d, { republish: true }); }}
@@ -470,19 +492,52 @@ function EventEditModal({ item, cats, onClose, onSave }) {
 /* ══════════════════ ตรวจสอบสถิติความสนใจของกิจกรรม ══════════════════ */
 
 function InterestModule() {
-  const stats = useStats();
+  const initialStats = useStats();
+  const [latestStats, setLatestStats] = useState(null);
+  const [statsError, setStatsError] = useState("");
+  useEffect(() => {
+    let active = true;
+    const reloadStats = async () => {
+      try {
+        const data = await apiFetch("/api/stats", { cache: "no-store" });
+        if (active) { setLatestStats(data); setStatsError(""); }
+      } catch (error) { if (active) setStatsError(error.message); }
+    };
+    reloadStats();
+    const onVisible = () => { if (document.visibilityState === "visible") reloadStats(); };
+    window.addEventListener("focus", reloadStats);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("scimap-event-search-recorded", reloadStats);
+    const interval = window.setInterval(reloadStats, 15000);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", reloadStats);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("scimap-event-search-recorded", reloadStats);
+      window.clearInterval(interval);
+    };
+  }, []);
+  const stats = latestStats || initialStats;
   const { items: interest } = useCollection("eventInterest");
   if (!stats) return <div style={{ color: "#5F6368", fontSize: 13 }}>กำลังโหลด…</div>;
-  const rows = [...(stats.eventStats || [])].sort((a, b) => b.interested - a.interested);
+  // Count unique user/event pairs from the same source as the interest buttons.
+  const counts = new Map();
+  for (const i of interest) {
+    if (!i.eventId || !i.userId) continue;
+    if (!counts.has(i.eventId)) counts.set(i.eventId, new Set());
+    counts.get(i.eventId).add(i.userId);
+  }
+  const rows = [...(stats.eventStats || [])].map(r => ({ ...r, interested: counts.get(r.eventId)?.size || 0 })).sort((a, b) => b.interested - a.interested);
+  const totalInterest = [...counts.values()].reduce((n, users) => n + users.size, 0);
 
   return (
     <>
-      <UCHead title="ตรวจสอบสถิติความสนใจของกิจกรรม" desc="ยอดเข้าชม ยอดกดสนใจเข้าร่วม และจำนวนครั้งที่ถูกค้นหาบนแผนที่ของแต่ละกิจกรรม" />
+      {statsError ? <Note tone="danger">โหลดสถิติล่าสุดไม่สำเร็จ: {statsError}</Note> : null}
       <Tiles items={[
         { label: "กิจกรรมที่มีสถิติ", value: rows.length },
-        { label: "ยอดกดสนใจรวม", value: rows.reduce((a, r) => a + r.interested, 0) },
-        { label: "ถูกค้นหาบนแผนที่รวม", value: rows.reduce((a, r) => a + r.searched, 0) },
-        { label: "ผู้กดสนใจล่าสุด", value: interest.length },
+        { label: "ยอดกดสนใจรวม", value: totalInterest },
+        { label: "ถูกค้นหาบนแผนที่รวม", value: rows.reduce((a, r) => a + Number(r.searched || 0), 0) },
+        { label: "ผู้กดสนใจล่าสุด", value: totalInterest },
       ]} />
       {rows.map((r) => {
         const max = Math.max(1, ...rows.flatMap((x) => [x.interested, x.searched]));
@@ -539,7 +594,6 @@ function CategoryModule({ user }) {
 
   return (
     <>
-      <UCHead title="เพิ่ม / แก้ไข / ลบหมวดหมู่กิจกรรมและสถานที่" desc="หมวดหมู่ที่สร้างไว้จะไปปรากฏให้เลือกในหน้าเขียนกิจกรรมและการกำหนดหมวดหมู่สถานที่" />
       <Tabs
         value={sub}
         onChange={setSub}

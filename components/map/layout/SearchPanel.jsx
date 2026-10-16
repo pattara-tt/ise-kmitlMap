@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "../../../lib/api";
+
 export default function SearchPanel({ view }) {
   const {
     PlaceInput,
@@ -87,6 +89,14 @@ export default function SearchPanel({ view }) {
               </div>
               <SearchPlaceInput value={searchQuery} onChange={setSearchQuery} events={events} categories={categories} rooms={rooms} searchNodes={indoorSearchNodes} placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ" onPick={async sg => {
       if (sg.src === "event" && sg.event) {
+        // Count a deliberate event result selection, not every keystroke.
+        try {
+          const result = await apiFetch(`/api/events/${encodeURIComponent(sg.event.id)}/search`, { method: "POST" });
+          if (result?.ok) window.dispatchEvent(new Event("scimap-event-search-recorded"));
+        } catch (error) {
+          console.error("บันทึกสถิติการค้นหากิจกรรมไม่สำเร็จ:", error);
+          window.dispatchEvent(new CustomEvent("scimap-event-search-error", { detail: error.message }));
+        }
         openEventCard(sg.event);
         return;
       }
