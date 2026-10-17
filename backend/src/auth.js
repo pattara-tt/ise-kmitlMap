@@ -20,6 +20,10 @@ function pruneRevoked() {
   }
 }
 
+export function destroySession(sessionId) {
+  sessions.delete(sessionId);
+}
+
 // ผู้ใช้ login ใหม่ / ถูกคืนสิทธิ์ → เหตุผลเก่าหมดความหมาย
 export function clearRevokedForUser(userId) {
   for (const [id, r] of revokedSessions) {

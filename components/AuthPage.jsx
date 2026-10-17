@@ -6,22 +6,20 @@ import { Btn, Field, Input, Logo, Select } from "./ui";
 // UC27 ลงทะเบียนเข้าใช้ระบบ · UC28 เข้าสู่ระบบด้วย E-mail
 export default function AuthPage({ onLogin }) {
   const [mode, setMode] = useState("login"); // login | register
-  const [form, setForm] = useState({ email: "", password: "", name: "", username: "", role: "user", institutionId: "" });
+  const [form, setForm] = useState({ email: "", password: "", name: "", username: "", institutionId: "" });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [roles, setRoles] = useState([]);
   const [institutions, setInstitutions] = useState([]);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/auth/roles").then((r) => r.json()),
-      fetch("/api/auth/institutions").then((r) => r.json()),
-    ]).then(([roleData, institutionData]) => {
-      setRoles(roleData.items || []);
-      const rows = institutionData.items || [];
-      setInstitutions(rows);
-      setForm((current) => ({ ...current, institutionId: current.institutionId || rows[0]?.id || "" }));
-    }).catch(() => { setRoles([]); setInstitutions([]); });
+    fetch("/api/auth/institutions")
+      .then((r) => r.json())
+      .then((institutionData) => {
+        const rows = institutionData.items || [];
+        setInstitutions(rows);
+        setForm((current) => ({ ...current, institutionId: current.institutionId || rows[0]?.id || "" }));
+      })
+      .catch(() => { setInstitutions([]); });
   }, []);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -86,11 +84,6 @@ export default function AuthPage({ onLogin }) {
             <Field label="สถาบัน">
               <Select value={form.institutionId} onChange={set("institutionId")}>
                 {institutions.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-              </Select>
-            </Field>
-            <Field label="บทบาทในระบบ">
-              <Select value={form.role} onChange={set("role")}>
-                {roles.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
               </Select>
             </Field>
           </>

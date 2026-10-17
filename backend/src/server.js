@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { list, insert, update, remove, logEdit, withTransaction, getRequestQuota, EDIT_TARGET_FK, USE_PG } from "./store.js";
 import { osmHandler, walknetHandler } from "./overpass.js";
 import { cancelPendingRequestsByUser } from "./account.js";
-import { createSession, invalidateSession, clearRevokedForUser, getSession, getRevokedReason } from "./auth.js";
+import { createSession, destroySession, invalidateSession, clearRevokedForUser, getSession, getRevokedReason } from "./auth.js";
 import { ROLE, MARKETING_COLLECTIONS as MARKETING_COLLECTION_LIST, ACCESS_STATUS as ACCESS_STATUS_LIST } from "./constants.js";
 
 const app = express();
@@ -23,6 +23,7 @@ const ALLOWED = new Set([
 const ACCESS_STATUS = new Set(ACCESS_STATUS_LIST);
 
 function safeUser(user) { if(!user) return user; const { passwordHash, password, ...safe } = user; return safe; }
+
 function requireSession(req,res,next) {
   const id=req.headers["x-session-id"];
   if(!id) return res.status(401).json({ok:false,error:"กรุณาเข้าสู่ระบบ",code:"NO_SESSION"});
@@ -35,6 +36,7 @@ function requireSession(req,res,next) {
   }
   req.session=session; next();
 }
+
 function guard(req,res){ if(ALLOWED.has(req.params.name)) return true; res.status(404).json({ok:false,error:"ไม่พบชุดข้อมูล"}); return false; }
 const COMPOSITE_KEYS = Object.freeze({
   roleUseCases: ["roleCode", "useCaseKey"],
@@ -80,15 +82,34 @@ app.get("/api/auth/session", requireSession, wrap(async(req,res)=>{
   res.json({ok:true,user:safeUser(user),session:req.session});
 }));
 
+app.post("/api/auth/logout", wrap(async (req, res) => {
+  const id = req.headers["x-session-id"];
+  if (id) destroySession(id);
+  res.json({ ok: true });
+}));
+
 app.post("/api/auth", wrap(async(req,res)=>{
   const body=req.body||{}; const email=String(body.email||"").trim().toLowerCase(); const users=await list("users");
   if(body.action==="register"){
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ok:false,error:"รูปแบบอีเมลไม่ถูกต้อง"});
     const pw=String(body.password||""); if(pw.length<4) return res.status(400).json({ok:false,error:"รหัสผ่านต้องยาวอย่างน้อย 4 ตัวอักษร"});
     if(users.some(u=>u.email.toLowerCase()===email)) return res.status(409).json({ok:false,error:"อีเมลนี้ถูกใช้ลงทะเบียนแล้ว"});
-    const roles=await list("roles"); const roleCode=roles.some(r=>r.code===body.role)?body.role:ROLE.USER;
-    const institutions=await list("institutions"); const defaultInst=institutions.find(i=>i.shortName==="KMITL") || institutions[0];
-    const user=await insert("users", { email, passwordHash:await bcrypt.hash(pw,10), name:body.name||email.split("@")[0], username:body.username||email.split("@")[0], roleCode, institutionId:body.institutionId||defaultInst?.id||null, status:"active", createdAt:new Date().toISOString() });
+
+    const roleCode = ROLE.USER;
+    const institutions=await list("institutions"); 
+    const defaultInst=institutions.find(i=>i.shortName==="KMITL") || institutions[0];
+    const user=await insert(
+      "users", 
+      { email, passwordHash:await bcrypt.hash(pw,10), 
+        name:body.name||email.split("@")[0], 
+        username:body.username||email.split("@")[0], 
+        roleCode, 
+        institutionId:body.institutionId||defaultInst?.id||null, 
+        status:"active", 
+        createdAt:new Date().toISOString() 
+      }
+    );
+
     return res.json({ok:true,user:safeUser(user)});
   }
   if(body.action==="login"){
@@ -172,9 +193,21 @@ app.get("/api/data/:name", requireSession, wrap(async(req,res)=>{
   }
   res.json({ok:true,items:items.map(x=>name==="users"?safeUser(x):x)});
 }));
+
 app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
   if (!guard(req, res)) return;
+
   const { name } = req.params;
+  if (name === "users" && req.session.role !== ROLE.ADMIN) {
+    return res.status(403).json({ ok: false, error: "เฉพาะผู้ดูแลระบบเท่านั้นที่แก้ไขบัญชีผู้ใช้ได้" });
+  }
+
+  if (name === "users" && req.session.role === ROLE.ADMIN) {
+      const target = (await list("users")).find((u) => sameId(u.id, id));
+      if (target?.roleCode === ROLE.MARKETING || patch.roleCode === ROLE.MARKETING)
+        return res.status(403).json({ ok: false, error: "ฝ่ายดูแลระบบไม่มีสิทธิ์จัดการบัญชีฝ่ายการตลาด" });
+  }
+
   if (name === "roomTypes" && req.session.role !== ROLE.REGISTRAR) return res.status(403).json({ok:false,error:"เฉพาะฝ่ายทะเบียนที่จัดการประเภทห้องได้"});
   const { _actor, ...item } = req.body || {};
   if (MARKETING_COLLECTIONS.has(name) && req.session.role !== ROLE.MARKETING)
@@ -262,12 +295,6 @@ app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
       await insert("accessHistory", { accessId: row.id, actorId: req.session.userId,
         beforeStatus: before.accessStatus || "active", afterStatus: row.accessStatus,
         changedAt: new Date().toISOString() });
-
-    if (name === "users" && req.session.role === ROLE.ADMIN) {
-      const target = (await list("users")).find((u) => sameId(u.id, id));
-      if (target?.roleCode === ROLE.MARKETING || patch.roleCode === ROLE.MARKETING)
-        return res.status(403).json({ ok: false, error: "ฝ่ายดูแลระบบไม่มีสิทธิ์จัดการบัญชีฝ่ายการตลาด" });
-    }
 
     if (name === "institutionAccessModules") await logAccessModuleChange(row.accessId, req.session.userId);
     

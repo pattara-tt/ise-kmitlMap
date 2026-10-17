@@ -255,6 +255,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
     code: "", name: "", type: "ห้องเรียน", capacity: 40,
     teacherCount: 1, teachers: [""], nodeId: "",
   });
+  const { items: nodes } = useCollection("nodes");
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   // โหมดการแสดงผลของแผงห้อง: 'idle' = รายการทั้งหมด, 'view' = ดูข้อมูลอย่างเดียว, 'edit' = ฟอร์มแก้ไข, 'create' = ห้องที่ยังไม่มีข้อมูล
@@ -656,13 +657,15 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
                   // create() จะ throw ต้องดักไว้ ไม่งั้นปุ่มจะเงียบไปเฉยๆ โดยผู้ใช้ไม่รู้สาเหตุ
                   let createdRoom;
                   try {
+                    const nodeRow = nodes.find((n) => n.id === form.nodeId || n.nodeKey === form.nodeId);
+
                     createdRoom = await create({
                       code: form.code,
                       name: form.name,
                       type: form.type,
                       capacity: Number(form.capacity),
                       teacher: teacherNamesToText(form.teachers),
-                      nodeId: form.nodeId,
+                      nodeId: nodeRow?.id ?? null,
                       floorId: floorRow?.id,
                     }, user);
                   } catch (e) {

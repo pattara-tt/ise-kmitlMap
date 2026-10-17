@@ -9,7 +9,8 @@ import GisPanel from "../components/panels/GisPanel";
 import AdminPanel from "../components/panels/AdminPanel";
 import PrPanel from "../components/panels/PrPanel";
 import RegistrarPanel from "../components/panels/RegistrarPanel";
-import { useRefData } from "../lib/useRefData";
+import { useRefData, resetRefDataCache } from "../lib/useRefData";
+import { resetMapDataCache } from "../lib/useMapData";
 import { Icon, Logo, MenuIcon } from "../components/ui";
 
 const PANELS = { exec: ExecPanel, marketing: MarketingPanel, gis: GisPanel, admin: AdminPanel, pr: PrPanel, registrar: RegistrarPanel };
@@ -126,15 +127,34 @@ export default function Page() {
   }, [user, useCases, uc]);
 
   function logout() {
-    try {
-      localStorage.removeItem("kmitlmap:user");
-      localStorage.removeItem("kmitlmap:session");
-    } catch (e) {}
+      sessionHandledRef.current = true;
 
-    setUser(null);
-    setUc(null);
-    setMenuOpen(false);
-  }
+      let sessionId = null;
+      try { sessionId = localStorage.getItem("kmitlmap:session"); } 
+      catch (e) {}
+
+      if (sessionId) {
+        fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "x-session-id": sessionId },
+          keepalive: true,
+        }).catch(() => {});
+      }
+
+      try {
+        localStorage.removeItem("kmitlmap:user");
+        localStorage.removeItem("kmitl:session");
+      }
+      catch (e) {}
+
+      resetRefDataCache();
+      resetMapDataCache();
+
+      setUser(null);
+      setUc(null);
+      setTab("map");
+      setMenuOpen(false);
+    }
 
     useEffect(() => {
     function handleSessionInvalid(event) {
