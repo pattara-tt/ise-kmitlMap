@@ -111,19 +111,21 @@ function SaveMap({
 
       <NodeEdgeTab user={user} mapData={mapData} onPageChange={setMapPage} />
       
-      <Card>
-        <Field label="เลือกหมวดข้อมูล">
-          <Select
-            value={selectedCategory}
-            onChange={e => setSelectedCategory(e.target.value)}
-          >
-            <option value="all">ทั้งหมด</option>
-            <option value="campus">วิทยาเขต</option>
-            <option value="building">อาคาร</option>
-            <option value="zone">โซน/พื้นที่ย่อย</option>
-          </Select>
-        </Field>
-      </Card>
+      {mapPage === "select" && (
+        <Card>
+          <Field label="เลือกหมวดข้อมูล">
+            <Select
+              value={selectedCategory}
+              onChange={e => setSelectedCategory(e.target.value)}
+            >
+              <option value="all">ทั้งหมด</option>
+              <option value="campus">วิทยาเขต</option>
+              <option value="building">อาคาร</option>
+              <option value="zone">โซน/พื้นที่ย่อย</option>
+            </Select>
+          </Field>
+        </Card>
+      )}
 
       {mapPage === "select" && <>
 

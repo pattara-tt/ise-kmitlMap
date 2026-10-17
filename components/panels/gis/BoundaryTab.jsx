@@ -21,6 +21,10 @@ function Boundary({
 
   const buildingsApi = useCollection("buildings");
   const floorsApi = useCollection("floors");
+  const facultiesApi = useCollection("faculties");
+  const faculties = facultiesApi.items || [];
+  const [facultyForm, setFacultyForm] = useState({ id: "", name: "" });
+  const [savingFaculty, setSavingFaculty] = useState(false);
 
   const {
     items = [],
@@ -34,6 +38,8 @@ function Boundary({
     customName: "",
     type: "building",
     buildingId: "",
+    buildingCode: "",
+    facultyId: "",
     floorCount: ""
   });
   
@@ -85,43 +91,79 @@ function Boundary({
 
   // สร้างอาคาร (ถ้ายังไม่มี) และชั้น 1..count ที่ยังไม่มี ให้เป็นข้อมูลจริงในระบบ
   // เพื่อให้ UC8 เลือกอาคาร/ชั้นได้เหมือนข้อมูลที่มีอยู่เดิม
-  const ensureBuildingWithFloors = async ({ buildingId, name, count }) => {
-    let id = buildingId || buildings.find(b => b.name === name)?.id;
+  const ensureBuildingWithFloors = async ({ buildingId, code, name, facultyId, count }) => {
+    const cleanCode = String(code || "").trim().toUpperCase();
+    if (!cleanCode) throw new Error("กรุณาระบุรหัสอาคาร");
+    if (!name?.trim()) throw new Error("กรุณาระบุชื่ออาคาร");
+    if (!facultyId) throw new Error("กรุณาเลือกคณะ");
 
-    if (!id) {
-      id = `BU-${Date.now()}`;
-      await buildingsApi.create({
-        id,
-        code: `B${Date.now().toString(36).toUpperCase()}`, // ปรับให้ตรงกับ schema ของ buildings
-        name
-      }, user);
+    let building = buildings.find(b => b.id === buildingId) ||
+      buildings.find(b => String(b.code || "").toUpperCase() === cleanCode);
+    const id = building?.id || `BLD-${cleanCode}`;
+
+    if (!building) {
+      await buildingsApi.create({ id, code: cleanCode, name: name.trim(), facultyId }, user);
+    } else {
+      // คง ID เดิมไว้เพื่อรักษาความสัมพันธ์กับข้อมูลส่วนอื่น
+      await buildingsApi.patch(id, { code: cleanCode, name: name.trim(), facultyId }, user);
     }
 
-    const existingNos = new Set(
-      (buildings.find(b => b.id === id)?.floors || []).map(f => String(f.floorNo))
-    );
+    const existingNos = new Set((building?.floors || []).map(f => String(f.floorNo)));
     const stamp = Date.now();
-
     for (let n = 1; n <= count; n++) {
-      if (existingNos.has(String(n))) continue; // มีชั้นนี้อยู่แล้ว ไม่สร้างซ้ำ
+      if (existingNos.has(String(n))) continue;
       await floorsApi.create({
         id: `FL-${stamp}-${n}`,
         buildingId: id,
-        floorNo: n,
+        floorNo: String(n),
         name: `ชั้น ${n}`
       }, user);
     }
-
     clearMapDataCache();
     return id;
+  };
+
+  const saveFaculty = async () => {
+    const id = facultyForm.id.trim();
+    const name = facultyForm.name.trim();
+    if (!id || !name) return alert("กรุณาระบุ ID และชื่อคณะ");
+    // ตรวจสอบข้อมูลซ้ำก่อนส่งบันทึก
+    if (faculties.some(f => String(f.id).trim().toLowerCase() === id.toLowerCase())) {
+      return alert("ID คณะนี้มีอยู่แล้ว กรุณาใช้ ID อื่น");
+    }
+    if (faculties.some(f => String(f.name).trim().toLowerCase() === name.toLowerCase())) {
+      return alert("ชื่อคณะนี้มีอยู่แล้ว");
+    }
+
+    // ให้ผู้ใช้ยืนยันอีกครั้งก่อนบันทึกลงฐานข้อมูล
+    const confirmed = window.confirm(
+      `ยืนยันการเพิ่มคณะนี้หรือไม่?\n\nID: ${id}\nชื่อคณะ: ${name}\n\nโปรดตรวจสอบ ID ให้ถูกต้อง เพราะไม่ควรเปลี่ยนภายหลัง`
+    );
+    if (!confirmed) return;
+
+    setSavingFaculty(true);
+    try {
+      await facultiesApi.create({ id, name }, user);
+      setFacultyForm({ id: "", name: "" });
+      clearMapDataCache();
+    } catch (err) {
+      alert(err?.message || "บันทึกข้อมูลคณะไม่สำเร็จ");
+    } finally {
+      setSavingFaculty(false);
+    }
   };
 
   const openNewBoundaryEditor = () => {
     if (!nameValue) {
       return alert("กรุณาระบุชื่อขอบเขต");
     }
-    if (form.type === "building" && !floorCountValid) {
-      return alert("จำนวนชั้นต้องเป็นจำนวนเต็มตั้งแต่ 1 ถึง 99");
+    if (!form.facultyId) return alert("กรุณาเลือกคณะ");
+    if (form.type === "building") {
+      if (!String(form.buildingCode || "").trim()) return alert("กรุณาระบุรหัสอาคาร");
+      if (!nameValue) return alert("กรุณาระบุชื่ออาคาร");
+      if (!floorCountText || !floorCountValid || floorCountNum < 1) {
+        return alert("จำนวนชั้นต้องเป็นจำนวนเต็มตั้งแต่ 1 ถึง 99");
+      }
     }
     setEditingBoundary(null);
     setDraftPoints([]);
@@ -155,11 +197,13 @@ function Boundary({
     // ก็ต่อเมื่อระบุจำนวนชั้น (ระบบสร้างอาคารและชั้นให้)
     let buildingId = form.type === "building" && form.buildingId !== "custom" ? form.buildingId : null;
 
-    if (form.type === "building" && floorCountText !== "") {
+    if (form.type === "building") {
       try {
         buildingId = await ensureBuildingWithFloors({
           buildingId,
+          code: form.buildingCode || buildings.find(b => b.id === buildingId)?.code,
           name: nameValue,
+          facultyId: form.facultyId,
           count: floorCountNum
         });
       } catch (err) {
@@ -172,6 +216,8 @@ function Boundary({
       id: `MB-${Date.now()}`,
       name: nameValue,
       type: form.type,
+      // map_boundaries เชื่อมกับอาคารผ่าน building_id เท่านั้น
+      // คณะจะอ่านผ่าน buildings.faculty_id ไม่ต้องบันทึก facultyId ซ้ำ
       buildingId,
       // geometry เก็บเป็น [lat, lon] ตามพฤติกรรมเดิมของ editor
       geometry: points,
@@ -185,6 +231,8 @@ function Boundary({
       customName: "",
       type: "building",
       buildingId: "",
+      buildingCode: "",
+      facultyId: "",
       floorCount: ""
     });
     setDraftPoints([]);
@@ -226,6 +274,25 @@ function Boundary({
   return <>
       <UCHead title="จัดการขอบเขตสถานที่" desc="กำหนดขอบเขตวิทยาเขต/อาคาร โดยเลือกจุดบนแผนที่เพื่อบันทึกพิกัด Latitude และ Longitude" />
 
+      <Card>
+        <b style={{ fontSize: 13.5, color: "#202124" }}>จัดการข้อมูลคณะ</b>
+        <div style={{ marginTop: 6, fontSize: 11.5, color: "#B45309" }}>
+          ID ต้องคงเดิม ห้ามเปลี่ยน เพราะกระทบข้อมูลที่เชื่อมโยง
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1fr) minmax(180px, 2fr)", gap: 8, marginTop: 10 }}>
+          <Field label="ID คณะ">
+            <Input value={facultyForm.id} onChange={e => setFacultyForm(f => ({ ...f, id: e.target.value }))} placeholder="เช่น FAC-11" />
+          </Field>
+          <Field label="ชื่อคณะ">
+            <Input value={facultyForm.name} onChange={e => setFacultyForm(f => ({ ...f, name: e.target.value }))} placeholder="ระบุชื่อคณะ" />
+          </Field>
+        </div>
+        <Btn onClick={saveFaculty} disabled={savingFaculty}>{savingFaculty ? "กำลังบันทึก..." : "เพิ่มคณะ"}</Btn>
+        <div style={{ marginTop: 10, fontSize: 12, color: "#5F6368" }}>
+          คณะที่มีในระบบ: {faculties.map(f => `${f.name} (${f.id})`).join(" · ") || "ยังไม่มีข้อมูล"}
+        </div>
+      </Card>
+
       {/* ======================================
           เพิ่มขอบเขตใหม่
           ====================================== */}
@@ -250,6 +317,8 @@ function Boundary({
               name: "custom",
               customName: "",
               buildingId: "",
+              buildingCode: "",
+              facultyId: "",
               floorCount: ""
             }));
           }}>
@@ -267,15 +336,23 @@ function Boundary({
             </Select>
           </Field>
 
+          <Field label="คณะที่เป็นเจ้าของขอบเขต">
+            <Select value={form.facultyId} onChange={e => setForm(f => ({ ...f, facultyId: e.target.value }))}>
+              <option value="">-- เลือกคณะ --</option>
+              {faculties.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </Select>
+          </Field>
+
           {form.type === "building" ? <>
               {/* ประเภท = อาคาร : เชื่อมกับรายชื่ออาคารจริงจาก mapData.buildings เหมือนหน้า "แผนผังภายในอาคาร" */}
               <Field label="อาคาร">
                 <Select value={form.buildingId} onChange={e => {
                 const buildingId = e.target.value;
                 if (buildingId === "custom") {
-                  setForm(current => ({ ...current, buildingId: "custom", customName: "" }));
+                  setForm(current => ({ ...current, buildingId: "custom", buildingCode: "", customName: "" }));
                 } else {
-                  setForm(current => ({ ...current, buildingId }));
+                  const selected = buildings.find(b => b.id === buildingId);
+                  setForm(current => ({ ...current, buildingId, buildingCode: selected?.code || "", customName: selected?.name || "" }));
                 }
               }}>
                   {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -284,12 +361,18 @@ function Boundary({
               </Field>
 
               {/* ถ้าเลือก อาคาร แบบกำหนดเอง ให้แสดงช่อง Input ให้พิมพ์ */}
-              {(form.buildingId === "custom" || buildings.length === 0) && (
-                <Field label="ระบุชื่ออาคารเอง">
+              <Field label="รหัสอาคาร">
+                <Input value={form.buildingCode || ""} onChange={set("buildingCode")} placeholder="เช่น SC8"
+                  disabled={form.buildingId !== "custom" && Boolean(form.buildingId)} />
+              </Field>
+
+              {/* แสดงช่องชื่ออาคารเฉพาะเมื่อเลือกพิมพ์ระบุเอง */}
+              {form.buildingId === "custom" && (
+                <Field label="ชื่ออาคาร">
                   <Input
                     value={form.customName || ""}
                     onChange={set("customName")}
-                    placeholder="พิมพ์ชื่ออาคาร..."
+                    placeholder="เช่น อาคารวิทยาศาสตร์"
                   />
                 </Field>
               )}
