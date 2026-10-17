@@ -208,14 +208,18 @@ function normalizePrWrite(name, data) {
 }
 
 export async function insert(name,item) {
-<<<<<<< HEAD
-  const row=name === "mapAssets" ? packAsset({...item}) : name === "requests" ? packRequest({...item}) : normalizePrWrite(name, {...item}); const pk=PK[name]||"id";
+  const processedItem = name === "mapAssets" ? packAsset({...item}) : name === "requests" ? packRequest({...item}) : normalizePrWrite(name, {...item}); 
+  const row = packJson(name, processedItem);
+  const pk=PK[name]||"id";
   if(!COMPOSITE[name] && pk==="id" && !row.id) row.id=await generateId(name);
-=======
-  const row = packJson(name, name === "mapAssets" ? packAsset({...item}) : name === "requests" ? packRequest({...item}) : {...item}); const pk=PK[name]||"id";  if(!COMPOSITE[name] && pk==="id" && !row.id) row.id=await generateId(name);
->>>>>>> 943bb2d0b30e672201e4cb32de209bf2eaebcc5e
-  const keys=Object.keys(row).filter(k=>row[k]!==undefined); if(!keys.length) throw new Error("ไม่มีข้อมูลสำหรับ insert");
-  const cols=keys.map(k=>`"${snake(k)}"`).join(", "); const ph=keys.map((_,i)=>`$${i+1}`).join(", "); const vals=keys.map(k=>row[k]);
+
+  const keys=Object.keys(row).filter(k=>row[k]!==undefined); 
+  if(!keys.length) throw new Error("ไม่มีข้อมูลสำหรับ insert");
+
+  const cols=keys.map(k=>`"${snake(k)}"`).join(", "); 
+  const ph=keys.map((_,i)=>`$${i+1}`).join(", "); 
+  const vals=keys.map(k=>row[k]);
+
   // A create operation must never overwrite an existing row. PostgreSQL's
   // 23505 is translated into HTTP 409 by server.js.
   const {rows}=await query(`INSERT INTO ${table(name)} (${cols}) VALUES (${ph}) RETURNING *`, vals);
@@ -225,30 +229,18 @@ export async function insert(name,item) {
 
 function whereFor(name,id,start=1) {
   const keys=COMPOSITE[name];
-  if(keys){ if(!id||typeof id!=="object") throw new Error(`${name} ต้องใช้ composite key object`); return {sql:keys.map((k,i)=>`"${k}"=$${start+i}`).join(" AND "), vals:keys.map(k=>id[camel(k)])}; }
-  const pk=PK[name]||"id"; return {sql:`"${snake(pk)}"=$${start}`,vals:[id]};
+  if(keys){ 
+    if(!id||typeof id!=="object") throw new Error(`${name} ต้องใช้ composite key object`); 
+    return {sql:keys.map((k,i)=>`"${k}"=$${start+i}`).join(" AND "), vals:keys.map(k=>id[camel(k)])}; 
+  }
+  const pk=PK[name]||"id"; 
+  return {sql:`"${snake(pk)}"=$${start}`,vals:[id]};
 }
-<<<<<<< HEAD
-export async function update(name,id,patch) {
-  patch = normalizePrWrite(name, patch);
-  if (name === "requests") patch = packRequest(patch);
-  if (name === "mapAssets" && Object.prototype.hasOwnProperty.call(patch, "placement")) {
-    const { rows } = await query(`SELECT * FROM map_assets WHERE id=$1`, [id]);
-    const current = unpackAsset(rowOut(rows[0]));
-    patch = packAsset({ ...current, ...patch });
-    delete patch.id;
-    delete patch.floorId;
-    delete patch.name;
-    delete patch.kind;
-    delete patch.status;
-    delete patch.updatedAt;
-=======
-
 
 export async function update(name, id, patch) {
+  patch = normalizePrWrite(name, patch);
   if (name === "requests") {
     patch = packRequest(patch);
->>>>>>> 943bb2d0b30e672201e4cb32de209bf2eaebcc5e
   }
 
   patch = packJson(name, patch);
@@ -328,11 +320,17 @@ export async function update(name, id, patch) {
 }
 
 
-export async function remove(name,id) { const w=whereFor(name,id,1); const r=await query(`DELETE FROM ${table(name)} WHERE ${w.sql}`,w.vals); return r.rowCount>0; }
+export async function remove(name,id) { 
+  const w=whereFor(name,id,1); 
+  const r=await query(`DELETE FROM ${table(name)} WHERE ${w.sql}`,w.vals); 
+  return r.rowCount>0; 
+}
 
 const TARGET_FK={nodes:"node_id",edges:"edge_id",floors:"floor_id",rooms:"room_id",mapBoundaries:"map_boundary_id",mapAssets:"map_asset_id",news:"news_id",events:"event_id",categories:"category_id",broadcasts:"broadcast_id",requestQuota:"request_quota_id",requests:"request_id",feedback:"feedback_id"};
 export async function logEdit({userId,action,target,before=null,after=null}) {
-  const fk=TARGET_FK[target?.type]; if(!fk) throw new Error(`Unsupported edit-log target type: ${target?.type||""}`);
+  const fk=TARGET_FK[target?.type]; 
+  if(!fk) throw new Error(`Unsupported edit-log target type: ${target?.type||""}`);
   const data={id:`EL-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,userId:userId||null,action,before:before==null?null:(typeof before==="string"?before:JSON.stringify(before)),after:after==null?null:(typeof after==="string"?after:JSON.stringify(after)),editedAt:new Date().toISOString(),targetLabel:target.label||target.id||null};
-  data[camel(fk)]=target.id||null; return insert("editLogs",data);
+  data[camel(fk)]=target.id||null; 
+  return insert("editLogs",data);
 }
