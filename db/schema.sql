@@ -208,8 +208,6 @@ CREATE TABLE feedback (
   user_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
   topic      TEXT NOT NULL,
   detail     TEXT,
-  status     TEXT NOT NULL DEFAULT 'open',
-  reply      TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

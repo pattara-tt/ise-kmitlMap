@@ -125,6 +125,9 @@ DATABASE_URL='postgresql://...' npm run test:pg   # ตรวจ DB ทดสอ
 | `006_contracts_usecase_title.sql` | แก้ชื่อเมนู `contracts` (ข้อมูลเท่านั้น) |
 | `007_exec_requests_and_search_stats.sql` | เมนูผู้บริหาร: แยกคำร้องออกจากข้อเสนอแนะ และเพิ่มสถิติการค้นหา (ข้อมูลเท่านั้น) |
 | `008_search_logs.sql` | ตาราง `search_logs` เก็บประวัติการค้นหา/นำทาง (รันซ้ำได้) |
+| `012_remove_unused_buildings.sql` | ลบตึกชั่วคราวนอก `FAC-05` ที่ไม่มีข้อมูลแผนที่ (เก็บ `BLD-B007` ไว้ก่อน) |
+| `013_feedback_drop_status.sql` | ลบคอลัมน์ `status` และ `reply` ของ `feedback` |
+| `014_remove_test_map_data.sql` | ลบข้อมูลแผนที่ที่ใช้ทดสอบ (ขอบเขต SC9/IT, ตึก IT, log ที่เกี่ยวข้อง) และคืนตำแหน่งผังชั้น 1 |
 
 ```bash
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/00N_name.sql

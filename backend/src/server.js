@@ -329,17 +329,24 @@ app.get("/api/stats", requireSession, wrap(async(_req,res)=>{
   const [users,requests,feedback,news,events,eventStats,rooms,contracts,usageRows,buildings,eventInterest,editLogs,searchLogs]=await Promise.all(["users","requests","feedback","news","events","eventStats","rooms","contracts","usage","buildings","eventInterest","editLogs","searchLogs"].map(list));
   // ผู้ใช้ที่ใช้งานรายเดือน: นับจากกิจกรรมจริงของผู้ใช้/เจ้าหน้าที่ (คำร้อง ข้อเสนอแนะ ความสนใจกิจกรรม การแก้ไขแผนที่)
   // เดือนที่ไม่มีกิจกรรมเลยจะใช้ค่าจากตาราง usage แทน และไม่ให้เกินจำนวนผู้ใช้ทั้งหมด
-  const monthOf=v=>{const d=v?new Date(v):null;return d&&!isNaN(d)?d.toISOString().slice(0,7):null;};
+  // เดือนนับตามเวลาไทย (ตรงกับ lib/datetime.js) เพื่อให้รอยต่อเดือนไม่เพี้ยนเมื่อเซิร์ฟเวอร์ใช้เวลา UTC
+  const monthOf=v=>{const d=v?new Date(v):null;return d&&!isNaN(d)?d.toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"}).slice(0,7):null;};
   const activeByMonth=new Map();
   for(const [rows,uid,at] of [[requests,"userId","createdAt"],[feedback,"userId","createdAt"],[eventInterest,"userId","createdAt"],[editLogs,"userId","editedAt"]])
     for(const r of rows){const m=monthOf(r[at]);if(m&&r[uid]){if(!activeByMonth.has(m))activeByMonth.set(m,new Set());activeByMonth.get(m).add(r[uid]);}}
   // ค้นหา/นำทางรายเดือน: เดือนที่มี search_logs จริงใช้ค่าจาก log (navigate = นำทาง, อื่นๆ = ค้นหา) เดือนที่ไม่มี log ใช้ค่าจากตาราง usage
   const logByMonth=new Map();
   for(const r of searchLogs){const m=monthOf(r.createdAt);if(!m)continue;const c=logByMonth.get(m)||{searches:0,routes:0};if(r.kind==="navigate")c.routes++;else c.searches++;logByMonth.set(m,c);}
-  const baseUsage=[...usageRows,...[...logByMonth.keys()].filter(m=>!usageRows.some(u=>u.month===m)).map(month=>({month,activeUsers:0,searches:0,routes:0}))].sort((a,b)=>String(a.month).localeCompare(String(b.month)));
+  // รายการเดือนต่อเนื่องจากเดือนแรกในตาราง usage ถึง "เดือนปัจจุบัน" เพื่อให้ตัวเลข "เดือนนี้" ขยับตามกิจกรรมจริง
+  // (เดิมใช้แถวสุดท้ายของตาราง usage ซึ่งหยุดอยู่ที่เดือนสุดท้ายที่พิมพ์ไว้) เดือนที่ไม่มีแถว usage เริ่มจาก 0
+  const currentMonth=monthOf(Date.now());
+  const firstMonth=[...usageRows.map(u=>u.month),...logByMonth.keys(),...activeByMonth.keys(),currentMonth].filter(Boolean).sort()[0];
+  const monthList=[];
+  for(let [y,m]=firstMonth.split("-").map(Number); `${y}-${String(m).padStart(2,"0")}`<=currentMonth; m===12?(y++,m=1):m++) monthList.push(`${y}-${String(m).padStart(2,"0")}`);
+  const baseUsage=monthList.map(month=>usageRows.find(u=>u.month===month)||{month,activeUsers:0,searches:0,routes:0});
   const usage=baseUsage.map(u=>({...u,...(logByMonth.get(u.month)||{}),activeUsers:Math.min(users.length,activeByMonth.has(u.month)?activeByMonth.get(u.month).size:(u.activeUsers||0))}));
   const last=usage[usage.length-1]||{}; const byStatus=requests.reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{}); const byType=requests.reduce((a,r)=>{const k=r.subject||"อื่นๆ";a[k]=(a[k]||0)+1;return a;},{}); const daysLeft=d=>d?Math.ceil((new Date(d)-new Date())/86400000):null;
-  res.json({ok:true,overview:{totalUsers:users.length,activeUsers:last.activeUsers||0,suspendedUsers:users.filter(u=>u.status!=="active").length,searches:last.searches||0,routes:last.routes||0,pendingRequests:requests.filter(r=>r.status==="pending").length,newFeedback:feedback.filter(f=>f.status==="new"||f.status==="open").length,publishedNews:news.filter(n=>n.published).length,buildings:buildings.length,rooms:rooms.length},usage,requestsByStatus:byStatus,requestsByType:byType,contracts:contracts.map(c=>({...c,daysLeft:daysLeft(c.endDate)})),eventStats:eventStats.map(s=>({...s,title:events.find(e=>e.id===s.eventId)?.name||s.eventId}))});
+  res.json({ok:true,overview:{totalUsers:users.length,activeUsers:last.activeUsers||0,suspendedUsers:users.filter(u=>u.status!=="active").length,searches:last.searches||0,routes:last.routes||0,pendingRequests:requests.filter(r=>r.status==="pending").length,totalFeedback:feedback.length,publishedNews:news.filter(n=>n.published).length,buildings:buildings.length,rooms:rooms.length},usage,requestsByStatus:byStatus,requestsByType:byType,contracts:contracts.map(c=>({...c,daysLeft:daysLeft(c.endDate)})),eventStats:eventStats.map(s=>({...s,title:events.find(e=>e.id===s.eventId)?.name||s.eventId}))});
 }));
 
 const SEARCH_LOG_KINDS = new Set(["search", "route", "navigate"]);

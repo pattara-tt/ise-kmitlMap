@@ -315,9 +315,10 @@ Submission limits (single configuration row in practice).
 | `id` | TEXT | PK |
 | `user_id` | TEXT | FK → `users(id)` ON DELETE SET NULL |
 | `topic` | TEXT | NOT NULL |
-| `detail`, `reply` | TEXT | |
-| `status` | TEXT | NOT NULL, default `'open'` |
+| `detail` | TEXT | |
 | `created_at` | TIMESTAMPTZ | NOT NULL, default `now()` |
+
+Feedback is a plain inbox (who suggested what, with the `FB-…` code). It has no review status and no reply, because nobody processes it.
 
 ## 4. News and events
 
@@ -488,6 +489,9 @@ Not cascading (delete is blocked while referenced): `users.institution_id`, `use
 | 006 | `migrations/006_contracts_usecase_title.sql` | Data only: corrects the `contracts` menu title |
 | 007 | `migrations/007_exec_requests_and_search_stats.sql` | Data only: Exec menu entries `exec_requests`, `search_stats`; `feedback` title |
 | 008 | `migrations/008_search_logs.sql` | New table `search_logs` |
+| 012 | `migrations/012_remove_unused_buildings.sql` | Data only: removes placeholder buildings outside `FAC-05` that have no map data (keeps `BLD-B007` for now) |
+| 013 | `migrations/013_feedback_drop_status.sql` | Drops `feedback.status` and `feedback.reply` |
+| 014 | `migrations/014_remove_test_map_data.sql` | Data only: removes test boundaries (SC9, IT), building `BLD-B007`, their log rows, and reverts the floor-1 plan placement |
 
 Migrations 002a and 002b share a number; run both in either order on an old database.
 

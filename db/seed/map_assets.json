@@ -4,7 +4,7 @@
     "floorId": "FL-SC8-1",
     "name": "ผังชั้น 1 อาคาร Sc8",
     "kind": "floorplan",
-    "file": "__SCIMAP_ASSET_V1__:{\"file\":\"/data/floorplans/Sc8/floor1.svg\",\"placement\":{\"center\":[13.72965260214599,100.78452354810662],\"widthMeters\":100,\"heightMeters\":80,\"rotation\":0}}",
+    "file": "/data/floorplans/Sc8/floor1.svg",
     "status": "published",
     "updatedAt": "2026-08-06"
   },

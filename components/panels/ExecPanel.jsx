@@ -33,7 +33,7 @@ function Overview() {
         { label: "การค้นหาเดือนนี้", value: o.searches.toLocaleString() },
         { label: "การนำทางเดือนนี้", value: o.routes.toLocaleString() },
         { label: "คำร้องรอพิจารณา", value: o.pendingRequests },
-        { label: "ข้อเสนอแนะใหม่", value: o.newFeedback },
+        { label: "ข้อเสนอแนะทั้งหมด", value: o.totalFeedback },
       ]} />
 
       <Card>
@@ -62,43 +62,26 @@ function Overview() {
 function Feedback() {
   const { items } = useCollection("feedback");
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState("all");
-  // ข้อเสนอแนะที่ผู้ใช้ส่งใหม่มีสถานะ "open" ส่วน seed เดิมใช้ "new" — ถือเป็นสถานะ "ยังไม่ได้ตรวจ" เหมือนกัน
-  const isNew = (f) => f.status === "new" || f.status === "open";
+  // ข้อเสนอแนะเป็นกล่องรับเรื่อง: มีแค่ "ใครเสนออะไรมาบ้าง" ไม่มีขั้นตอนพิจารณา จึงไม่มีสถานะ
   const rows = items.filter((f) =>
-    (filter === "all" || (filter === "new" ? isNew(f) : f.status === filter)) &&
-    `${f.topic} ${f.detail} ${f.userName ?? ""}`.toLowerCase().includes(q.toLowerCase())
+    `${f.id} ${f.topic} ${f.detail ?? ""} ${f.userName ?? ""}`.toLowerCase().includes(q.toLowerCase())
   );
 
   return (
     <>
       <UCHead title="ตรวจสอบข้อเสนอแนะจากผู้ใช้งานทั่วไป" desc="ดูข้อเสนอแนะที่ผู้ใช้งานทั่วไปส่งเข้ามา (ดูได้อย่างเดียว)" />
-      <Tiles items={[
-        { label: "ทั้งหมด", value: items.length },
-        { label: "ยังไม่ได้ตรวจ", value: items.filter(isNew).length },
-        { label: "ตรวจแล้ว", value: items.filter((f) => f.status === "reviewed").length },
-      ]} />
-      <SearchBar value={q} onChange={setQ} placeholder="ค้นหาหัวข้อ / เนื้อหา / ผู้ส่ง" />
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-        {[["all", "ทั้งหมด"], ["new", "ยังไม่ได้ตรวจ"], ["reviewed", "ตรวจแล้ว"]].map(([k, label]) => (
-          <button key={k} onClick={() => setFilter(k)}
-            style={{ border: "1px solid", borderColor: filter === k ? "#1A73E8" : "#DADCE0", background: filter === k ? "#E8F0FE" : "#fff",
-              color: filter === k ? "#1A73E8" : "#5F6368", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tiles items={[{ label: "ข้อเสนอแนะทั้งหมด", value: items.length }]} />
+      <SearchBar value={q} onChange={setQ} placeholder="ค้นหารหัส / หัวข้อ / เนื้อหา / ผู้ส่ง" />
 
       {rows.length === 0 ? <div style={{ fontSize: 13, color: "#5F6368" }}>ไม่พบข้อเสนอแนะตามเงื่อนไข</div> : null}
       {rows.map((f) => (
         <Card key={f.id}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
             <b style={{ fontSize: 14.5, color: "#202124" }}>{f.topic}</b>
-            <Status value={f.status} />
+            <Pill>{f.id}</Pill>
           </div>
           <div style={{ fontSize: 13, color: "#3C4043", marginTop: 6 }}>{f.detail}</div>
-          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 8 }}>โดย {f.userName} · {formatDateTime(f.createdAt)} · {f.id}</div>
-          {f.reply ? <div style={{ fontSize: 12.5, color: "#188038", marginTop: 6 }}>ผลการพิจารณา: {f.reply}</div> : null}
+          <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 8 }}>โดย {f.userName ?? "-"} · {formatDateTime(f.createdAt)}</div>
         </Card>
       ))}
     </>
@@ -320,10 +303,17 @@ function changeSummary(r) {
   return parts.length ? parts.join(" · ") : "-";
 }
 
+// หน้านี้แสดงเฉพาะ "การแก้ไขข้อมูลแผนที่" ส่วนบันทึกอื่นในตาราง edit_logs (คำร้อง ข้อเสนอแนะ ข่าว กิจกรรม หมวดหมู่ ประกาศ โควตา) ซ่อนไว้
+// ตัดสินว่าแถวไหนเป็นของแผนที่จาก 2 อย่าง: (1) ช่องอ้างอิงแผนที่ในแถวมีค่า (2) ชื่อ action ลงท้ายด้วยชนิดข้อมูลแผนที่
+// ต้องดู action ด้วยเพราะเมื่อลบข้อมูลต้นทาง ช่องอ้างอิงจะถูกตั้งเป็น NULL แต่ action ยังบอกชนิดได้
+const MAP_LOG_FK = ["nodeId", "edgeId", "floorId", "roomId", "mapBoundaryId", "mapAssetId"];
+const MAP_LOG_ACTION = /^(CREATE|UPDATE|DELETE)_(nodes|edges|floors|rooms|mapBoundaries|mapAssets)$/;
+const isMapLog = (r) => MAP_LOG_FK.some((k) => r[k]) || MAP_LOG_ACTION.test(String(r.action || ""));
+
 function Audit() {
   const { items } = useCollection("editLogs");
   const [q, setQ] = useState("");
-  const rows = items.filter((r) =>
+  const rows = items.filter(isMapLog).filter((r) =>
   [r.id, r.action, actionLabel(r.action), r.targetLabel, r.userName, changeSummary(r)]
     .map((v) => String(v ?? ""))
     .join(" ")
@@ -333,7 +323,7 @@ function Audit() {
 
   return (
     <>
-      <UCHead title="ตรวจสอบบันทึกประวัติการแก้ไขข้อมูลแผนที่" desc="ระบบบันทึกอัตโนมัติทุกครั้งที่มีการเพิ่ม/แก้ไข/ลบข้อมูลแผนผัง ห้อง ชั้น หรือตำแหน่งกิจกรรม" />
+      <UCHead title="ตรวจสอบบันทึกประวัติการแก้ไขข้อมูลแผนที่" desc="ระบบบันทึกอัตโนมัติทุกครั้งที่มีการเพิ่ม/แก้ไข/ลบข้อมูลแผนผัง ห้อง ชั้น จุดนำทาง หรือเส้นทาง" />
       <SearchBar value={q} onChange={setQ} placeholder="ค้นหา ID / ผู้แก้ไข / รายการที่ถูกแก้ไข" />
       <Table
         columns={[
