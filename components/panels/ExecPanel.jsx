@@ -167,8 +167,10 @@ function SearchStats() {
 
   const isSample = data.total === 0;
   const rows = isSample ? SAMPLE_SEARCHES : data.places;
-  const totalSearches = rows.reduce((n, r) => n + r.searches, 0);
-  const totalNav = rows.reduce((n, r) => n + r.navigations, 0);
+  // ตารางตัดเหลือ 20 อันดับ จึงใช้ยอดรวมจาก server (ไม่รวมจากแถวที่แสดง) ยกเว้นข้อมูลตัวอย่าง
+  const totalSearches = isSample ? rows.reduce((n, r) => n + r.searches, 0) : data.totalSearches;
+  const totalNav = isSample ? rows.reduce((n, r) => n + r.navigations, 0) : data.totalNavigations;
+  const placeCount = isSample ? rows.length : data.placeCount;
   const max = Math.max(1, ...rows.map((r) => r.searches));
 
   return (
@@ -192,7 +194,7 @@ function SearchStats() {
       <Tiles items={[
         { label: isSample ? "การค้นหาทั้งหมด (ตัวอย่าง)" : "การค้นหาทั้งหมด", value: totalSearches.toLocaleString() },
         { label: "เริ่มนำทาง", value: totalNav.toLocaleString() },
-        { label: "จำนวนสถานที่ที่ถูกค้นหา", value: rows.length },
+        { label: "จำนวนสถานที่ที่ถูกค้นหา", value: placeCount },
         { label: "ค้นหามากที่สุด", value: rows[0]?.place.split(" (")[0] ?? "-" },
       ]} />
       <Table
@@ -216,6 +218,23 @@ function SearchStats() {
         rows={rows}
         empty="ยังไม่มีประวัติการค้นหา"
       />
+      {!isSample ? (
+        <>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#202124", margin: "20px 0 4px" }}>เส้นทางที่ถูกค้นหา (ต้นทาง → ปลายทาง)</div>
+          <div style={{ fontSize: 12.5, color: "#5F6368", marginBottom: 10 }}>นับเฉพาะครั้งที่ผู้ใช้ระบุต้นทางไว้ตอนค้นหาเส้นทางหรือเริ่มนำทาง</div>
+          <Table
+            columns={[
+              { key: "rank", label: "อันดับ", render: (r) => data.pairs.indexOf(r) + 1 },
+              { key: "from", label: "ต้นทาง" },
+              { key: "to", label: "ปลายทาง" },
+              { key: "requests", label: "ค้นหาเส้นทาง", render: (r) => r.requests.toLocaleString() },
+              { key: "navigations", label: "เริ่มนำทาง", render: (r) => r.navigations.toLocaleString() },
+            ]}
+            rows={data.pairs || []}
+            empty="ยังไม่มีการค้นหาเส้นทางที่ระบุต้นทาง"
+          />
+        </>
+      ) : null}
     </>
   );
 }

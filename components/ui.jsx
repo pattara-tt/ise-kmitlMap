@@ -86,7 +86,8 @@ export function Tiles({ items }) {
     <div className="bdi-stat-tiles">
       {items.map((t) => (
         <div className="bdi-tile" key={t.label}>
-          <b>{t.value}</b>
+          {/* ค่าที่เป็นข้อความยาว (เช่น ชื่อสถานที่/พิกัด) ลดขนาดตามความยาวและตัดบรรทัดได้ ไม่ให้ล้นกรอบ */}
+          <b style={String(t.value).length > 8 ? { fontSize: String(t.value).length > 22 ? 14 : 18, lineHeight: 1.3, overflowWrap: "anywhere" } : undefined}>{t.value}</b>
           <span>{t.label}</span>
         </div>
       ))}

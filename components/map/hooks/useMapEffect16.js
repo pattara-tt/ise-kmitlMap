@@ -154,7 +154,12 @@ export function useMapEffect16({
           const g = c.walkNet ? graphRoute(c.walkNet, c.lastStart, c.lastEnd) : null;
           if (g) { g.index = cands.length; cands.push(g); }
           if (!cands.length) {
-            setRouteData({ error: "กำลังเตรียมข้อมูลแผนที่ ลองใหม่อีกครั้งในสักครู่" });
+            // เครือข่ายทางเดินโหลดเฉพาะในกรอบ DEMO_BBOX — จุดนอกกรอบจะหาเส้นทางไม่ได้เสมอ จึงแจ้งให้ชัดแทนการให้ลองใหม่
+            const inArea = (p) => p[1] >= DEMO_BBOX[0] && p[0] >= DEMO_BBOX[1] && p[1] <= DEMO_BBOX[2] && p[0] <= DEMO_BBOX[3];
+            const outside = [!inArea(c.lastStart) && (c.sName || "จุดเริ่มต้น"), !inArea(c.lastEnd) && (c.eName || "ปลายทาง")].filter(Boolean);
+            setRouteData({ error: outside.length
+              ? `ใช้ไม่ได้: ${outside.join(" และ ")} อยู่นอกพื้นที่ให้บริการนำทาง (ครอบคลุมเฉพาะบริเวณ สจล. และพื้นที่ใกล้เคียง)`
+              : "กำลังเตรียมข้อมูลแผนที่ ลองใหม่อีกครั้งในสักครู่" });
             return [];
           }
           const scored = scoreRoutes(cands, osm || { ok: false, trees: [], green: [], toilets: [], cameras: [] });

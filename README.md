@@ -27,7 +27,10 @@ Frontend ไม่ต่อฐานข้อมูลโดยตรง ทุ�
 | `backend/src/auth.js`, `account.js`, `overpass.js`, `constants.js` | session/idle timeout · ผลข้างเคียงของบัญชี · proxy OSM/walknet · enum ของ role และสถานะ |
 | `db/schema.sql`, `db/SCHEMA.md` | schema ปัจจุบัน (34 ตาราง + view `event_stats_view`) และเอกสารอธิบายทุกตาราง/FK/ER diagram |
 | `db/seed/*.json` | ข้อมูล seed ต้นทาง (หนึ่งไฟล์ต่อตาราง) |
-| `db/seed.sql` | **สร้างอัตโนมัติ** จาก JSON ด้วย `scripts/build-seed.js` อย่าแก้ด้วยมือ |
+| `db/seed-base.sql` | **สร้างอัตโนมัติ** ข้อมูลเริ่มต้น: roles/เมนู/modules/โควตา, สถาบัน/คณะ/หมวดหมู่/ประเภทห้อง และแผนที่ Sc8 ครบ (ตึก, ชั้น, โหนด, เส้นทาง, ห้อง, ขอบเขต, ผังชั้น) ไม่มีผู้ใช้ |
+| `db/seed-demo.sql` | **สร้างอัตโนมัติ** ข้อมูลสาธิต (ผู้ใช้ `1234`, คำร้อง, กิจกรรม ฯลฯ) ต้องโหลดหลัง base |
+| `db/seed.sql` | **สร้างอัตโนมัติ** base + demo รวมไฟล์เดียว |
+(ทั้งสามไฟล์สร้างจาก JSON ด้วย `scripts/build-seed.js` อย่าแก้ด้วยมือ)
 | `db/migrations/` | migration สำหรับ DB ที่มีอยู่แล้ว (ดูหัวข้อ Migration) |
 | `scripts/` | seed builder, test/verify scripts, สคริปต์สำรวจข้อมูล GIS |
 | `public/data/` | dataset GIS แบบ static (ร่มเงา, น้ำท่วม, ไฟถนน ฯลฯ) |
@@ -66,7 +69,18 @@ node scripts/build-seed.js
 docker compose up -d --build  # เปิด http://localhost
 ```
 
-`db/schema.sql` และ `db/seed.sql` ถูกรันอัตโนมัติ **เฉพาะตอนสร้าง volume ครั้งแรก** ถ้าแก้ schema/seed แล้วต้องการเริ่มใหม่ใช้ `docker compose down -v` (ลบข้อมูลใน volume ทั้งหมด)
+`db/schema.sql` และ `db/seed-base.sql` ถูกรันอัตโนมัติ **เฉพาะตอนสร้าง volume ครั้งแรก** (ค่าเริ่มต้นคือ base ไม่มีผู้ใช้ ต้องสมัครเอง หรือโหลด demo เพิ่ม)
+
+| ต้องการ | คำสั่ง |
+|---|---|
+| เริ่มใหม่แบบ base (ค่าเริ่มต้น) | `docker compose down -v && docker compose up -d --build` |
+| เริ่มใหม่แบบครบ base+demo | `docker compose down -v && SEED_FILE=seed.sql docker compose up -d --build` (หรือใส่ `SEED_FILE=seed.sql` ใน `.env`) |
+| เพิ่ม demo ให้ฐานที่รันอยู่ (ไม่ลบข้อมูล) | `docker compose exec -T db psql -U kmitlmap -d kmitlmap < db/seed-demo.sql` |
+| เติม base ซ้ำ (ไม่ทับของเดิม) | `docker compose exec -T db psql -U kmitlmap -d kmitlmap < db/seed-base.sql` |
+| VM (`setup-vm.sh`) | `sudo ./deploy/setup-vm.sh` (base) หรือ `sudo SEED_FILE=seed.sql ./deploy/setup-vm.sh` |
+| mock (ไม่มี DB) | โหลด `db/seed/*.json` ครบทุกตารางเสมอ ไม่เกี่ยวกับ base/demo |
+
+ทุกไฟล์ใช้ `ON CONFLICT DO NOTHING` จึงรันซ้ำได้ ข้อมูลของเดิมไม่ถูกทับ ถ้าแก้ schema/seed แล้วต้องการเริ่มใหม่ใช้ `docker compose down -v` (ลบข้อมูลใน volume ทั้งหมด)
 
 ### PostgreSQL ที่ติดตั้งเอง
 
@@ -128,6 +142,7 @@ DATABASE_URL='postgresql://...' npm run test:pg   # ตรวจ DB ทดสอ
 | `012_remove_unused_buildings.sql` | ลบตึกชั่วคราวนอก `FAC-05` ที่ไม่มีข้อมูลแผนที่ (เก็บ `BLD-B007` ไว้ก่อน) |
 | `013_feedback_drop_status.sql` | ลบคอลัมน์ `status` และ `reply` ของ `feedback` |
 | `014_remove_test_map_data.sql` | ลบข้อมูลแผนที่ที่ใช้ทดสอบ (ขอบเขต SC9/IT, ตึก IT, log ที่เกี่ยวข้อง) และคืนตำแหน่งผังชั้น 1 |
+| `015_remove_sc9_building.sql` | ลบตึก SC9 (`BLD-B001`) และขอบเขตที่ผูกกับตึกนี้ |
 
 ```bash
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/00N_name.sql

@@ -5,3 +5,7 @@ node_modules/
 !.env.example
 !.env.local.example
 *.dump
+
+# session notes
+handoff.md
+SUMMARY.md

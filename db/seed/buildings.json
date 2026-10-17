@@ -50,14 +50,6 @@
     ]
   },
   {
-    "id": "BLD-B001",
-    "facultyId": "FAC-05",
-    "code": "B001",
-    "name": "SC9",
-    "outline": null,
-    "bounds": null
-  },
-  {
     "id": "BLD-B002",
     "facultyId": "FAC-05",
     "code": "B002",

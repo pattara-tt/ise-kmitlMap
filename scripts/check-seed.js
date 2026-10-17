@@ -92,6 +92,15 @@ assert.ok(data.edges.every(edge => edge.fromNodeId !== edge.toNodeId), 'Self-loo
 const labelFk = ['nodeId','edgeId','floorId','roomId','mapBoundaryId','mapAssetId','newsId','eventId','categoryId','broadcastId','requestQuotaId','requestId','feedbackId'];
 assert.ok(data.edit_logs.every(log => labelFk.filter(key => log[key] != null).length <= 1), 'edit_logs target FK must be singular');
 const sql = fs.readFileSync(path.join(root, 'db', 'seed.sql'), 'utf8');
+const baseSql = fs.readFileSync(path.join(root, 'db', 'seed-base.sql'), 'utf8');
+const demoSql = fs.readFileSync(path.join(root, 'db', 'seed-demo.sql'), 'utf8');
+for (const [table, rows] of Object.entries(data)) {
+  if (!rows.length) continue;
+  const stmt = `INSERT INTO ${table} (`;
+  assert.ok(baseSql.includes(stmt) !== demoSql.includes(stmt), `${table}: must be in exactly one of seed-base.sql / seed-demo.sql`);
+}
+assert.ok(!baseSql.includes('INSERT INTO users ('), 'seed-base.sql must not contain users');
+for (const room of data.rooms) assert.ok(find('floors', room.floorId), 'base map rows must be self-contained');
 for (const [table, rows] of Object.entries(data)) {
   if (rows.length) assert.ok(sql.includes(`INSERT INTO ${table} (`), `${table}: generated SQL is stale or missing`);
 }

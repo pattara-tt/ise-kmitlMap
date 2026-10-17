@@ -380,7 +380,17 @@ app.get("/api/stats/searches", requireSession, wrap(async (req, res) => {
     byPlace.set(r.placeLabel, p);
   }
   const places = [...byPlace.values()].sort((a, b) => (b.searches - a.searches) || (b.navigations - a.navigations) || a.place.localeCompare(b.place)).slice(0, 20);
-  res.json({ ok: true, days, total: rows.length, totalSearches: rows.filter((r) => r.kind !== "navigate").length,
+  // คู่ "ต้นทาง → ปลายทาง": นับจาก route/navigate ที่ผู้ใช้กรอกต้นทางไว้เท่านั้น (search ไม่มีต้นทาง)
+  const byPair = new Map();
+  for (const r of rows) {
+    if (r.kind === "search" || !r.fromLabel) continue;
+    const k = `${r.fromLabel}\u0000${r.placeLabel}`;
+    const p = byPair.get(k) || { from: r.fromLabel, to: r.placeLabel, requests: 0, navigations: 0 };
+    if (r.kind === "navigate") p.navigations++; else p.requests++;
+    byPair.set(k, p);
+  }
+  const pairs = [...byPair.values()].sort((a, b) => ((b.requests + b.navigations) - (a.requests + a.navigations)) || (b.navigations - a.navigations) || a.from.localeCompare(b.from)).slice(0, 20);
+  res.json({ ok: true, days, total: rows.length, placeCount: byPlace.size, pairs, totalSearches: rows.filter((r) => r.kind !== "navigate").length,
     totalNavigations: rows.filter((r) => r.kind === "navigate").length, places });
 }));
 

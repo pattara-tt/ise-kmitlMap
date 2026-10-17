@@ -492,6 +492,7 @@ Not cascading (delete is blocked while referenced): `users.institution_id`, `use
 | 012 | `migrations/012_remove_unused_buildings.sql` | Data only: removes placeholder buildings outside `FAC-05` that have no map data (keeps `BLD-B007` for now) |
 | 013 | `migrations/013_feedback_drop_status.sql` | Drops `feedback.status` and `feedback.reply` |
 | 014 | `migrations/014_remove_test_map_data.sql` | Data only: removes test boundaries (SC9, IT), building `BLD-B007`, their log rows, and reverts the floor-1 plan placement |
+| 015 | `migrations/015_remove_sc9_building.sql` | Data only: removes placeholder building `BLD-B001` (SC9) and boundaries tied to it |
 
 Migrations 002a and 002b share a number; run both in either order on an old database.
 

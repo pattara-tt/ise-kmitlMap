@@ -44,7 +44,9 @@ sudo -u postgres psql -d "$DB_NAME" -c "GRANT ALL ON SCHEMA public TO ${DB_USER}
 echo "▶ สร้างตารางและข้อมูลตัวอย่าง"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -f "$SCRIPT_DIR/db/schema.sql"
-sudo -u postgres psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -f "$SCRIPT_DIR/db/seed.sql"
+# SEED_FILE: seed-base.sql (ค่าเริ่มต้น: ข้อมูลอ้างอิง + แผนที่ Sc8), seed.sql (ครบ + บัญชีทดสอบ)
+SEED_FILE="${SEED_FILE:-seed-base.sql}"
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -f "$SCRIPT_DIR/db/$SEED_FILE"
 sudo -u postgres psql -d "$DB_NAME" -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO ${DB_USER};"
 
 echo "▶ ติดตั้งแอปไปที่ ${APP_DIR}"
