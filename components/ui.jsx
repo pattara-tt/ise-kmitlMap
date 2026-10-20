@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -226,6 +227,100 @@ function apiFetch(url, options = {}) {
 
     return res;
   });
+}
+
+/* ===== Real-time notifications ===== */
+export function useRealtimeNotifications(onNotification) {
+  const callbackRef = useRef(onNotification);
+
+  useEffect(() => {
+    callbackRef.current = onNotification;
+  }, [onNotification]);
+
+  useEffect(() => {
+    let stopped = false;
+    let controller = null;
+    let retryTimer = null;
+
+    async function connect() {
+      if (stopped) return;
+
+      const sessionId = localStorage.getItem("kmitlmap:session");
+      if (!sessionId) return;
+
+      controller = new AbortController();
+
+      try {
+        const response = await fetch("/api/notifications/stream", {
+          method: "GET",
+          headers: {
+            "x-session-id": sessionId,
+            Accept: "text/event-stream",
+          },
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        if (!response.ok || !response.body) {
+          if (response.status === 401 || response.status === 403) {
+            return;
+          }
+          throw new Error("เชื่อมต่อระบบแจ้งเตือนไม่สำเร็จ");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (!stopped) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          const messages = buffer.split("\n\n");
+          buffer = messages.pop() || "";
+
+          for (const message of messages) {
+            const dataLine = message
+              .split("\n")
+              .find((line) => line.startsWith("data:"));
+
+            if (!dataLine) continue;
+
+            try {
+              const payload = JSON.parse(
+                dataLine.slice(5).trim()
+              );
+
+              callbackRef.current?.(payload);
+            } catch (error) {
+              console.error(
+                "อ่านข้อมูลแจ้งเตือนไม่สำเร็จ",
+                error
+              );
+            }
+          }
+        }
+      } catch (error) {
+        if (error.name !== "AbortError" && !stopped) {
+          console.warn("Real-time connection disconnected");
+        }
+      } finally {
+        if (!stopped) {
+          retryTimer = setTimeout(connect, 3000);
+        }
+      }
+    }
+
+    connect();
+
+    return () => {
+      stopped = true;
+      controller?.abort();
+      clearTimeout(retryTimer);
+    };
+  }, []);
 }
 
 // ───────── hook เรียกข้อมูลจาก /api/data/[name] ─────────

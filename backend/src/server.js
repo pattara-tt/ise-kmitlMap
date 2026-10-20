@@ -24,7 +24,43 @@ const ACCESS_STATUS = new Set(ACCESS_STATUS_LIST);
 
 function safeUser(user) { if(!user) return user; const { passwordHash, password, ...safe } = user; return safe; }
 
-function requireSession(req,res,next) {
+async function institutionContractBlock(userId) {
+  const user = (await list("users")).find((row) => String(row.id) === String(userId));
+  if (!user || !user.institutionId || user.roleCode === ROLE.MARKETING) return null;
+
+  const [accessRows, contracts] = await Promise.all([list("institutionAccess"), list("contracts")]);
+  const access = accessRows.find((row) => String(row.institutionId) === String(user.institutionId));
+  if (access?.accessStatus && access.accessStatus !== "active") return { reason: access.accessStatus };
+
+  const institutionContracts = contracts.filter((row) => String(row.institutionId) === String(user.institutionId));
+  if (!institutionContracts.length) return null;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  const hasValidContract = institutionContracts.some((contract) => {
+    const endDate = String(contract.endDate || "").slice(0, 10);
+    return contract.status !== "expired" && contract.status !== "suspended" && (!endDate || endDate >= today);
+  });
+  return hasValidContract ? null : { reason: "expired" };
+}
+
+// Server-Sent Events connections keyed by authenticated user id.
+const notificationClients = new Map();
+
+function publishNotification(userId, notification) {
+  const clients = notificationClients.get(String(userId));
+  if (!clients) return;
+  const payload = `data: ${JSON.stringify(notification)}\n\n`;
+  for (const res of clients) {
+    try {
+      if (!res.destroyed && !res.writableEnded) res.write(payload);
+      else clients.delete(res);
+    } catch {
+      clients.delete(res);
+    }
+  }
+  if (clients.size === 0) notificationClients.delete(String(userId));
+}
+
+async function requireSession(req,res,next) {
   const id=req.headers["x-session-id"];
   if(!id) return res.status(401).json({ok:false,error:"กรุณาเข้าสู่ระบบ",code:"NO_SESSION"});
   const session=getSession(id);
@@ -34,7 +70,26 @@ function requireSession(req,res,next) {
     if(reason==="ACCOUNT_SUSPENDED") return res.status(401).json({ok:false,error:"บัญชีถูกระงับการใช้งาน",code:reason});
     return res.status(401).json({ok:false,error:"Session หมดอายุ กรุณาเข้าสู่ระบบใหม่",code:"SESSION_EXPIRED"});
   }
-  req.session=session; next();
+  req.session=session;
+  // Permit only safe reads needed to render the suspension screen. Marketing
+  // remains able to renew contracts; blocked institutions cannot write access data.
+  const isAllowedWhileBlocked = req.method === "GET" && (
+    req.path === "/api/auth/session" || req.path === "/api/data/contracts" ||
+    req.path === "/api/data/institutionAccess" || req.path === "/api/data/institutions"
+  );
+  if (!isAllowedWhileBlocked) {
+    try {
+      const blocked = await institutionContractBlock(session.userId);
+      if (blocked) return res.status(423).json({
+        ok: false, code: "INSTITUTION_CONTRACT_INACTIVE",
+        error: "ระบบถูกหยุดชั่วคราว", accessStatus: blocked.reason,
+      });
+    } catch (error) {
+      console.error("[contract-guard] failed to check institution contract:", error);
+      return res.status(503).json({ ok: false, error: "ไม่สามารถตรวจสอบสิทธิ์สัญญาได้ กรุณาลองใหม่" });
+    }
+  }
+  next();
 }
 
 function guard(req,res){ if(ALLOWED.has(req.params.name)) return true; res.status(404).json({ok:false,error:"ไม่พบชุดข้อมูล"}); return false; }
@@ -75,6 +130,36 @@ app.get("/health",(_req,res)=>res.json({ok:true,backend:"scimap",storage:USE_PG?
 
 app.get("/api/auth/roles", wrap(async(_req,res)=>res.json({ok:true,items:(await list("roles")).map(({code,name})=>({code,name}))})));
 app.get("/api/auth/institutions", wrap(async(_req,res)=>res.json({ok:true,items:(await list("institutions")).map(({id,name,shortName})=>({id,name,shortName}))})));
+
+app.get("/api/notifications/stream", requireSession, (req, res) => {
+  const userId = String(req.session.userId);
+  res.status(200);
+  res.set({
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders?.();
+
+  if (!notificationClients.has(userId)) notificationClients.set(userId, new Set());
+  const clients = notificationClients.get(userId);
+  clients.add(res);
+  res.write(": connected\n\n");
+
+  const heartbeat = setInterval(() => {
+    if (!res.destroyed && !res.writableEnded) res.write(": heartbeat\n\n");
+  }, 25000);
+
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    clients.delete(res);
+    if (clients.size === 0) notificationClients.delete(userId);
+  };
+  // The request itself can emit "close" as soon as its body is consumed;
+  // keep the SSE client registered until the response/socket actually closes.
+  res.on("close", cleanup);
+});
 
 app.get("/api/auth/session", requireSession, wrap(async(req,res)=>{
   const user=(await list("users")).find(u=>u.id===req.session.userId);
@@ -225,7 +310,7 @@ app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
         const [users, institutions] = await Promise.all([list("users"), list("institutions")]);
         const institutionName = new Map(institutions.map((i) => [i.id, i.name]));
         const isAll = !created.audience || created.audience === "all" || created.audience === "ทุกมหาวิทยาลัย";
-        const recipients = users.filter((u) => u.roleCode === ROLE.USER && u.status === "active" &&
+        const recipients = users.filter((u) => u.status === "active" &&
           (isAll || u.institutionId === created.audience || institutionName.get(u.institutionId) === created.audience));
         for (const u of recipients) {
           await insert("notifications", { userId: u.id, broadcastId: created.id, kind: "system",
@@ -237,6 +322,25 @@ app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
       action: `CREATE_${name}`, target: { type: name, id: rowId(name, created), label: labelOf(created) }, after: created });
     return created;
   });
+  // Publish only after the transaction has committed and per-recipient notifications exist.
+  if (name === "broadcasts") {
+    const when = new Date(row.sendAt || row.createdAt || 0).getTime();
+    if (!Number.isFinite(when) || when <= Date.now()) {
+      const recipientNotifications = (await list("notifications"))
+        .filter((n) => String(n.broadcastId) === String(row.id));
+      for (const n of recipientNotifications) {
+        publishNotification(n.userId, {
+          type: "system-broadcast",
+          id: n.id,
+          broadcastId: row.id,
+          title: n.title || row.title,
+          body: n.body || row.body || "",
+          createdAt: n.createdAt || row.sendAt || row.createdAt,
+          audience: row.audience || "ทุกมหาวิทยาลัย",
+        });
+      }
+    }
+  }
   res.json({ ok: true, item: name === "users" ? safeUser(row) : row });
 }));
 

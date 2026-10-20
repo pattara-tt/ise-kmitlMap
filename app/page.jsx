@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AuthPage from "../components/AuthPage";
 import UserApp from "../components/UserApp";
+import SystemNotifications from "../components/SystemNotifications";
 import ExecPanel from "../components/panels/ExecPanel";
 import MarketingPanel from "../components/panels/MarketingPanel";
 import GisPanel from "../components/panels/GisPanel";
@@ -11,7 +12,7 @@ import PrPanel from "../components/panels/PrPanel";
 import RegistrarPanel from "../components/panels/RegistrarPanel";
 import { useRefData, resetRefDataCache } from "../lib/useRefData";
 import { resetMapDataCache } from "../lib/useMapData";
-import { Icon, Logo, MenuIcon } from "../components/ui";
+import { Icon, Logo, MenuIcon, useRealtimeNotifications } from "../components/ui";
 
 const PANELS = { exec: ExecPanel, marketing: MarketingPanel, gis: GisPanel, admin: AdminPanel, pr: PrPanel, registrar: RegistrarPanel };
 
@@ -34,8 +35,64 @@ export default function Page() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [view, setView] = useState("auto");     // auto | mobile | desktop (ผู้ใช้กดเลือกเองได้)
   const [wide, setWide] = useState(false);      // ขนาดจอจริงตอนนี้กว้างพอเป็นจอคอมไหม
+  const [contractGate, setContractGate] = useState({ loading: false, blocked: false });
+  const [notificationToast, setNotificationToast] = useState(null);
   const { useCases, roleLabels } = useRefData(!!user);
+  const handleRealtimeNotification = useCallback((event) => {
+    if (event?.type !== "system-broadcast") return;
+    window.dispatchEvent(new CustomEvent("scimap:collection-changed", { detail: { name: "notifications" } }));
+    window.dispatchEvent(new CustomEvent("scimap:collection-changed", { detail: { name: "broadcasts" } }));
+    setNotificationToast({ title: event.title || "ประกาศแจ้งเตือนจากระบบ", body: event.body || "" });
+  }, []);
+  useRealtimeNotifications(handleRealtimeNotification, !!user && user.roleCode !== "marketing" && !contractGate.blocked);
+  useEffect(() => {
+    if (!notificationToast) return undefined;
+    const timer = setTimeout(() => setNotificationToast(null), 8000);
+    return () => clearTimeout(timer);
+  }, [notificationToast]);
   const sessionHandledRef = useRef(false);
+
+  // ตรวจสอบสิทธิ์สัญญาระดับสถาบันสำหรับทุกบทบาทที่ไม่ใช่ฝ่ายการตลาด
+  // ตรวจซ้ำเป็นระยะเพื่อให้เปิดระบบกลับได้หลังต่อสัญญา โดยไม่ต้อง logout/login
+  useEffect(() => {
+    if (!user || user.roleCode === "marketing" || !user.institutionId) {
+      setContractGate({ loading: false, blocked: false });
+      return;
+    }
+
+    let stopped = false;
+    let timer;
+    const checkContract = async () => {
+      try {
+        const sessionId = localStorage.getItem("kmitlmap:session");
+        if (!sessionId) return;
+        const headers = { "x-session-id": sessionId, "Cache-Control": "no-cache" };
+        const [accessRes, contractRes] = await Promise.all([
+          fetch("/api/data/institutionAccess", { headers, cache: "no-store" }),
+          fetch("/api/data/contracts", { headers, cache: "no-store" }),
+        ]);
+        if (!accessRes.ok || !contractRes.ok) return;
+        const [accessData, contractData] = await Promise.all([accessRes.json(), contractRes.json()]);
+        const access = (accessData.items || []).find((row) => String(row.institutionId) === String(user.institutionId));
+        const contracts = (contractData.items || []).filter((row) => String(row.institutionId) === String(user.institutionId));
+        const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+        const accessBlocked = !!access?.accessStatus && access.accessStatus !== "active";
+        const hasValidContract = contracts.some((contract) => {
+          const endDate = String(contract.endDate || "").slice(0, 10);
+          return contract.status !== "expired" && contract.status !== "suspended" && (!endDate || endDate >= today);
+        });
+        const blocked = accessBlocked || (contracts.length > 0 && !hasValidContract);
+        if (!stopped) setContractGate({ loading: false, blocked, reason: access?.accessStatus || "expired" });
+      } catch (error) {
+        // Network interruption must not erase the user's session or data.
+      }
+    };
+
+    setContractGate({ loading: true, blocked: false });
+    checkContract();
+    timer = setInterval(checkContract, 15000);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [user]);
 
   // ── ติดตามขนาดหน้าจอจริง เพื่อให้โหมด auto ปรับตามความกว้าง/สูงเอง ──
   useEffect(() => {
@@ -123,6 +180,8 @@ export default function Page() {
 
   useEffect(() => {
     if (!user || user.roleCode === "user") { setUc(null); return; }
+    const notificationRoles = ["admin", "gis", "pr", "registrar", "exec"];
+    if (uc === "notifications" && notificationRoles.includes(user.roleCode)) return;
     if (useCases.length && !useCases.some((x) => x.key === uc)) setUc(useCases[0]?.key || null);
   }, [user, useCases, uc]);
 
@@ -249,11 +308,40 @@ export default function Page() {
     );
   }
 
+  if (contractGate.loading && user.roleCode !== "marketing") {
+    return (
+      <div className="bdi-shell" data-view={dataView}>
+        <div className="bdi-main" style={{ display: "grid", placeItems: "center", minHeight: "100dvh", color: "#5F6368" }}>
+          กำลังตรวจสอบสถานะสัญญาของสถาบัน…
+        </div>
+      </div>
+    );
+  }
+
+  if (contractGate.blocked) {
+    return (
+      <div className="bdi-shell" data-view={dataView}>
+        <div className="bdi-main" style={{ display: "grid", placeItems: "center", minHeight: "100dvh", padding: 24 }}>
+          <div style={{ width: "min(560px, 100%)", background: "#fff", border: "1px solid #E8EAED", borderRadius: 18, padding: 28, boxShadow: "0 8px 28px rgba(60,64,67,.12)" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#B06000" }}>ระบบถูกหยุดชั่วคราว</div>
+            <p style={{ color: "#5F6368", lineHeight: 1.8, marginTop: 10 }}>
+              สถาบัน {user.institutionName || user.institutionId} ไม่สามารถใช้งานระบบได้ในขณะนี้ เนื่องจากสัญญาถูกระงับหรือหมดอายุ กรุณาติดต่อฝ่ายการตลาดเพื่อดำเนินการต่อสัญญา
+            </p>
+            <button onClick={logout} style={{ marginTop: 12, border: "1px solid #DADCE0", background: "#fff", borderRadius: 10, padding: "10px 16px", cursor: "pointer" }}>ออกจากระบบ</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const isUser = user.roleCode === "user";
   const ucList = useCases || [];
-  const current = ucList.find((x) => x.key === uc) || ucList[0];
+  const current = ucList.find((x) => x.key === uc) || (uc === "notifications" ? { key: "notifications", title: "แจ้งเตือนจากระบบ" } : ucList[0]);
   const Panel = PANELS[user.roleCode];
-  const menuItems = isUser ? USER_TABS.map((t) => ({ code: t.code, key: t.id, title: t.label, icon: t.icon })) : ucList;
+  const notificationRoles = ["admin", "gis", "pr", "registrar", "exec"];
+  const menuItems = isUser
+    ? USER_TABS.map((t) => ({ code: t.code, key: t.id, title: t.label, icon: t.icon }))
+    : [...ucList, ...(notificationRoles.includes(user.roleCode) ? [{ key: "notifications", title: "แจ้งเตือนจากระบบ", icon: "svg:notification" }] : [])];
   const activeKey = isUser ? tab : uc;
 
   function pickMenu(item) {
@@ -305,6 +393,18 @@ export default function Page() {
       ) : null}
 
       <div className="bdi-main">
+        {notificationToast ? (
+          <div role="status" aria-live="polite" style={{ position: "fixed", top: "calc(16px + env(safe-area-inset-top))", right: 16, zIndex: 5000, width: "min(380px, calc(100vw - 32px))", background: "#fff", border: "1px solid #F3B7B3", borderLeft: "5px solid #D93025", borderRadius: 14, boxShadow: "0 8px 28px rgba(32,33,36,.2)", padding: 14 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <Icon name="notification" size={20} color="#D93025" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b style={{ display: "block", color: "#202124", fontSize: 14 }}>{notificationToast.title}</b>
+                <div style={{ marginTop: 5, color: "#3C4043", fontSize: 13, whiteSpace: "pre-wrap" }}>{notificationToast.body}</div>
+              </div>
+              <button onClick={() => setNotificationToast(null)} aria-label="ปิดการแจ้งเตือน" style={{ border: 0, background: "transparent", cursor: "pointer", fontSize: 18 }}>×</button>
+            </div>
+          </div>
+        ) : null}
         <div className="bdi-topbar">
           {!desktop ? (
             <button onClick={() => setMenuOpen((v) => !v)} style={{ border: "none", background: "none", fontSize: 20, cursor: "pointer", padding: 0, lineHeight: 1, color: "#202124" }}>☰</button>
@@ -332,7 +432,11 @@ export default function Page() {
           <UserApp user={user} tab={tab} onTabChange={setTab} viewMode={view === "auto" ? "auto" : desktop ? "desktop" : "mobile"} />
         ) : (
           <div className="bdi-page">
-            <div className="bdi-page-inner"><Panel uc={current?.key} user={user} onNavigate={setUc} /></div>
+            <div className="bdi-page-inner">
+              {uc === "notifications" && ["admin", "gis", "pr", "registrar", "exec"].includes(user.roleCode)
+                ? <SystemNotifications user={user} />
+                : <Panel uc={current?.key} user={user} onNavigate={setUc} />}
+            </div>
           </div>
         )}
       </div>
