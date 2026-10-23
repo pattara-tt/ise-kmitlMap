@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Btn, Card, Field, Input, Pill, SearchBar, Status, Table, Textarea, Tiles, UCHead, useCollection} from "../../ui";
+import { Btn, Card, Field, Input, Pill, SearchBar, Select, Status, Table, Textarea, Tiles, UCHead, useCollection} from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
 import { contractDaysLeft, contractDisplayStatus, datePart, todayLocalISO } from "./shared";
+import { LEVELS } from "./shared";
+import { useRefData } from "../../../lib/useRefData";
 import { todayKey } from "../../../lib/datetime";
 
 export default function Contracts({
@@ -17,10 +19,22 @@ export default function Contracts({
     items: institutionAccess,
     patch: patchAccess
   } = useCollection("institutionAccess");
+
+  const { modules: moduleRefs } = useRefData(true);
+  const {
+    items: accessModules,
+    create: createAccessModule,
+    destroy: destroyAccessModule
+  } = useCollection("institutionAccessModules");
+
   const [q, setQ] = useState("");
   const [today, setToday] = useState(() => todayLocalISO());
   const [expirySyncError, setExpirySyncError] = useState("");
   const syncingContracts = useRef(new Set());
+
+  const [renewLevel, setRenewLevel] = useState("standard");
+  const [renewSeats, setRenewSeats] = useState(0);
+  const [renewModules, setRenewModules] = useState([]);
 
   // Keep the visible status up to date when the page remains open overnight.
   useEffect(() => {
@@ -391,6 +405,19 @@ export default function Contracts({
     setRenewNote("");
     setConfirmed(false);
     setRenewedDoc(null);
+
+    const access = institutionAccess.find(
+      a => a.institutionId === c.institutionId
+    );
+    setRenewLevel(access?.level || "standard");
+    setRenewSeats(access?.seats ?? 0);
+    setRenewModules(
+      access
+        ? accessModules
+            .filter(m => m.accessId === access.id)
+            .map(m => m.moduleCode)
+        : []
+    );
   }
 
   // =========================================================
@@ -546,10 +573,23 @@ export default function Contracts({
           access.id,
           {
             accessStatus: "active",
+            level: renewLevel,
+            seats: Math.max(0, Number(renewSeats) || 0),
             updatedAt: todayKey()
           },
           user
         );
+
+        const currentModules = accessModules
+          .filter(m => m.accessId === access.id)
+          .map(m => m.moduleCode);
+
+        for (const code of renewModules.filter(c => !currentModules.includes(c))) {
+          await createAccessModule({ accessId: access.id, moduleCode: code }, user);
+        }
+        for (const code of currentModules.filter(c => !renewModules.includes(c))) {
+          await destroyAccessModule({ accessId: access.id, moduleCode: code }, user);
+        }
       }
 
       // =====================================================
@@ -577,7 +617,14 @@ export default function Contracts({
           renewing.institutionName ||
           renewing.institutionId,
 
-        plan: renewing.plan,
+        level: LEVELS[renewLevel] || renewLevel,
+
+        seats: Math.max(0, Number(renewSeats) || 0),
+
+        modules: renewModules.map(
+          code =>
+            moduleRefs.find(m => m.code === code)?.name || code
+        ),
 
         oldEndDate:
           datePart(
@@ -1013,15 +1060,91 @@ export default function Contracts({
                 />
               </Field>
 
-              <Field label="ประเภทการใช้งาน">
-                <Input
-                  value={
-                    renewing.plan ||
-                    "-"
-                  }
-                  disabled
-                />
-              </Field>
+                            {/* ระดับสิทธิ์ + จำนวนบัญชี */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap"
+                }}
+              >
+                <Field label="ระดับสิทธิ์">
+                  <Select
+                    value={renewLevel}
+                    onChange={e => setRenewLevel(e.target.value)}
+                    style={{ width: 170 }}
+                  >
+                    {Object.entries(LEVELS).map(([key, value]) => (
+                      <option key={key} value={key}>
+                        {value}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field label="จำนวนบัญชีสูงสุด">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={renewSeats}
+                    onChange={e => setRenewSeats(e.target.value)}
+                    style={{ width: 130 }}
+                  />
+                </Field>
+              </div>
+
+              {/* โมดูลที่เปิดใช้ (ใช้ div แทน Field เพราะ Field เป็น <label> จะทำให้คลิกปุ่มซ้อน) */}
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#5F6368",
+                  marginBottom: 5,
+                  marginTop: 4
+                }}
+              >
+                โมดูลที่เปิดใช้
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 7,
+                  flexWrap: "wrap",
+                  marginBottom: 9
+                }}
+              >
+                {moduleRefs.map(({ code: key, name: label }) => {
+                  const enabled = renewModules.includes(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() =>
+                        setRenewModules(prev =>
+                          prev.includes(key)
+                            ? prev.filter(m => m !== key)
+                            : [...prev, key]
+                        )
+                      }
+                      style={{
+                        border: "1px solid",
+                        borderColor: enabled ? "#1A73E8" : "#DADCE0",
+                        background: enabled ? "#E8F0FE" : "#fff",
+                        color: enabled ? "#1A73E8" : "#5F6368",
+                        borderRadius: 999,
+                        padding: "5px 12px",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        cursor: "pointer"
+                      }}
+                    >
+                      {enabled ? "✓ " : ""}
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
 
               <Field label="วันสิ้นสุดสัญญาปัจจุบัน">
                 <Input
@@ -1249,7 +1372,7 @@ export default function Contracts({
               "center",
             justifyContent:
               "center",
-            zIndex: 1100,
+            zIndex: 3000,
             padding: 20
           }}
         >
@@ -1257,6 +1380,8 @@ export default function Contracts({
             style={{
               width: "100%",
               maxWidth: 650,
+              maxHeight: "90vh",
+              overflowY: "auto",
               background: "#fff",
               borderRadius: 16,
               boxShadow:
@@ -1362,13 +1487,60 @@ export default function Contracts({
                     "-"}
                 </span>
 
-                <b>
-                  ประเภทการใช้งาน
-                </b>
+                <b>ระดับสิทธิ์</b>
                 <span>
-                  {renewedDoc.plan ||
-                    "-"}
+                  {renewedDoc.level || "-"}
                 </span>
+
+                <b>จำนวนบัญชีสูงสุด</b>
+                <span>
+                  {renewedDoc.seats != null
+                    ? renewedDoc.seats.toLocaleString("th-TH") + " บัญชี"
+                    : "-"}
+                </span>
+
+                <b>โมดูลที่เปิดใช้</b>
+                <div>
+                  {renewedDoc.modules?.length ? (
+                    <>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#5F6368",
+                          marginBottom: 6
+                        }}
+                      >
+                        เปิดใช้ {renewedDoc.modules.length} โมดูล
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6
+                        }}
+                      >
+                        {renewedDoc.modules.map(name => (
+                          <span
+                            key={name}
+                            style={{
+                              background: "#F8F9FA",
+                              border: "1px solid #DADCE0",
+                              borderRadius: 8,
+                              padding: "3px 10px",
+                              fontSize: 12.5,
+                              color: "#202124"
+                            }}
+                          >
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <span>ไม่มี</span>
+                  )}
+                </div>
 
                 <b>
                   วันสิ้นสุดเดิม

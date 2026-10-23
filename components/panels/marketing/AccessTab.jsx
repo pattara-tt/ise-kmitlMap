@@ -179,7 +179,7 @@ export default function Access({
               try {
                 await patch(row.id, {
                   level: e.target.value,
-                  uupdatedAt: new Date().toISOString()
+                  updatedAt: new Date().toISOString()
                 }, user);
               } catch (error) {
                 alert(error?.message || "อัปเดตระดับสิทธิ์ไม่สำเร็จ");
