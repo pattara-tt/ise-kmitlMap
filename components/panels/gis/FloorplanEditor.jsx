@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { SC8_CENTER, SC8_OUTLINE } from "../../mapConfig";
+import { SC8_CENTER} from "../../mapConfig";
 import OSMMap from "./OSMMap";
 import { DEFAULT_PLACEMENT } from "./shared";
 import { InfoRow, editorButton, smallEditorButton } from "./EditorShared";
@@ -21,6 +21,7 @@ function FloorplanEditor({
   placement,
   mode = "placement",
   embedded = false,
+  outline =[],
   nodes = [],            // node ของชั้นนี้ ใช้แสดงหมุดเดิม
   edges = [],            // edge ที่จะวาดเป็นเส้น
   nodeById,              // Map(id -> node) สำหรับหาปลายทางของ edge
@@ -186,7 +187,7 @@ function FloorplanEditor({
      Building outline (โหมดจัดวางแปลน)
   ----------------------------------------- */
 
-  const outlinePoints = isPin || embedded ? [] : SC8_OUTLINE?.map(([lat, lon]) => {
+  const outlinePoints = isPin || embedded || !outline?.length ? [] : outline.map(([lat, lon]) => {
     const p = latLonToPixel(lat, lon);
     return {
       x: p.x - centerPixel.x + window.innerWidth / 2,

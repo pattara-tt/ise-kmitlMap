@@ -10,6 +10,29 @@ import BoundaryPointEditor from "./BoundaryPointEditor";
    UC7 : ขอบเขตแผนผัง
 ========================================================= */
 
+const LEVEL = { campus: 0, zone: 1, building: 2 };
+
+const geomPts = b =>
+  Array.isArray(b?.geometry) && Array.isArray(b.geometry[0])
+    ? b.geometry.map(p => [Number(p[0]), Number(p[1])]).filter(([a, c]) => Number.isFinite(a) && Number.isFinite(c))
+    : [];
+
+const centroidOf = pts => [
+  pts.reduce((s, p) => s + p[0], 0) / pts.length,
+  pts.reduce((s, p) => s + p[1], 0) / pts.length,
+];
+
+// จุด [lat, lon] อยู่ในรูปหลายเหลี่ยม poly ([[lat, lon], ...]) หรือไม่
+const pointInPolygon = ([lat, lon], poly) => {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [yi, xi] = poly[i];
+    const [yj, xj] = poly[j];
+    if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+
 function Boundary({
   user
 }) {
@@ -21,6 +44,9 @@ function Boundary({
 
   const buildingsApi = useCollection("buildings");
   const floorsApi = useCollection("floors");
+  const assetsApi = useCollection("mapAssets");
+  const nodesApi = useCollection("nodes");
+  const edgesApi = useCollection("edges");
   const facultiesApi = useCollection("faculties");
   const faculties = facultiesApi.items || [];
   const [facultyForm, setFacultyForm] = useState({ id: "", name: "" });
@@ -188,6 +214,13 @@ function Boundary({
   // ==========================================
   // บันทึก Boundary ใหม่
   // ==========================================
+  // หาขอบเขตเดิมของอาคารเดียวกัน (จับคู่ด้วย buildingId, ถ้าข้อมูลเก่าไม่มี buildingId ใช้ชื่อ)
+  const findBuildingBoundary = (id, name) =>
+    items.find(it =>
+      it.type === "building" && it.status !== "deleted" &&
+      ((id && it.buildingId === id) || (!it.buildingId && name && it.name === name))
+    );
+
   const saveNewBoundary = async points => {
     if (points.length < 3) {
       return alert("กรุณาเลือกอย่างน้อย 3 จุด");
@@ -198,6 +231,15 @@ function Boundary({
     let buildingId = form.type === "building" && form.buildingId !== "custom" ? form.buildingId : null;
 
     if (form.type === "building") {
+      // เช็กก่อนสร้างอะไรลงระบบ ว่าอาคารนี้มีขอบเขตอยู่แล้วหรือไม่
+      const cleanCode = String(form.buildingCode || "").trim().toUpperCase();
+      const preId = buildingId ||
+        buildings.find(b => String(b.code || "").toUpperCase() === cleanCode)?.id || null;
+      if (
+        findBuildingBoundary(preId, nameValue) &&
+        !confirm("อาคารนี้มีขอบเขตอยู่แล้ว ต้องการแทนที่ด้วยพิกัดและข้อมูลใหม่หรือไม่?\n(แผนผังที่เพิ่มไว้ยังอยู่)")
+      ) return;
+
       try {
         buildingId = await ensureBuildingWithFloors({
           buildingId,
@@ -212,10 +254,10 @@ function Boundary({
       }
     }
 
-    const newBoundary = {
-      id: `MB-${Date.now()}`,
+    const existing = form.type === "building" ? findBuildingBoundary(buildingId, nameValue) : null;
+
+    const payload = {
       name: nameValue,
-      type: form.type,
       // map_boundaries เชื่อมกับอาคารผ่าน building_id เท่านั้น
       // คณะจะอ่านผ่าน buildings.faculty_id ไม่ต้องบันทึก facultyId ซ้ำ
       buildingId,
@@ -223,9 +265,15 @@ function Boundary({
       geometry: points,
       updatedAt: new Date().toISOString(),
       status: "draft",
-      selectableForAssets: form.type=="building"
+      selectableForAssets: form.type == "building"
     };
-    await create(newBoundary, user);
+
+    if (existing) {
+      await patch(existing.id, payload, user); // แทนที่ของเดิม คง id เดิมไว้
+    } else {
+      await create({ id: `MB-${Date.now()}`, type: form.type, ...payload }, user);
+    }
+
     setForm({
       name: "custom",
       customName: "",
@@ -271,6 +319,78 @@ function Boundary({
       await saveNewBoundary(points);
     }
   };
+  // ==========================================
+  // ลบขอบเขต: ลบทุกอย่างที่อยู่ภายในตามลำดับชั้น
+  // วิทยาเขต → โซน → อาคาร → แผนผัง → node → edge
+  // ==========================================
+  const collectCascade = r => {
+    const alive = items.filter(it => it.status !== "deleted");
+    const rPts = geomPts(r);
+
+    // ลูกที่อยู่ภายใน: ระดับต่ำกว่า และจุดกึ่งกลางอยู่ในพื้นที่ของ r
+    const children = rPts.length >= 3
+      ? alive.filter(it => {
+          if (it.id === r.id || !(LEVEL[it.type] > LEVEL[r.type])) return false;
+          const pts = geomPts(it);
+          return pts.length >= 3 && pointInPolygon(centroidOf(pts), rPts);
+        })
+      : [];
+
+    const targets = [r, ...children];
+    const targetIds = new Set(targets.map(t => t.id));
+
+    // อาคารที่ต้องลบข้อมูลภายใน (ข้ามถ้ามีขอบเขตอื่นของอาคารเดียวกันที่ไม่ได้ถูกลบอยู่)
+    const buildingIds = new Set();
+    for (const t of targets) {
+      if (t.type !== "building" || !t.buildingId) continue;
+      const stillUsed = alive.some(it => !targetIds.has(it.id) && it.type === "building" && it.buildingId === t.buildingId);
+      if (!stillUsed) buildingIds.add(t.buildingId);
+    }
+
+    const floorIds = new Set();
+    for (const f of floorsApi.items || []) if (buildingIds.has(f.buildingId)) floorIds.add(f.id);
+    for (const b of buildings) if (buildingIds.has(b.id)) (b.floors || []).forEach(f => floorIds.add(f.id));
+
+    const assets = (assetsApi.items || []).filter(a => floorIds.has(a.floorId)); // ทุก status
+    const nodes = (nodesApi.items || []).filter(n => floorIds.has(n.floorId));
+    const nodeIds = new Set(nodes.map(n => n.id));
+    const edges = (edgesApi.items || []).filter(e => nodeIds.has(e.fromNodeId) || nodeIds.has(e.toNodeId));
+
+    // ลบลูกก่อนแม่: อาคาร → โซน → ตัวที่กดลบ
+    const ordered = [...children].sort((a, b) => LEVEL[b.type] - LEVEL[a.type]).concat(r);
+    return { children, ordered, assets, nodes, edges };
+  };
+
+  const deleteBoundary = async r => {
+    const { children, ordered, assets, nodes, edges } = collectCascade(r);
+
+    const names = children.slice(0, 8).map(c => `• ${c.name} (${c.type})`).join("\n");
+    const lines = [
+      `ลบ "${r.name}" จะลบสิ่งที่อยู่ภายในทั้งหมดด้วย:`,
+      children.length ? `\nขอบเขตย่อย ${children.length} รายการ\n${names}${children.length > 8 ? "\n• ..." : ""}` : "",
+      `\nแผนผัง ${assets.length} รายการ (ทุกสถานะ)`,
+      `จุด (node) ${nodes.length} รายการ`,
+      `เส้นเชื่อม (edge) ${edges.length} รายการ`,
+      "\nกู้คืนไม่ได้ ยืนยันการลบหรือไม่?",
+    ].filter(Boolean).join("\n");
+    if (!confirm(lines)) return;
+
+    const failed = [];
+    const safeDestroy = async (api, row, label) => {
+      try { await api.destroy(row.id, user); }
+      catch (err) { failed.push(`${label} ${row.name || row.nodeKey || row.id}: ${err?.message || "ลบไม่สำเร็จ"}`); }
+    };
+
+    // ลบจากล่างขึ้นบน: edge → node → แผนผัง → ขอบเขต
+    for (const e of edges) await safeDestroy(edgesApi, e, "edge");
+    for (const n of nodes) await safeDestroy(nodesApi, n, "node");
+    for (const a of assets) await safeDestroy(assetsApi, a, "แผนผัง");
+    for (const b of ordered) await safeDestroy({ destroy }, b, "ขอบเขต");
+
+    clearMapDataCache();
+    if (failed.length) alert(`ลบไม่สำเร็จ ${failed.length} รายการ:\n${failed.slice(0, 8).join("\n")}`);
+  };
+
   return <>
       <UCHead title="จัดการขอบเขตสถานที่" desc="กำหนดขอบเขตวิทยาเขต/อาคาร โดยเลือกจุดบนแผนที่เพื่อบันทึกพิกัด Latitude และ Longitude" />
 
@@ -279,13 +399,17 @@ function Boundary({
         <div style={{ marginTop: 6, fontSize: 11.5, color: "#B45309" }}>
           ID ต้องคงเดิม ห้ามเปลี่ยน เพราะกระทบข้อมูลที่เชื่อมโยง
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1fr) minmax(180px, 2fr)", gap: 8, marginTop: 10 }}>
-          <Field label="ID คณะ">
-            <Input value={facultyForm.id} onChange={e => setFacultyForm(f => ({ ...f, id: e.target.value }))} placeholder="เช่น FAC-11" />
-          </Field>
-          <Field label="ชื่อคณะ">
-            <Input value={facultyForm.name} onChange={e => setFacultyForm(f => ({ ...f, name: e.target.value }))} placeholder="ระบุชื่อคณะ" />
-          </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 8, marginTop: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <Field label="ID คณะ">
+              <Input value={facultyForm.id} onChange={e => setFacultyForm(f => ({ ...f, id: e.target.value }))} placeholder="เช่น FAC-11" />
+            </Field>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <Field label="ชื่อคณะ">
+              <Input value={facultyForm.name} onChange={e => setFacultyForm(f => ({ ...f, name: e.target.value }))} placeholder="ระบุชื่อคณะ" />
+            </Field>
+          </div>
         </div>
         <Btn onClick={saveFaculty} disabled={savingFaculty}>{savingFaculty ? "กำลังบันทึก..." : "เพิ่มคณะ"}</Btn>
         <div style={{ marginTop: 10, fontSize: 12, color: "#5F6368" }}>
@@ -491,7 +615,7 @@ function Boundary({
                   </Btn>}
 
                 {/* Delete */}
-                <Btn kind="danger" onClick={() => confirm("ลบขอบเขตนี้?") && destroy(r.id, user)}>
+                <Btn kind="danger" onClick={() => deleteBoundary(r)}>
                   ลบ
                 </Btn>
               </div>

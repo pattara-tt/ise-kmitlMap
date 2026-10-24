@@ -91,14 +91,14 @@ INSERT INTO role_use_cases ("role_code", "use_case_key") VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users ("id", "email", "name", "username", "role_code", "institution_id", "status", "created_at", "password_hash") VALUES
-  ('U001', 'exec@kmitl.ac.th', 'จินยอง ปาร์ค', 'exec', 'exec', 'INST-01', 'active', '2026-01-12', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U002', 'marketing@kmitl.ac.th', 'อาฮยาน จาง', 'marketing', 'marketing', 'INST-01', 'active', '2026-01-12', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U003', 'gis@kmitl.ac.th', 'ธานอส ซัง', 'gis', 'gis', 'INST-01', 'active', '2026-01-15', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U004', 'admin@kmitl.ac.th', 'แตงโม จัง', 'admin', 'admin', 'INST-01', 'active', '2026-01-10', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U005', 'pr@kmitl.ac.th', 'อาสะ คิม', 'pr', 'pr', 'INST-01', 'active', '2026-02-02', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U006', 'registrar@kmitl.ac.th', 'ฮง ไลเคน', 'registrar', 'registrar', 'INST-01', 'active', '2026-02-02', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U007', 'student@kmitl.ac.th', 'อินฟินิตี้ ไอ', 'student', 'user', 'INST-01', 'active', '2026-03-01', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U008', 'somchai@kmitl.ac.th', 'สมชาย ตั้งมั่น', 'somchai', 'user', 'INST-01', 'active', '2026-03-04', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK')
+  ('U001', 'exec@kmitl.ac.th', 'จินยอง ปาร์ค', 'exec', 'exec', 'INST-01', 'active', '2026-01-12', '$2b$10$HS7M4C/c4WwLYlrw4SJLYufruSX0JRNC9wqdX/z540EZhlleU5y6m'),
+  ('U002', 'marketing@kmitl.ac.th', 'อาฮยาน จาง', 'marketing', 'marketing', 'INST-01', 'active', '2026-01-12', '$2b$10$HS7M4C/c4WwLYlrw4SJLYufruSX0JRNC9wqdX/z540EZhlleU5y6m'),
+  ('U003', 'gis@kmitl.ac.th', 'ธานอส ซัง', 'gis', 'gis', 'INST-01', 'active', '2026-01-15', '$2b$10$HS7M4C/c4WwLYlrw4SJLYufruSX0JRNC9wqdX/z540EZhlleU5y6m'),
+  ('U004', 'admin@kmitl.ac.th', 'แตงโม จัง', 'admin', 'admin', 'INST-01', 'active', '2026-01-10', '$2b$10$HS7M4C/c4WwLYlrw4SJLYufruSX0JRNC9wqdX/z540EZhlleU5y6m'),
+  ('U005', 'pr@kmitl.ac.th', 'อาสะ คิม', 'pr', 'pr', 'INST-01', 'active', '2026-02-02', '$2b$10$HS7M4C/c4WwLYlrw4SJLYufruSX0JRNC9wqdX/z540EZhlleU5y6m'),
+  ('U006', 'registrar@kmitl.ac.th', 'ฮง ไลเคน', 'registrar', 'registrar', 'INST-01', 'active', '2026-02-02', '$2b$10$HS7M4C/c4WwLYlrw4SJLYufruSX0JRNC9wqdX/z540EZhlleU5y6m'),
+  ('U007', 'student@kmitl.ac.th', 'อินฟินิตี้ ไอ', 'student', 'user', 'INST-01', 'active', '2026-03-01', '$2b$10$HS7M4C/c4WwLYlrw4SJLYufruSX0JRNC9wqdX/z540EZhlleU5y6m'),
+  ('U008', 'somchai@kmitl.ac.th', 'สมชาย ตั้งมั่น', 'somchai', 'user', 'INST-01', 'active', '2026-03-04', '$2b$10$HS7M4C/c4WwLYlrw4SJLYufruSX0JRNC9wqdX/z540EZhlleU5y6m')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO faculties ("id", "name") VALUES
