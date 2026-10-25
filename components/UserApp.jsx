@@ -241,7 +241,7 @@ function NotificationsPage({ user }) {
                 </div>
                 <b style={{ display: "block", fontSize: 14.5, color: "#202124", marginTop: 6 }}>{f.title}</b>
                 <div style={{ fontSize: 13, color: "#3C4043", marginTop: 4 }}>{f.body}</div>
-                <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 7 }}>{f.meta}{f.at ? ` · ${f.at}` : ""}</div>
+                <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 7 }}>{f.meta}{f.at ? ` · ${formatDateTime(f.at)}` : ""}</div>
               </div>
             </div>
           </Card>
@@ -267,48 +267,89 @@ function parseJson(value) {
 }
 
 // ขั้นตอนที่ผู้ใช้เห็น (ไม่เปิดเผยว่าใครเป็นผู้ดำเนินการ)
-function requestSteps(status) {
+function requestSteps(status, times = {}) {
+  // คำร้องที่ถูกยกเลิก (เช่น บัญชีถูกระงับ) ไม่เคยผ่านขั้นตรวจสอบ → ไม่แสดงขั้น "รอการตรวจสอบ" คั่น
+  if (status === "cancelled") {
+    return [
+      { label: "ส่งคำร้องแล้ว", state: "done", time: times.submitted },
+      { label: "ยกเลิกแล้ว", state: "fail", time: times.decided },
+    ];
+  }
   const decided = status === "approved" || status === "rejected";
   const inProgress = status === "pending" || status === "processing";
   const failed = status === "rejected" || status === "cancelled";
   return [
-    { label: "ส่งคำร้องแล้ว", state: "done" },
+    { label: "ส่งคำร้องแล้ว", state: "done", time: times.submitted },
     {
-      label: status === "processing" ? "รับเรื่องแล้ว กำลังดำเนินการ" : "รอการตรวจสอบ",
+      label: status === "processing"
+        ? "รับเรื่องแล้ว กำลังดำเนินการ"
+        : decided && times.received ? "รับเรื่องและตรวจสอบแล้ว" : "รอการตรวจสอบ",
       state: decided ? "done" : inProgress ? "active" : "idle",
+      time: times.received,
     },
     {
       label: status === "approved" ? "อนุมัติ" : status === "rejected" ? "ไม่อนุมัติ" : status === "cancelled" ? "ยกเลิกแล้ว" : "ผลการพิจารณา",
       state: decided || status === "cancelled" ? (failed ? "fail" : "done") : "idle",
+      time: times.decided,
     },
   ];
 }
 
-function RequestProgress({ status }) {
+// เวลาของแต่ละขั้น: ดึงจากประวัติการเปลี่ยนสถานะ (editLogs) ถ้าไม่มีใช้ reviewedAt ของคำร้องแทน
+function requestStepTimes(request, editLogs = []) {
+  const FINAL = ["approved", "rejected", "cancelled"];
+  const stages = [];
+  for (const l of editLogs) {
+    if (l.requestId !== request.id) continue;
+    const st = parseJson(l.after)?.status;
+    if (st) stages.push({ status: st, at: l.editedAt });
+  }
+  stages.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const received = stages.find((s) => s.status === "processing")?.at
+    || (request.status === "processing" ? request.reviewedAt : null);
+  const decidedAt = [...stages].reverse().find((s) => FINAL.includes(s.status))?.at
+    || request.reviewedAt;
+  return {
+    submitted: request.createdAt,
+    received: received || null,
+    decided: FINAL.includes(request.status) ? decidedAt || null : null,
+  };
+}
+
+function RequestProgress({ status, times }) {
   const COLORS = { done: "#188038", active: "#1A73E8", fail: "#D93025", idle: "#BDC1C6" };
-  const MARK = { done: "✓", active: "●", fail: "✕", idle: "" };
-  const steps = requestSteps(status);
+  const MARK = { done: "✓", fail: "✕", idle: "" };
+  const steps = requestSteps(status, times);
   return (
     <div>
       {steps.map((s, i) => (
         <div key={i} style={{ display: "flex", gap: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{
-              width: 22, height: 22, borderRadius: "50%", boxSizing: "border-box",
+              width: 22, height: 22, borderRadius: "50%", boxSizing: "border-box", flex: "none",
               background: s.state === "idle" ? "#fff" : COLORS[s.state],
               border: `2px solid ${COLORS[s.state]}`,
-              color: "#fff", fontSize: 11, fontWeight: 800,
+              color: "#fff", fontSize: 11, fontWeight: 800, lineHeight: 1,
               display: "flex", alignItems: "center", justifyContent: "center",
-            }}>{MARK[s.state]}</div>
+            }}>
+              {s.state === "active"
+                ? <span style={{ display: "block", width: 8, height: 8, borderRadius: "50%", background: "#fff" }} />
+                : MARK[s.state]}
+            </div>
             {i < steps.length - 1 && (
               <div style={{ width: 2, flex: 1, minHeight: 16, background: s.state === "done" ? COLORS.done : "#E8EAED" }} />
             )}
           </div>
-          <div style={{
-            paddingBottom: 14, fontSize: 13.5,
-            fontWeight: s.state === "active" ? 800 : 600,
-            color: s.state === "idle" ? "#80868B" : "#202124",
-          }}>{s.label}</div>
+          <div style={{ paddingBottom: 14 }}>
+            <div style={{
+              fontSize: 13.5,
+              fontWeight: s.state === "active" ? 800 : 600,
+              color: s.state === "idle" ? "#80868B" : "#202124",
+            }}>{s.label}</div>
+            {s.time ? (
+              <div style={{ fontSize: 11.5, color: "#80868B", marginTop: 2 }}>{formatDateTime(s.time)}</div>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>
@@ -320,6 +361,8 @@ function MyRequestDetail({ request, roomName, onBack }) {
   const after = parseJson(request.after);
   const approved = request.status === "approved";
   const decided = approved || request.status === "rejected";
+  const { items: editLogs } = useCollection("editLogs");
+  const times = requestStepTimes(request, editLogs);
 
   // แสดงเฉพาะช่องที่ขอแก้และค่าต่างจากของเดิม
   const changes = Object.keys(REQUEST_FIELD_LABEL).filter((k) =>
@@ -353,10 +396,7 @@ function MyRequestDetail({ request, roomName, onBack }) {
 
         <Card>
           <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12 }}>ความคืบหน้า</div>
-          <RequestProgress status={request.status} />
-          {decided && request.reviewedAt ? (
-            <div style={{ fontSize: 12, color: "#5F6368" }}>พิจารณาเมื่อ {formatDateTime(request.reviewedAt)}</div>
-          ) : null}
+          <RequestProgress status={request.status} times={times} />
           {decided && request.note ? (
             <div style={{ fontSize: 13, color: "#3C4043", marginTop: 8 }}>
               <b>เหตุผลจากผู้พิจารณา:</b> {request.note}
@@ -423,7 +463,7 @@ function MyRequests({ user }) {
   return (
     <div className="bdi-page">
       <div className="bdi-page-inner">
-      <UCHead title="คำร้องของฉัน" desc="ตรวจสอบสถานะและรายละเอียดคำร้องที่คุณส่ง" />
+      <UCHead title="การส่งคำร้อง" desc="ตรวจสอบสถานะและรายละเอียดคำร้องที่คุณส่ง" />
         <div style={{
           display: "inline-block",
           fontSize: 12,
@@ -445,30 +485,26 @@ function MyRequests({ user }) {
           <div style={{ fontSize: 13, color: "#5F6368" }}>ยังไม่มีคำร้อง</div>
         ) : (
           mine.map((r) => (
-            <div
-              key={r.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => setSelectedId(r.id)}
-              onKeyDown={(e) => { if (e.key === "Enter") setSelectedId(r.id); }}
-              style={{ cursor: "pointer" }}
-            >
-              <Card>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                  <b style={{ fontSize: 14 }}>{r.subject || r.type}</b>
-                  <Status value={r.status} />
-                </div>
+            <Card key={r.id}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <b style={{ fontSize: 14 }}>{r.subject || r.type}</b>
+                <Status value={r.status} />
+              </div>
 
-                <div style={{ fontSize: 13, marginTop: 6 }}>{r.detail}</div>
+              <div style={{ fontSize: 13, marginTop: 6 }}>{r.detail}</div>
 
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7 }}>
-                  <span style={{ fontSize: 11.5, color: "#5F6368" }}>
-                    {formatDateTime(r.createdAt)} · {r.id}
-                  </span>
-                  <span style={{ fontSize: 12, color: "#1A73E8", fontWeight: 700 }}>ดูรายละเอียด ›</span>
-                </div>
-              </Card>
-            </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 7 }}>
+                <span style={{ fontSize: 11.5, color: "#5F6368" }}>
+                  {formatDateTime(r.createdAt)} · {r.id}
+                </span>
+                <button
+                  type="button"
+                  className="sm-plain"
+                  onClick={() => setSelectedId(r.id)}
+                  style={{ background: "none", border: 0, padding: "4px 0 4px 8px", cursor: "pointer", fontSize: 12, color: "#1A73E8", fontWeight: 700 }}
+                >ดูรายละเอียด ›</button>
+              </div>
+            </Card>
           ))
         )}
       </div>

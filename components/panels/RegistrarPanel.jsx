@@ -27,6 +27,34 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
   const [panelFullscreen, setPanelFullscreen] = useState(false); // แผงจัดการด้านล่างขยายเต็มจอหรือไม่
   const [panelCollapsed, setPanelCollapsed] = useState(false); // ย่อแผงจัดการลงเหลือแค่แถบเล็ก ๆ (เห็นแต่ผังชั้น) กดแถบเพื่อขยายกลับ
 
+  const containerRef = useRef(null);
+  const [panelHeight, setPanelHeight] = useState(null); // px ของแผงด้านล่าง; null = ค่าเริ่มต้น (สัดส่วน 40%)
+  const MIN_PANEL = 140; // แผงเตี้ยสุด
+  const MIN_MAP = 120; // แผนที่ต้องเหลืออย่างน้อยเท่านี้
+
+  const startResize = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const box = containerRef.current?.getBoundingClientRect();
+    if (!box) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+
+    const onMove = (ev) => {
+      const next = box.bottom - ev.clientY; // ความสูงแผง = ขอบล่างของคอนเทนเนอร์ - ตำแหน่งเมาส์/นิ้ว
+      const max = Math.max(MIN_PANEL, box.height - MIN_MAP);
+      setPanelHeight(Math.min(max, Math.max(MIN_PANEL, next)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
   // ผู้ใช้อาจสลับ sub-flow ข้อมูลห้อง <-> ข้อมูลชั้น โดยที่ RegistrarPanel component เดิมไม่ remount
   // ต้องซิงก์ activeTab ตาม uc ทุกครั้งที่ prop เปลี่ยน ไม่ใช่แค่ตอน mount ครั้งแรก
   useEffect(() => {
@@ -46,9 +74,9 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
   const panelOpen = !!selected.building;
 
   return (
-    <div className="bdi-fullpanel" style={{ display: "flex", flexDirection: "column", width: "100%", minHeight: 420, overflow: "hidden" }}>
+    <div ref={containerRef} className="bdi-fullpanel" style={{ display: "flex", flexDirection: "column", width: "100%", minHeight: 420, overflow: "hidden" }}>
       {/* 1. แผนที่ — อยู่ด้านบนเสมอ ย่อพื้นที่ลงเมื่อแผงจัดการเปิด แทนที่จะให้แผงลอยทับแผนที่ */}
-      <div style={{ position: "relative", flex: panelOpen && !panelCollapsed ? "0 0 60%" : "1 1 auto", minHeight: 0 }}>
+      <div style={{ position: "relative", flex: "1 1 auto", minHeight: 0 }}>
         <BuildingFloorPicker
           building={selected.building}
           floor={selected.floor}
@@ -97,7 +125,9 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
           style={{
             ...(panelFullscreen
               ? { position: "fixed", inset: 0, zIndex: 5000 }
-              : { flex: "1 1 40%", minHeight: 0 }),
+              : panelHeight != null
+                ? { flex: `0 0 ${panelHeight}px`, minHeight: 0 }
+                : { flex: "0 0 40%", minHeight: 0 }),
             background: "#ffffff",
             borderTop: "1px solid #DADCE0",
             boxShadow: "0 -4px 20px rgba(0,0,0,0.08)",
@@ -106,6 +136,24 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
             overflow: "hidden",
           }}
         >
+          {!panelFullscreen && (
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="ลากเพื่อปรับความสูงแผง (ดับเบิลคลิกเพื่อรีเซ็ต)"
+              title="ลากเพื่อปรับความสูง · ดับเบิลคลิกเพื่อรีเซ็ต"
+              onPointerDown={startResize}
+              onDoubleClick={() => setPanelHeight(null)}
+              style={{
+                flex: "0 0 auto", height: 14, marginTop: -7, marginBottom: -7,
+                position: "relative", zIndex: 2, cursor: "row-resize", touchAction: "none",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <div style={{ width: 44, height: 4, borderRadius: 999, background: "#C4C7CC" }} />
+            </div>
+          )}
+
           {/* Header แถบควบคุม Panel */}
           <div style={{ padding: "12px 20px", borderBottom: "1px solid #DADCE0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F8F9FA", flex: "0 0 auto" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

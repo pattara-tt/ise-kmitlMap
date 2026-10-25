@@ -152,6 +152,7 @@ export default function BuildingFloorPicker({
         label: base?.label || current?.label || `ชั้น ${floorId}`,
         svg: asset.file,
         mapAssetId: asset.id,
+        placement: asset.placement || null,
       });
     }
 

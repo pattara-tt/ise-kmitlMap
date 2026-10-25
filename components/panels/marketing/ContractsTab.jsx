@@ -986,7 +986,7 @@ export default function Contracts({
               "center",
             justifyContent:
               "center",
-            zIndex: 1000,
+            zIndex: 5000,
             padding: 20
           }}
         >
@@ -1676,7 +1676,7 @@ export default function Contracts({
             justifyContent:
               "center",
             padding: 20,
-            zIndex: 1000
+            zIndex: 5000
           }}
         >
           <Card
@@ -1808,7 +1808,7 @@ export default function Contracts({
             justifyContent:
               "center",
             padding: 20,
-            zIndex: 1001
+            zIndex: 5001
           }}
         >
           <Card

@@ -381,7 +381,7 @@ export function useNavigationActions({
     const f = sFrom.trim(),
       t = sTo.trim();
     setSearchOpen(false);
-    setRouteSheetOpen(false);
+    setRouteSheetOpen(true);
     if (t) logSearch({ kind: "route", placeLabel: t, fromLabel: f });
     try {
       apiRef?.current?.showRoutes?.(f || null, t || null);

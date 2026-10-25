@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { placementToBounds } from "../../map/mapViewHelpers";
 
 export function useBuildingEffect09({ b, ctx, curFloor, mergedFloors, openKey }) {
   useEffect(() => {const {L,map,} = ctx.current;
@@ -16,17 +17,17 @@ export function useBuildingEffect09({ b, ctx, curFloor, mergedFloors, openKey })
           String(f.id) === String(curFloor)
       );
   
-    if (floorData?.svg) {
-      ctx.current.floorOverlay =L.imageOverlay(
-          floorData.svg,
-          b.bounds,
-          {
-            opacity: 0.96,
-            interactive: false,
-            pane:"regFloorPane",
-          }
-        ).addTo(map);
-    }
+    if (!floorData?.svg) return;
+
+    // มี placement ใช้ placement ไม่มีใช้ bounds เดิมของอาคาร
+    const targetBounds = placementToBounds(floorData.placement, b.bounds);
+    if (!targetBounds) return;
+
+    ctx.current.floorOverlay = L.imageOverlay(floorData.svg, targetBounds, {
+      opacity: 0.96,
+      interactive: false,
+      pane: "regFloorPane",
+    }).addTo(map);
   }, [
     openKey,
     curFloor,

@@ -31,7 +31,6 @@ export default function MapViewLayout({ view }) {
         .bdi-mapwrap button,.bdi-mapwrap input{font:inherit}
         .bdi-mapwrap .leaflet-control-zoom{border:0!important;box-shadow:0 1px 6px rgba(60,64,67,.30)!important;border-radius:8px!important;overflow:hidden;margin-right:12px!important;margin-bottom:140px!important}
         .bdi-mapwrap .leaflet-control-zoom a{width:40px!important;height:40px!important;line-height:40px!important;color:#3C4043!important;background:#fff!important;border-color:#E8EAED!important;font-size:22px!important;font-weight:400!important}
-        .bdi-mapwrap .leaflet-control-zoom a:hover{background:#F8F9FA!important}
         .bdi-mapwrap .leaflet-control-attribution{background:rgba(255,255,255,.9)!important;color:#5F6368!important;font-size:10px!important}
         .bdi-mapwrap .leaflet-popup-content-wrapper{border-radius:12px;box-shadow:0 3px 14px rgba(60,64,67,.30);color:#202124;padding:3px}
         .bdi-mapwrap .leaflet-popup-content{margin:12px 14px;line-height:1.45}
@@ -46,22 +45,26 @@ export default function MapViewLayout({ view }) {
         .gm-search-open{padding:12px;border-radius:12px;background:#fff}
         .gm-search-head{display:flex;align-items:center;gap:9px;margin-bottom:9px}
         .gm-back{width:36px;height:36px;border:0;background:transparent;border-radius:50%;cursor:pointer;color:#5F6368;font-size:21px}
-        .gm-back:hover{background:#F1F3F4}
         .gm-route-inputs{position:relative;display:flex;flex-direction:column;gap:8px;padding-left:32px}
         .gm-route-inputs:before{content:"";position:absolute;left:14px;top:18px;bottom:18px;border-left:2px dotted #9AA0A6}
         .gm-origin-dot,.gm-dest-pin{position:absolute;left:8px;z-index:2;background:#fff}
         .gm-origin-dot{top:14px;width:12px;height:12px;border:3px solid #5F6368;border-radius:50%}
         .gm-dest-pin{bottom:13px;width:12px;height:12px;background:#D93025;border-radius:50% 50% 50% 0;transform:rotate(-45deg)}
         .gm-search-action{width:100%;margin-top:10px;height:42px;border-radius:21px}
+        .gm-search-bar-active{cursor:text;transition:box-shadow .18s ease}
+        .gm-search-bar-active:focus-within{box-shadow:0 0 0 1.5px #8AB4F8,0 0 0 4px rgba(26,115,232,.10)}
+        .bdi-mapwrap .gm-search-input{flex:1;min-width:0;height:100%;border:0!important;background:transparent;box-shadow:none!important;outline:none!important;padding:0;font-size:16px;color:#3C4043;text-overflow:ellipsis}
+        .bdi-mapwrap .gm-search-input::placeholder{color:#5F6368;opacity:1}
+        .gm-search-clear{flex:0 0 auto;border:0;padding:0;line-height:1;cursor:pointer}
+        .gm-search-bar-active .gm-avatar,.gm-search-bar-active .gm-menu{flex:0 0 auto}
+        .gm-search-clear{width:28px;height:28px;margin-right:-3px;border-radius:50%;background:transparent;color:#5F6368;font-size:15px}
         .wb-nav{top:0;left:0;right:0;border-radius:0 0 16px 16px;background:#1A73E8;color:#fff;padding:calc(32px + env(safe-area-inset-top)) 16px 14px;z-index:1700;border:none;box-shadow:0 3px 12px rgba(26,115,232,.35)}
         .wb-startbtn{display:block;width:100%;margin-top:8px;padding:12px;border:none;border-radius:22px;background:#1A73E8;color:#fff;font-weight:600;font-size:14px;cursor:pointer;box-shadow:none;transition:background .15s ease}
-        .wb-startbtn:hover,.bdi-btn:hover{background:#1967D2}
         .bdi-btn{border:0;border-radius:20px;background:#1A73E8;color:#fff;padding:10px 18px;font-weight:600;cursor:pointer;transition:background .15s ease}
         .bdi-btn.ghost{background:#E8F0FE!important;color:#1967D2!important}
         .bdi-chips{position:absolute;left:12px;right:8px;z-index:1250;display:flex;gap:8px;overflow-x:auto;padding:2px 4px 8px 0;scrollbar-width:none}
         .bdi-chips::-webkit-scrollbar{display:none}
         .bdi-chip{height:36px;white-space:nowrap;border:1px solid #DADCE0;border-radius:18px;background:#fff;color:#3C4043;padding:0 14px;font-size:13px;font-weight:500;box-shadow:0 1px 3px rgba(60,64,67,.20);cursor:pointer;display:flex;align-items:center;gap:6px}
-        .bdi-chip:hover{background:#F8F9FA}
         .bdi-chip.on{background:#E8F0FE;border-color:#AECBFA;color:#1967D2}
         .gm-bottom-stack{position:absolute;left:0!important;right:0!important;bottom:0!important;z-index:1300!important;gap:0!important}
         .gm-route-sheet{max-height:44vh!important;border-radius:18px 18px 0 0!important;padding:0 16px calc(12px + env(safe-area-inset-bottom))!important;overflow:auto!important;box-shadow:0 -2px 12px rgba(60,64,67,.22)!important;background:linear-gradient(135deg,#dbeafe 0%,#e0e7ff 52%,#ede9fe 100%)!important}
@@ -79,7 +82,16 @@ export default function MapViewLayout({ view }) {
         .bdi-wc{padding:1px 3px;border-radius:4px;font-size:9px;font-weight:800}
         .bdi-esc{width:14px;height:16px;border-radius:3px;position:relative}
         .gm-fab{position:absolute;right:12px;z-index:1200;width:48px;height:48px;border-radius:50%;border:0;background:#fff;color:#1A73E8;font-size:22px;display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgba(60,64,67,.3)}
-        .gm-fab:hover{background:#F8F9FA}
+        /* บนจอคอมชีตอยู่ซ้ายล่าง ปุ่ม ◎ อยู่ขวา จึงไม่ต้องหนีชีต */
+        .bdi-mapwrap.force-desktop .gm-fab{bottom:120px!important}
+        @media(min-width:760px){.bdi-mapwrap.auto .gm-fab{bottom:120px!important}}
+        /* hover เฉพาะอุปกรณ์ที่มีเมาส์ จอสัมผัสไม่ค้างหลังแตะ สีพื้นมาจาก globals.css */
+        @media (hover:hover) and (pointer:fine){
+          .bdi-mapwrap .leaflet-control-zoom a:hover{background:#E8F0FE!important;color:#1A73E8!important}
+          .gm-back:hover{color:#1A73E8}
+          .bdi-chip:hover{border-color:#AECBFA;color:#1967D2}
+          .gm-fab:hover{color:#1967D2}
+        }
         input:focus{border-color:#1A73E8!important;box-shadow:0 0 0 1px #1A73E8!important;outline:none!important}
         @media(min-width:760px){
           .bdi-mapwrap.auto .wb-search{right:auto;width:392px}

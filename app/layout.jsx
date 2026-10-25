@@ -1,7 +1,9 @@
 import "./globals.css";
+import { DialogHost } from "../components/dialogs";
+import InteractionFx from "../components/InteractionFx";
 
 export const metadata = {
-  title: "SciMap — แผนที่และนำทางภายในมหาวิทยาลัย",
+  title: "SciMap",
   description: "ระบบแผนที่และนำทางภายในสถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง",
 };
 
@@ -31,6 +33,8 @@ export default function RootLayout({ children }) {
       </head>
       <body style={{ margin: 0, fontFamily: FONT, fontSize: 15.5 }}>
         {children}
+         <DialogHost />
+         <InteractionFx />
       </body>
     </html>
   );

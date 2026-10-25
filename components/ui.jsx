@@ -1,12 +1,7 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, } from "react";
+export { notify, askConfirm } from "./dialogs";
 
 // ───────── ชุด UI กลางของคอนโซล SciMap (ธีมขาวแบบ Google Maps) ─────────
 
@@ -88,7 +83,7 @@ export function Tiles({ items }) {
       {items.map((t) => (
         <div className="bdi-tile" key={t.label}>
           {/* ค่าที่เป็นข้อความยาว (เช่น ชื่อสถานที่/พิกัด) ลดขนาดตามความยาวและตัดบรรทัดได้ ไม่ให้ล้นกรอบ */}
-          <b style={String(t.value).length > 8 ? { fontSize: String(t.value).length > 22 ? 14 : 18, lineHeight: 1.3, overflowWrap: "anywhere" } : undefined}>{t.value}</b>
+          <b style={String(t.value).length > 8 ? { fontSize: String(t.value).length > 22 ? 14 : String(t.value).length > 14 ? 18 : 22, lineHeight: 1.3, overflowWrap: "anywhere" } : undefined}>{t.value}</b>
           <span>{t.label}</span>
         </div>
       ))}
@@ -120,7 +115,7 @@ export function Select({ children, ...props }) {
   return <select {...props} style={{ ...inputStyle, ...(props.style || {}) }}>{children}</select>;
 }
 
-export function Btn({ children, kind = "primary", ...props }) {
+export function Btn({ children, kind = "primary", className, ...props }) {
   const base = { padding: "9px 15px", borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: "pointer", border: "1px solid transparent" };
   const kinds = {
     primary: { background: "#1A73E8", color: "#fff" },
@@ -128,7 +123,7 @@ export function Btn({ children, kind = "primary", ...props }) {
     danger: { background: "#fff", color: "#D93025", border: "1px solid #F5C2C0" },
     ok: { background: "#188038", color: "#fff" },
   };
-  return <button {...props} style={{ ...base, ...kinds[kind], opacity: props.disabled ? 0.55 : 1, ...(props.style || {}) }}>{children}</button>;
+  return <button {...props} className={["sm-b", `sm-b-${kind}`, className].filter(Boolean).join(" ")} style={{ ...base, ...kinds[kind], opacity: props.disabled ? 0.55 : 1, ...(props.style || {}) }}>{children}</button>;
 }
 
 export function Pill({ children, color = "#5F6368", bg = "#F1F3F4" }) {
@@ -220,6 +215,7 @@ function apiFetch(url, options = {}) {
             message:
               data?.error ||
               "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่",
+              sessionId,
           },
         })
       );
@@ -407,7 +403,9 @@ export function useCollection(name) {
   }, [name, reload]);
 
   const destroy = useCallback(async (id, actor) => {
-    await apiFetch(`/api/data/${name}?id=${encodeURIComponent(id)}&actor=${encodeURIComponent(actor?.name || "")}`, { method: "DELETE" });
+    // composite key (เช่น eventInterest) เป็น object → ต้องแปลงเป็น JSON ให้ backend อ่านได้
+    const idParam = id !== null && typeof id === "object" ? JSON.stringify(id) : id;
+    await apiFetch(`/api/data/${name}?id=${encodeURIComponent(idParam)}&actor=${encodeURIComponent(actor?.name || "")}`, { method: "DELETE" });
     await reload();
     window.dispatchEvent(new CustomEvent("scimap:collection-changed", { detail: { name } }));
   }, [name, reload]);
@@ -443,11 +441,11 @@ export function BarChart({ data, labelKey, valueKey, color = "#1A73E8" }) {
 // ───────── แท็บหน้าย่อยภายในเมนูเดียว ─────────
 export function Tabs({ tabs, value, onChange }) {
   return (
-    <div className="bdi-tabs" style={{ display: "flex", gap: 6, borderBottom: "1px solid #DADCE0", marginBottom: 14, overflowX: "auto", overflowY: "hidden" }}>
+    <div className="bdi-tabs" role="tablist" style={{ display: "flex", gap: 6, borderBottom: "1px solid #DADCE0", marginBottom: 14, overflowX: "auto", overflowY: "hidden" }}>
       {tabs.map((t) => {
         const on = t.key === value;
         return (
-          <button key={t.key} onClick={() => onChange(t.key)}
+          <button key={t.key} role="tab" aria-selected={on} onClick={() => onChange(t.key)}
             style={{ flex: "none", border: "none", background: "transparent", cursor: "pointer", padding: "10px 14px",
               fontSize: 13.5, fontWeight: on ? 800 : 600, color: on ? "#1A73E8" : "#5F6368",
               borderBottom: on ? "3px solid #1A73E8" : "3px solid transparent", marginBottom: -1, whiteSpace: "nowrap" }}>
@@ -469,7 +467,9 @@ export function Modal({ open, title, onClose, children, footer, width = 620 }) {
         style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: width, boxShadow: "0 12px 40px rgba(0,0,0,.35)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 18px", borderBottom: "1px solid #E8EAED" }}>
           <b style={{ fontSize: 15.5, color: "#202124" }}>{title}</b>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 20, cursor: "pointer", color: "#5F6368", lineHeight: 1 }}>×</button>
+          <button className="round-btn" onClick={onClose} aria-label="ปิด" title="ปิด">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
+          </button>
         </div>
         <div style={{ padding: 18, maxHeight: "68vh", overflowY: "auto" }}>{children}</div>
         {footer ? <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", padding: "12px 18px", borderTop: "1px solid #E8EAED", background: "#F8F9FA" }}>{footer}</div> : null}

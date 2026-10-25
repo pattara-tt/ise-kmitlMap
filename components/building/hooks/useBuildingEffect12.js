@@ -94,7 +94,7 @@ export function useBuildingEffect12({
           offset: [0, -8,],
           maxWidth: 260,
           autoPan: true,
-          keepInView: true,
+          // keepInView: true,
           autoPanPaddingTopLeft: [120,30,],
           autoPanPaddingBottomRight: [50,40],
         }

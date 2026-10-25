@@ -22,7 +22,18 @@ const ALLOWED = new Set([
 ]);
 const ACCESS_STATUS = new Set(ACCESS_STATUS_LIST);
 
-function safeUser(user) { if(!user) return user; const { passwordHash, password, ...safe } = user; return safe; }
+function safeUser(user) {
+  if (!user) return user;
+
+  const {
+    passwordHash,
+    password,
+    username,
+    ...safe
+  } = user;
+
+  return safe;
+}
 
 async function institutionContractBlock(userId) {
   const user = (await list("users")).find((row) => String(row.id) === String(userId));
@@ -66,8 +77,8 @@ async function requireSession(req,res,next) {
   const session=getSession(id);
   if(!session){
     const reason=getRevokedReason(id);
-    if(reason==="ROLE_CHANGED") return res.status(401).json({ok:false,error:"มีการเปลี่ยนบทบาทในระบบ กรุณาเข้าสู่ระบบใหม่อีกครั้ง",code:reason});
-    if(reason==="ACCOUNT_SUSPENDED") return res.status(401).json({ok:false,error:"บัญชีถูกระงับการใช้งาน",code:reason});
+    if(reason==="ROLE_CHANGED") return res.status(401).json({ok:false,error:"มีการเปลี่ยนแปลงบทบาทของคุณ กรุณาเข้าสู่ระบบใหม่อีกครั้ง",code:reason});
+    if(reason==="ACCOUNT_SUSPENDED") return res.status(401).json({ok:false,error:"บัญชีของคุณถูกระงับการใช้งาน โปรดติดต่อผู้ดูแลระบบ",code:reason});
     return res.status(401).json({ok:false,error:"Session หมดอายุ กรุณาเข้าสู่ระบบใหม่",code:"SESSION_EXPIRED"});
   }
   req.session=session;
@@ -181,26 +192,27 @@ app.post("/api/auth", wrap(async(req,res)=>{
     if(users.some(u=>u.email.toLowerCase()===email)) return res.status(409).json({ok:false,error:"อีเมลนี้ถูกใช้ลงทะเบียนแล้ว"});
 
     const roleCode = ROLE.USER;
-    const institutions=await list("institutions"); 
-    const defaultInst=institutions.find(i=>i.shortName==="KMITL") || institutions[0];
+    const institutions=await list("institutions");
+    const institution=institutions.find(i=>i.id===body.institutionId);
+    if(!institution) return res.status(400).json({ok:false,error:"กรุณาเลือกสถาบันจากรายการ"});
     const user=await insert(
       "users", 
       { email, passwordHash:await bcrypt.hash(pw,10), 
         name:body.name||email.split("@")[0], 
-        username:body.username||email.split("@")[0], 
         roleCode, 
-        institutionId:body.institutionId||defaultInst?.id||null, 
+        institutionId:institution.id, 
         status:"active", 
         createdAt:new Date().toISOString() 
       }
     );
 
-    return res.json({ok:true,user:safeUser(user)});
+    const sessionId=createSession(user,roleCode,[]);
+    return res.json({ok:true,user:safeUser(user),sessionId});
   }
   if(body.action==="login"){
     const user=users.find(u=>u.email.toLowerCase()===email);
     if(!user || !user.passwordHash || !(await bcrypt.compare(String(body.password||""),user.passwordHash))) return res.status(401).json({ok:false,error:"อีเมลหรือรหัสผ่านไม่ถูกต้อง"});
-    if(user.status!=="active") return res.status(403).json({ok:false,error:"บัญชีถูกระงับการใช้งาน"});
+    if(user.status!=="active") return res.status(403).json({ok:false,error:"บัญชีของคุณถูกระงับการใช้งาน โปรดติดต่อผู้ดูแลระบบ"});
     const sessionId=createSession(user,user.roleCode,[]); return res.json({ok:true,user:safeUser(user),sessionId});
   }
   return res.status(400).json({ok:false,error:"action ไม่ถูกต้อง"});

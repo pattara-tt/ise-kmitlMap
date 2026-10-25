@@ -48,6 +48,7 @@ export function usePlaceActions({
     if (!finalCoord || !Number.isFinite(finalCoord[0]) || !Number.isFinite(finalCoord[1])) {
       return;
     }
+    setEventCard(null); // ปิดการ์ดกิจกรรมที่เปิดค้างอยู่ก่อนเปิดการ์ดสถานที่
     ctx.current.placeCache[name] = {
       coord: routeNode ? [routeNode.lon, routeNode.lat] : finalCoord,
       markerCoord: finalCoord,
@@ -104,7 +105,9 @@ export function usePlaceActions({
         ...prev,
         // Indoor nodes already have an authoritative room/hover name.
         // Do not let generic place-info overwrite it (this caused "บ้านห่อง").
-        name: prev.nodeId ? prev.name : (info?.title || prev.name),
+        // ใช้ชื่อที่ผู้ใช้เลือกเสมอ ไม่ให้ผลค้นหาจากภายนอกมาเปลี่ยนชื่อบนการ์ด
+        name: prev.name,
+        // name: prev.nodeId ? prev.name : (info?.title || prev.name),
         loading: false,
         extract: prev.extract || info?.extract || null,
         image: prev.image || info?.image || null,

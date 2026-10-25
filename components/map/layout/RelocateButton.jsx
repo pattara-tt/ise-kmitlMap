@@ -57,6 +57,6 @@ export default function RelocateButton({ view }) {
     maximumAge: 5000
   });
 }} className="gm-fab" style={{
-  bottom: routeData ? routeSheetOpen ? "58%" : 224 : 120
+  bottom: routeData ? "calc(var(--route-sheet-h, 64px) + 16px)" : 120
 }}>◎</button> : null;
 }

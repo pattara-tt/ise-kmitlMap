@@ -79,15 +79,7 @@ export default function SearchPanel({ view }) {
       }} placeholder="ปลายทาง" />
               </div>
               <button className="bdi-btn gm-search-action" onClick={doSearch}>ค้นหาเส้นทาง</button>
-            </div> : <div className="gm-search-open">
-              <div className="gm-search-head">
-                <button className="gm-back" onClick={() => setSearchOpen(false)} aria-label="ย้อนกลับ">←</button>
-                <div style={{
-        fontSize: 16,
-        fontWeight: 600
-      }}>ค้นหาสถานที่</div>
-              </div>
-              <SearchPlaceInput value={searchQuery} onChange={setSearchQuery} events={events} categories={categories} rooms={rooms} searchNodes={indoorSearchNodes} placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ" onPick={async sg => {
+              </div> : <SearchPlaceInput variant="bar" autoFocus value={searchQuery} onChange={setSearchQuery} events={events} categories={categories} rooms={rooms} searchNodes={indoorSearchNodes} placeholder="ค้นหาตึก ห้อง กิจกรรม ลิฟต์ หรือห้องน้ำ" leading={<span className="gm-avatar">P</span>} onBlurEmpty={() => setSearchOpen(false)} trailing={searchQuery ? <button type="button" className="gm-menu gm-search-clear" onMouseDown={e => e.preventDefault()} onClick={() => setSearchQuery("")} aria-label="ล้างข้อความ">✕</button> : <span className="gm-menu">⌕</span>} onPick={async sg => {
       if (sg.src === "event" && sg.event) {
         // Count a deliberate event result selection, not every keystroke.
         try {
@@ -108,7 +100,6 @@ export default function SearchPanel({ view }) {
         } catch (e) {}
       }
       openPlaceCard(sg.name, coord, sg);
-    }} />
-            </div>}
+    }} />}
         </div> : null;
 }

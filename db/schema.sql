@@ -30,7 +30,6 @@ CREATE TABLE users (
   email          TEXT NOT NULL UNIQUE,
   password_hash  TEXT NOT NULL,
   name           TEXT NOT NULL,
-  username       TEXT UNIQUE,
   role_code      TEXT NOT NULL DEFAULT 'user' REFERENCES roles(code) ON UPDATE CASCADE,
   institution_id TEXT REFERENCES institutions(id),
   status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),

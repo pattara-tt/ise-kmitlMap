@@ -26,7 +26,9 @@ export default function EventPage() {
         <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#E8F0FE", border: "2px solid #AECBFA", display: "grid", placeItems: "center", fontSize: 26 }}>👤</div>
         <div>
           <div style={{ fontWeight: 800, fontSize: 16, color: "#202124" }}>{user.name}</div>
-          <div style={{ fontSize: 12.5, color: "#5F6368" }}>@{user.username}</div>
+          <div style={{ fontSize: 12.5, color: "#5F6368" }}>
+            {user.email}
+          </div>
         </div>
       </div>
 

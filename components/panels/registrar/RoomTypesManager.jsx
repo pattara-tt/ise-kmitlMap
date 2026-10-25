@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { useCollection } from "../../ui";
+import { Icon, useCollection, askConfirm } from "../../ui";
 import DOMPurify from "dompurify";
 
 const EMOJI_GROUPS = [
@@ -31,7 +31,10 @@ function EmojiPicker({onSelect, onClose}) {
   const aliases = q ? Object.entries(EMOJI_ALIASES).filter(([name])=>name.includes(q)).flatMap(([,emojis])=>emojis.split(" ")) : [];
   const selected = q ? [...new Set([...aliases, ...EMOJI_GROUPS.filter(group=>group.label.toLowerCase().includes(q)).flatMap(group=>group.emojis.split(" ")), ...EMOJI_GROUPS.flatMap(group=>group.emojis.split(" ")).filter(icon=>icon.includes(query.trim()))])] : EMOJI_GROUPS[category].emojis.split(" ");
   return <div ref={boxRef} role="dialog" aria-label="เลือก Emoji" style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:80,width:"min(350px, 90vw)",padding:12,border:"1px solid #DADCE0",borderRadius:14,background:"white",boxShadow:"0 12px 35px #20212430"}}>
-    <input aria-label="ค้นหา Emoji" autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="🔍 Search / ค้นหา" style={{...field,padding:"9px 12px",borderRadius:22,marginBottom:10}} />
+    <div style={{ position: "relative", marginBottom: 10 }}>
+      <Icon name="search" size={16} color="#5F6368" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+      <input aria-label="ค้นหา Emoji" autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search / ค้นหา" style={{...field,padding:"9px 12px 9px 34px",borderRadius:22}} />
+    </div>
     <div style={{display:"flex",gap:1,overflowX:"auto",borderBottom:"1px solid #E8EAED",paddingBottom:5,marginBottom:8}}>
       {EMOJI_GROUPS.map((group,index)=><button key={group.label} type="button" title={group.label} aria-label={group.label} onClick={()=>{setCategory(index);setQuery("");}} style={{border:0,borderBottom:category===index&&!q?"3px solid #1A73E8":"3px solid transparent",background:"transparent",padding:"6px 8px",fontSize:20,cursor:"pointer"}}>{group.tab}</button>)}
     </div>
@@ -170,7 +173,7 @@ export default function RoomTypesManager({user}) {
     finally {setBusy(false);}
   };
   const remove=async(item)=>{
-    if(!window.confirm(`ลบประเภทห้อง “${item.name}” ใช่หรือไม่? ห้องที่ตั้งประเภทนี้ไว้เดิมจะยังมีชื่อประเภทเก็บอยู่`))return;
+    if(!(await askConfirm(`ลบประเภทห้อง “${item.name}” ใช่หรือไม่? ห้องที่ตั้งประเภทนี้ไว้เดิมจะยังมีชื่อประเภทเก็บอยู่`, { title: "ลบประเภทห้อง", confirmLabel: "ลบ", tone: "danger" })))return;
     setBusy(true);setError("");setSuccess("");
     try {await destroy(item.id,user); if(editing===item.id)reset();setSuccess("ลบประเภทห้องเรียบร้อย");}
     catch(ex){setError(ex?.message||"ลบไม่สำเร็จ");}

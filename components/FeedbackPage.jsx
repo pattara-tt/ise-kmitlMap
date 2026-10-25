@@ -153,25 +153,21 @@ export default function FeedbackPage({ user }) {
           <div style={{ fontSize: 13, color: "#5F6368" }}>ยังไม่มีข้อเสนอแนะที่ส่งไป</div>
         ) : (
           mine.map((f) => (
-            <div
-              key={f.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => setSelectedId(f.id)}
-              onKeyDown={(e) => { if (e.key === "Enter") setSelectedId(f.id); }}
-              style={{ cursor: "pointer" }}
-            >
-              <Card>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                  <b style={{ fontSize: 14 }}>{f.topic}</b>
-                </div>
-                <div style={{ fontSize: 13, marginTop: 6 }}>{f.detail}</div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7 }}>
-                  <span style={{ fontSize: 11.5, color: "#5F6368" }}>{formatDateTime(f.createdAt)} · {f.id}</span>
-                  <span style={{ fontSize: 12, color: "#1A73E8", fontWeight: 700 }}>ดูรายละเอียด ›</span>
-                </div>
-              </Card>
-            </div>
+            <Card key={f.id}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <b style={{ fontSize: 14 }}>{f.topic}</b>
+              </div>
+              <div style={{ fontSize: 13, marginTop: 6 }}>{f.detail}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 7 }}>
+                <span style={{ fontSize: 11.5, color: "#5F6368" }}>{formatDateTime(f.createdAt)} · {f.id}</span>
+                <button
+                  type="button"
+                  className="sm-plain"
+                  onClick={() => setSelectedId(f.id)}
+                  style={{ background: "none", border: 0, padding: "4px 0 4px 8px", cursor: "pointer", fontSize: 12, color: "#1A73E8", fontWeight: 700 }}
+                >ดูรายละเอียด ›</button>
+              </div>
+            </Card>
           ))
         )}
       </div>

@@ -44,7 +44,13 @@ export default function MapPicker({ value, onChange, height = 300 }) {
   const onChangeRef = useRef(onChange);
   useEffect(() => { valueRef.current = value; onChangeRef.current = onChange; });
 
-  const emit = (patch) => onChangeRef.current?.({ ...(valueRef.current || {}), ...patch });
+  const emit = (patch) => {
+    // อัปเดต valueRef ทันที ไม่รอ render — เพราะ pick() เรียก emit ต่อกันหลายรอบ (ชื่อ แล้วค่อยพิกัด)
+    // ถ้ารอบหลังอ่านค่าเก่า จะเขียนทับชื่อที่เพิ่งเลือก
+    const next = { ...(valueRef.current || {}), ...patch };
+    valueRef.current = next;
+    onChangeRef.current?.(next);
+  };
 
   // ── สร้างแผนที่ครั้งเดียว ──
   useEffect(() => {
@@ -262,7 +268,7 @@ export default function MapPicker({ value, onChange, height = 300 }) {
       </div>
 
       {/* ── กรอบแผนที่ + แถบเลือกชั้น ── */}
-      <div style={{ position: "relative", border: "1px solid #DADCE0", borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ position: "relative", isolation: "isolate", border: "1px solid #DADCE0", borderRadius: 12, overflow: "hidden" }}>
         <div ref={elRef} style={{ height, width: "100%" }} />
 
         <div style={{ position: "absolute", top: 10, right: 10, zIndex: 500, display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>

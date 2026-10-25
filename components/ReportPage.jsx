@@ -8,12 +8,14 @@ import { todayKey as getToday } from "../lib/datetime";
 function getAutoUserName() {
   if (typeof window === "undefined") return "";
 
-  return (
-    localStorage.getItem("username") ||
-    localStorage.getItem("userName") ||
-    localStorage.getItem("displayName") ||
-    "ผู้ใช้งาน"
-  );
+  try {
+    const raw = localStorage.getItem("kmitlmap:user");
+    const user = raw ? JSON.parse(raw) : null;
+
+    return user?.name || user?.email || "ผู้ใช้งาน";
+  } catch {
+    return "ผู้ใช้งาน";
+  }
 }
 
 const initialForm = {

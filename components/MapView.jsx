@@ -152,7 +152,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [routeFormOpen, setRouteFormOpen] = useState(false);
   const [placeCard, setPlaceCard] = useState(null); // { name, coord, extract, image, loading, error } — การ์ดรายละเอียดสถานที่หลังค้นหา
-  const [routeSheetOpen, setRouteSheetOpen] = useState(false);
+  const [routeSheetOpen, setRouteSheetOpen] = useState(true);
 
 
 

@@ -25,24 +25,24 @@ INSERT INTO use_cases ("key", "title", "icon", "sort_order") VALUES
   ('audit', 'ตรวจสอบบันทึกประวัติการแก้ไขข้อมูลแผนที่', 'svg:Map_light', 4),
   ('broadcast', 'ส่งข้อความแจ้งเตือนระบบถึงมหาวิทยาลัยในระบบ', 'svg:bullhorn', 4),
   ('access', 'จัดการสิทธิ์การเข้าถึงระดับสถาบัน', 'svg:dataflow', 5),
-  ('boundary', 'จัดการขอบเขตแผนผัง', '🗺️', 6),
-  ('assets', 'จัดการข้อมูลประกอบแผนผัง', '🧩', 7),
-  ('save', 'บันทึกข้อมูลแผนที่', '💾', 8),
-  ('users', 'ข้อมูลผู้ใช้งาน', '👥', 9),
-  ('requests', 'คำร้อง', '📋', 10),
-  ('roles', 'สิทธิ์ผู้ใช้งาน', '🔑', 11),
-  ('status', 'สถานะบัญชีผู้ใช้งาน', '🚦', 12),
+  ('boundary', 'จัดการขอบเขตแผนผัง', 'svg:boundary', 6),
+  ('assets', 'จัดการข้อมูลประกอบแผนผัง', 'svg:puzzle', 7),
+  ('save', 'บันทึกข้อมูลแผนที่', 'svg:save', 8),
+  ('users', 'ข้อมูลผู้ใช้งาน', 'svg:users', 9),
+  ('requests', 'คำร้อง', 'svg:clipboard', 10),
+  ('roles', 'สิทธิ์ผู้ใช้งาน', 'svg:key', 11),
+  ('status', 'สถานะบัญชีผู้ใช้งาน', 'svg:user_check', 12),
   ('news', 'ข้อมูลข่าวสาร', 'svg:news', 13),
   ('events', 'ข้อมูลกิจกรรม', 'svg:bullhorn', 14),
   ('interest', 'ตรวจสอบสถิติความสนใจของกิจกรรม', 'svg:growth', 15),
   ('categories', 'เพิ่ม / แก้ไข / ลบหมวดหมู่กิจกรรมและสถานที่', 'svg:folder', 16),
-  ('rooms', 'จัดการรายละเอียดข้อมูลบนแผนที่', '🗺️', 17),
+  ('rooms', 'จัดการรายละเอียดข้อมูลบนแผนที่', 'svg:pin', 17),
   ('search', 'ค้นหาห้องเรียน อาคาร หรือชื่ออาจารย์', '🔍', 18),
   ('route', 'ค้นหาวิธีไปยังจุดหมาย', 'svg:compass', 19),
   ('common_1', 'ลงทะเบียนเข้าใช้ระบบ', NULL, 20),
   ('common_2', 'เข้าสู่ระบบด้วย E-mail', NULL, 21),
-  ('room_types', 'จัดการประเภทห้องและไอคอน', '🧩', 18),
-  ('exec_requests', 'ตรวจสอบคำร้องจากผู้ใช้งานทั่วไป', '📋', 2),
+  ('room_types', 'จัดการประเภทห้องและไอคอน', 'svg:category', 18),
+  ('exec_requests', 'ตรวจสอบคำร้องจากผู้ใช้งานทั่วไป', 'svg:clipboard', 2),
   ('search_stats', 'สถิติการค้นหาอาคารและจุดสนใจ', 'svg:growth', 5)
 ON CONFLICT DO NOTHING;
 
@@ -90,15 +90,15 @@ INSERT INTO role_use_cases ("role_code", "use_case_key") VALUES
   ('exec', 'search_stats')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO users ("id", "email", "name", "username", "role_code", "institution_id", "status", "created_at", "password_hash") VALUES
-  ('U001', 'exec@kmitl.ac.th', 'จินยอง ปาร์ค', 'exec', 'exec', 'INST-01', 'active', '2026-01-12', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U002', 'marketing@kmitl.ac.th', 'อาฮยาน จาง', 'marketing', 'marketing', 'INST-01', 'active', '2026-01-12', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U003', 'gis@kmitl.ac.th', 'ธานอส ซัง', 'gis', 'gis', 'INST-01', 'active', '2026-01-15', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U004', 'admin@kmitl.ac.th', 'แตงโม จัง', 'admin', 'admin', 'INST-01', 'active', '2026-01-10', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U005', 'pr@kmitl.ac.th', 'อาสะ คิม', 'pr', 'pr', 'INST-01', 'active', '2026-02-02', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U006', 'registrar@kmitl.ac.th', 'ฮง ไลเคน', 'registrar', 'registrar', 'INST-01', 'active', '2026-02-02', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U007', 'student@kmitl.ac.th', 'อินฟินิตี้ ไอ', 'student', 'user', 'INST-01', 'active', '2026-03-01', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK'),
-  ('U008', 'somchai@kmitl.ac.th', 'สมชาย ตั้งมั่น', 'somchai', 'user', 'INST-01', 'active', '2026-03-04', '$2b$10$4pkyES.oHPhxuZmEe4LjzONsys5LO.prd0RGp2DPS4sZK9fLgAqDK')
+INSERT INTO users ("id", "email", "name", "role_code", "institution_id", "status", "created_at", "password_hash") VALUES
+  ('U001', 'exec@kmitl.ac.th', 'จินยอง ปาร์ค', 'exec', 'INST-01', 'active', '2026-01-12', '$2b$10$k5BIw2IEU0xCrlsZ9Nej0el9doi6ko6fxDob9Pv8tze8wqO/ooFJS'),
+  ('U002', 'marketing@kmitl.ac.th', 'อาฮยาน จาง', 'marketing', 'INST-01', 'active', '2026-01-12', '$2b$10$k5BIw2IEU0xCrlsZ9Nej0el9doi6ko6fxDob9Pv8tze8wqO/ooFJS'),
+  ('U003', 'gis@kmitl.ac.th', 'ธานอส ซัง', 'gis', 'INST-01', 'active', '2026-01-15', '$2b$10$k5BIw2IEU0xCrlsZ9Nej0el9doi6ko6fxDob9Pv8tze8wqO/ooFJS'),
+  ('U004', 'admin@kmitl.ac.th', 'แตงโม จัง', 'admin', 'INST-01', 'active', '2026-01-10', '$2b$10$k5BIw2IEU0xCrlsZ9Nej0el9doi6ko6fxDob9Pv8tze8wqO/ooFJS'),
+  ('U005', 'pr@kmitl.ac.th', 'อาสะ คิม', 'pr', 'INST-01', 'active', '2026-02-02', '$2b$10$k5BIw2IEU0xCrlsZ9Nej0el9doi6ko6fxDob9Pv8tze8wqO/ooFJS'),
+  ('U006', 'registrar@kmitl.ac.th', 'ฮง ไลเคน', 'registrar', 'INST-01', 'active', '2026-02-02', '$2b$10$k5BIw2IEU0xCrlsZ9Nej0el9doi6ko6fxDob9Pv8tze8wqO/ooFJS'),
+  ('U007', 'student@kmitl.ac.th', 'อินฟินิตี้ ไอ', 'user', 'INST-01', 'active', '2026-03-01', '$2b$10$k5BIw2IEU0xCrlsZ9Nej0el9doi6ko6fxDob9Pv8tze8wqO/ooFJS'),
+  ('U008', 'somchai@kmitl.ac.th', 'สมชาย ตั้งมั่น', 'user', 'INST-01', 'active', '2026-03-04', '$2b$10$k5BIw2IEU0xCrlsZ9Nej0el9doi6ko6fxDob9Pv8tze8wqO/ooFJS')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO faculties ("id", "name") VALUES

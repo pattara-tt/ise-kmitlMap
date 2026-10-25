@@ -6,24 +6,15 @@ import { formatDateTime } from "../../../lib/datetime";
 import RequestDetail from "./RequestDetail";
 
 // ── UC11 ค้นหาและเรียกดูข้อมูลคำร้อง ──────────────────────
-function Requests({
-  user,
-  onReport,
-  onQuota
-}) {
-  const {
-    items,
-    reload
-  } = useCollection("requests");
-  const {
-    items: users
-  } = useCollection("users");
-  const {
-    items: rooms
-  } = useCollection("rooms");
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("pending");
-  const [sortBy, setSortBy] = useState("newest");
+function Requests({ user, filters, setFilters, onReport, onQuota }) {
+  const { items, reload } = useCollection("requests");
+  const { items: users } = useCollection("users");
+  const { items: rooms } = useCollection("rooms");
+  
+  const { q, status, sortBy } = filters;
+  const setQ = v => setFilters(f => ({ ...f, q: v }));
+  const setStatus = v => setFilters(f => ({ ...f, status: v }));
+  const setSortBy = v => setFilters(f => ({ ...f, sortBy: v }));
   const [selectedRequest, setSelectedRequest] = useState(null);
   const rows = items.filter(r => {
     // if (r.status === "cancelled") return false;

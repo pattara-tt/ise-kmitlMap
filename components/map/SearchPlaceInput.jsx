@@ -17,7 +17,12 @@ export default function SearchPlaceInput({
   events = [],
   categories = [],
   rooms = [],
-  searchNodes = []
+  searchNodes = [],
+  variant = "box",
+  autoFocus = false,
+  leading = null,
+  trailing = null,
+  onBlurEmpty
 }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
@@ -113,15 +118,20 @@ export default function SearchPlaceInput({
     setOpen(false);
     onPick(item);
   };
-  return <div style={{
-    position: "relative"
-  }}>
-      <input value={value} onChange={e => handleChange(e.target.value)} onFocus={() => items.length && setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 180)} onKeyDown={e => {
+  const isBar = variant === "bar";
+  const input = <input value={value} 
+    onChange={e => handleChange(e.target.value)} 
+    onFocus={() => items.length && setOpen(true)} 
+    onBlur={() => {
+      setTimeout(() => setOpen(false), 180);
+      if (isBar && !String(value || "").trim()) onBlurEmpty?.();
+    }}
+    onKeyDown={e => {
       if (e.key === "Enter" && items[0]) {
         e.preventDefault();
         choose(items[0]);
       }
-    }} placeholder={placeholder} style={{
+    }} placeholder={placeholder} autoFocus={autoFocus} className={isBar ? "gm-search-input no-focus-ring" : undefined} style={isBar ? undefined : {
       width: "100%",
       boxSizing: "border-box",
       padding: "12px 14px",
@@ -131,8 +141,8 @@ export default function SearchPlaceInput({
       color: "#202124",
       fontSize: 16,
       outline: "none"
-    }} />
-      {open ? <div style={{
+    }} />;
+  const dropdown = open ? <div data-sg-dropdown="1" style={{
       position: "absolute",
       top: "calc(100% + 6px)",
       left: 0,
@@ -176,6 +186,23 @@ export default function SearchPlaceInput({
           }}>{item.src === "event" ? `กิจกรรม · ${item.subtitle || ""}` : item.nodeId ? `ชั้น ${item.floor}${item.subtitle ? ` · ${item.subtitle}` : ""}` : item.src === "osm" ? "OSM" : "สถานที่"}</span>
               </span>
             </button>)}
-        </div> : null}
+        </div> : null;
+  if (!isBar) return <div style={{
+    position: "relative"
+  }}>
+      {input}
+      {dropdown}
+    </div>;
+  // แถบเดียวกับตอนยังไม่กด (สูง 52px มุมโค้งเท่าเดิม) แค่เปลี่ยนข้อความเป็นช่องพิมพ์
+  return <div className="gm-search-collapsed gm-search-bar-active" onClick={e => {
+    if (e.target.closest("[data-sg-dropdown]")) return;
+    e.currentTarget.querySelector("input")?.focus();
+  }} style={{
+    position: "relative"
+  }}>
+      {leading}
+      {input}
+      {trailing}
+      {dropdown}
     </div>;
 }

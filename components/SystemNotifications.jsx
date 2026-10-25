@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Card, Icon, UCHead, useCollection } from "./ui";
+import { formatDateTime } from "../lib/datetime";
 
 /** Shared system-announcement inbox for non-user roles.
  * Intentionally excludes events and PR news to keep this menu scoped to Marketing broadcasts.
@@ -57,7 +58,7 @@ export default function SystemNotifications({ user }) {
               <span style={{ display: "inline-block", color: "#D93025", background: "#FCE8E6", borderRadius: 999, padding: "3px 8px", fontSize: 11, fontWeight: 800 }}>ประกาศแจ้งเตือนจากระบบ</span>
               <b style={{ display: "block", fontSize: 14.5, color: "#202124", marginTop: 6 }}>{item.title}</b>
               <div style={{ fontSize: 13, color: "#3C4043", marginTop: 4, whiteSpace: "pre-wrap" }}>{item.body}</div>
-              <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 7 }}>ถึง {item.audience}{item.at ? ` · ${item.at}` : ""}</div>
+              <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: 7 }}>ถึง {item.audience || "ทุกมหาวิทยาลัย"}{item.at ? ` · ${formatDateTime(item.at)}` : ""}</div>
             </div>
           </div>
         </Card>

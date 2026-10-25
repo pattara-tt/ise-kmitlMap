@@ -2,32 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { useRefData } from "../../../lib/useRefData";
-import { Btn, Card, Field, Input, Pill, SearchBar, Select, UCHead, useCollection} from "../../ui";
+import { Btn, Card, Field, Input, Pill, SearchBar, Select, Table, UCHead, useCollection} from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
 import { ACCESS_STATUS, LEVELS } from "./shared";
 
-export default function Access({
-  user
-}) {
-  const {
-    modules: moduleRefs
-  } = useRefData(true);
-  const {
-    items,
-    patch
-  } = useCollection("institutionAccess");
-  const {
-    items: accessModules,
-    create: createAccessModule,
-    destroy: destroyAccessModule
-  } = useCollection("institutionAccessModules");
-  const {
-    items: users
-  } = useCollection("users");
-  const {
-    items: history
-  } = useCollection("accessHistory");
+export default function Access({ user }) {
+  const { modules: moduleRefs, roleLabels } = useRefData(true);
+  const { items, patch } = useCollection("institutionAccess");
+  const { items: accessModules, create: createAccessModule, destroy: destroyAccessModule } = useCollection("institutionAccessModules");
+  const { items: users } = useCollection("users");
+  const { items: history } = useCollection("accessHistory");
   const [q, setQ] = useState("");
+  const [staffViewId, setStaffViewId] = useState(null); // รหัสสถาบันที่กำลังดูรายชื่อเจ้าหน้าที่
 
   // เก็บสถานะที่กำลังเปลี่ยนไว้ก่อน backend reload
   const [statusOverrides, setStatusOverrides] = useState({});
@@ -61,7 +47,7 @@ export default function Access({
     if (currentStatus === accessStatus) {
       return;
     }
-    const confirmed = confirm(`เปลี่ยนสิทธิ์ ${row.institutionName || row.institutionId} เป็น “${config.label}” หรือไม่?`);
+    const confirmed = await askConfirm(`เปลี่ยนสิทธิ์ ${row.institutionName || row.institutionId} เป็น “${config.label}” หรือไม่?`, { title: "เปลี่ยนสิทธิ์สถาบัน", confirmLabel: "เปลี่ยนสิทธิ์" });
     if (!confirmed) return;
     const previousStatus = currentStatus;
 
@@ -116,6 +102,33 @@ export default function Access({
       alert(error?.message || "อัปเดตโมดูลไม่สำเร็จ");
     }
   }
+
+  if (staffViewId) {
+    const inst = rows.find(r => r.institutionId === staffViewId);
+    const staffRows = staffFor(staffViewId);
+    return <>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <Btn kind="ghost" onClick={() => setStaffViewId(null)}>กลับ</Btn>
+        <h3 style={{ margin: 0 }}>เจ้าหน้าที่ประจำสถาบัน</h3>
+      </div>
+
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#202124", marginBottom: 4 }}>
+        {inst?.institutionName || staffViewId}
+      </div>
+      <div style={{ fontSize: 12, color: "#5F6368", marginBottom: 10 }}>{staffRows.length} คน</div>
+
+      <Table
+        columns={[
+          { key: "name", label: "ชื่อ" },
+          { key: "email", label: "อีเมล" },
+          { key: "role", label: "บทบาท", render: u => <Pill>{roleLabels?.[u.roleCode] || u.roleCode}</Pill> },
+        ]}
+        rows={staffRows}
+        empty="ไม่พบเจ้าหน้าที่ประจำสถาบันนี้"
+      />
+    </>;
+  }
+
   return <>
       <UCHead title="จัดการสิทธิ์การเข้าถึงระดับสถาบัน" desc="ดูรายชื่อสถาบัน เจ้าหน้าที่ สถานะสิทธิ์ และปรับเปิดใช้/หยุดชั่วคราว/ระงับสิทธิ์ได้ทันที" />
 
@@ -153,17 +166,25 @@ export default function Access({
 
               {/* เจ้าหน้าที่ */}
               <div style={{
-          marginTop: 10,
-          fontSize: 12,
-          color: "#5F6368"
-        }}>
-                <b style={{
-            color: "#202124"
-          }}>
-                  เจ้าหน้าที่ประจำสถาบัน
-                </b>
-
-                {staff.length === 0 ? " — ไม่พบข้อมูล" : " " + staff.map(u => `${u.name} (${u.email})`).join(" · ")}
+                marginTop: 10,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+                fontSize: 12.5,
+                color: "#5F6368"
+              }}>
+                  <b style={{ color: "#202124" }}>เจ้าหน้าที่ประจำสถาบัน</b>
+                  <span>{staff.length === 0 ? "ไม่พบข้อมูล" : `${staff.length} คน`}</span>
+                  {staff.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setStaffViewId(row.institutionId)}
+                      style={{ background: "none", border: "none", padding: "2px 4px", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: 700, color: "#1A73E8" }}
+                    >
+                      ดูรายชื่อ ›
+                    </button>
+                  )}
               </div>
 
               {/* ตั้งค่า */}

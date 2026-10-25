@@ -13,17 +13,30 @@ import RegistrarPanel from "../components/panels/RegistrarPanel";
 import { useRefData, resetRefDataCache } from "../lib/useRefData";
 import { resetMapDataCache } from "../lib/useMapData";
 import { Icon, Logo, MenuIcon, useRealtimeNotifications } from "../components/ui";
+import { notify } from "../components/dialogs";
 
 const PANELS = { exec: ExecPanel, marketing: MarketingPanel, gis: GisPanel, admin: AdminPanel, pr: PrPanel, registrar: RegistrarPanel };
+const SESSION_NOTICE = {
+  ACCOUNT_SUSPENDED: { title: "บัญชีถูกระงับการใช้งาน", tone: "error" },
+  ROLE_CHANGED: { title: "บทบาทของคุณมีการเปลี่ยนแปลง", tone: "warning" },
+};
 
 // แท็บของผู้ใช้งานทั่วไป
 const USER_TABS = [
   { id: "map", label: "แผนที่", icon: "svg:map" },
   { id: "events", label: "กิจกรรม", icon: "svg:bullhorn" },
   { id: "notifications", label: "แจ้งเตือน", icon: "svg:notification" },
-  { id: "requests", label: "คำร้องของฉัน", icon: "📋" },
-  { id: "feedback", label: "ส่งข้อเสนอแนะ", icon: "✉️" }
+  { id: "requests", label: "การส่งคำร้อง", icon: "svg:clipboard_check" },
+  { id: "feedback", label: "ส่งข้อเสนอแนะ", icon: "svg:mail" }
 ];
+
+function BurgerIcon({ size = 20 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 // ความกว้างที่ถือว่าเป็นจอคอม (ใช้เฉพาะตอนอยู่โหมด auto)
 const DESKTOP_MIN_WIDTH = 900;
@@ -33,7 +46,7 @@ export default function Page() {
   const [uc, setUc] = useState(null);
   const [tab, setTab] = useState("map");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [view, setView] = useState("auto");     // auto | mobile | desktop (ผู้ใช้กดเลือกเองได้)
+  const [sideCollapsed, setSideCollapsed] = useState(false); // แถบเมนูซ้าย (โหมดคอม) พับอยู่ไหม
   const [wide, setWide] = useState(false);      // ขนาดจอจริงตอนนี้กว้างพอเป็นจอคอมไหม
   const [contractGate, setContractGate] = useState({ loading: false, blocked: false });
   const [notificationToast, setNotificationToast] = useState(null);
@@ -107,8 +120,7 @@ export default function Page() {
   useEffect(() => {
     async function restoreSession() {
       try {
-        const v = localStorage.getItem("kmitlmap:view");
-        if (v) setView(v);
+        setSideCollapsed(localStorage.getItem("kmitlmap:side") === "collapsed");
 
         const rawUser = localStorage.getItem("kmitlmap:user");
         const sessionId = localStorage.getItem("kmitlmap:session");
@@ -154,11 +166,13 @@ export default function Page() {
     restoreSession();
   }, []);
 
-  function pickView(v) {
-    setView(v);
-    try { localStorage.setItem("kmitlmap:view", v); } catch (e) {}
+  // พับ/กางแถบเมนูซ้าย (โหมดคอม) และจำค่าไว้
+  function toggleSide() {
+    const next = !sideCollapsed;
+    setSideCollapsed(next);
+    try { localStorage.setItem("kmitlmap:side", next ? "collapsed" : "open"); } catch (e) {}
     // แจ้ง Leaflet ให้คำนวณขนาด container ใหม่หลัง layout เปลี่ยน
-    setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
+    { const t0 = performance.now(); const tick = () => { window.dispatchEvent(new Event("resize")); if (performance.now() - t0 < 300) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
     setTimeout(() => window.dispatchEvent(new Event("resize")), 320);
   }
 
@@ -202,7 +216,7 @@ export default function Page() {
 
       try {
         localStorage.removeItem("kmitlmap:user");
-        localStorage.removeItem("kmitl:session");
+        localStorage.removeItem("kmitlmap:session");
       }
       catch (e) {}
 
@@ -233,8 +247,9 @@ export default function Page() {
       // NO_SESSION = ไม่มี session อยู่แล้ว (เช่น logout จากอีกแท็บ) กลับหน้า login เฉย ๆ
       if (code === "NO_SESSION") return;
 
-      alert(message || "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่");
-      window.location.reload(); // ล้าง state/cache ค้างทุกกรณี ก่อน login ใหม่
+      const notice = SESSION_NOTICE[code] || { title: "เซสชันหมดอายุ", tone: "warning" };
+      notify(message || "Session หมดอายุ กรุณาเข้าสู่ระบบใหม่", notice)
+        .then(() => window.location.reload()); // ล้าง state/cache ค้างทุกกรณี ก่อน login ใหม่
     }
 
     window.addEventListener("session-invalid", handleSessionInvalid);
@@ -283,25 +298,14 @@ export default function Page() {
   }, [user]);
 
 
-  // โหมดที่ใช้จริง = ที่ผู้ใช้เลือก หรือถ้า auto ก็ตัดสินจากความกว้างจอ
-  const desktop = view === "desktop" || (view === "auto" && wide);
+    // โหมดแสดงผลตัดสินจากความกว้างจอจริงเท่านั้น (ถอดปุ่มสลับมือถือ/คอมออกแล้ว)
+  const desktop = wide;
   const dataView = desktop ? "desktop" : "mobile";
-
-  const ViewSwitch = () => (
-    <div className="bdi-viewswitch" title="สลับมุมมอง มือถือ / คอม">
-      {[["mobile", "svg:mobile", "มือถือ"], ["auto", "⇄", "อัตโนมัติตามขนาดจอ"], ["desktop", "svg:desktop", "คอมพิวเตอร์"]].map(([k, ic, label]) => (
-        <button key={k} className={view === k ? "on" : ""} title={label} onClick={() => pickView(k)}>
-          <MenuIcon icon={ic} size={17} />
-        </button>
-      ))}
-    </div>
-  );
 
   if (!user) {
     return (
       <div className="bdi-shell" data-view={dataView}>
         <div className="bdi-main">
-          <div style={{ position: "absolute", top: "calc(10px + env(safe-area-inset-top))", right: 12, zIndex: 2200 }}><ViewSwitch /></div>
           <AuthPage onLogin={applyLogin} />
         </div>
       </div>
@@ -327,7 +331,7 @@ export default function Page() {
             <p style={{ color: "#5F6368", lineHeight: 1.8, marginTop: 10 }}>
               สถาบัน {user.institutionName || user.institutionId} ไม่สามารถใช้งานระบบได้ในขณะนี้ เนื่องจากสัญญาถูกระงับหรือหมดอายุ กรุณาติดต่อฝ่ายการตลาดเพื่อดำเนินการต่อสัญญา
             </p>
-            <button onClick={logout} style={{ marginTop: 12, border: "1px solid #DADCE0", background: "#fff", borderRadius: 10, padding: "10px 16px", cursor: "pointer" }}>ออกจากระบบ</button>
+            <button onClick={logout} className="sm-b-ghost" style={{ marginTop: 12, border: "1px solid #DADCE0", background: "#fff", borderRadius: 10, padding: "10px 16px", cursor: "pointer" }}>ออกจากระบบ</button>
           </div>
         </div>
       </div>
@@ -363,6 +367,7 @@ export default function Page() {
         const on = item.key === activeKey;
         return (
           <button key={item.code + item.key} onClick={() => pickMenu(item)}
+            className="bdi-menu-item" aria-current={on ? "page" : undefined}
             style={{ display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", border: "none", cursor: "pointer",
               background: on ? "#E8F0FE" : "transparent", padding: "11px 16px", color: on ? "#1A73E8" : "#202124" }}>
             <MenuIcon icon={item.icon} size={19} color={on ? "#1A73E8" : "#5F6368"} />
@@ -374,7 +379,7 @@ export default function Page() {
         );
       })}
       <div style={{ padding: "14px 16px 16px", borderTop: "1px solid #E8EAED", marginTop: 10 }}>
-        <button onClick={logout} style={{ width: "100%", padding: "11px 0", border: "1px solid #F5C2C0", borderRadius: 12, background: "#fff", color: "#D93025", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>ออกจากระบบ</button>
+        <button onClick={logout} className="sm-b-danger" style={{ width: "100%", padding: "11px 0", border: "1px solid #F5C2C0", borderRadius: 12, background: "#fff", color: "#D93025", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>ออกจากระบบ</button>
       </div>
     </>
   );
@@ -383,10 +388,13 @@ export default function Page() {
     <div className="bdi-shell" data-view={dataView}>
       {/* แถบเมนูซ้าย — เฉพาะโหมดคอม */}
       {desktop ? (
-        <aside className="bdi-side">
-          <div style={{ padding: "16px 16px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+        <aside className="bdi-side" data-collapsed={sideCollapsed ? "true" : "false"} inert={sideCollapsed}>
+          <div className="bdi-side-header" style={{ padding: "16px 16px 10px", display: "flex", alignItems: "center", gap: 8 }}>
             <Logo size={26} />
-            <b style={{ fontSize: 16, letterSpacing: .6, color: "#202124" }}>SciMap</b>
+            <b style={{ fontSize: 16, letterSpacing: .6, color: "#202124", flex: 1 }}>SciMap</b>
+            <button className="icon-btn" onClick={() => (desktop ? toggleSide() : setMenuOpen((v) => !v))} title="ซ่อนเมนู" aria-label="ซ่อนเมนู">
+              <BurgerIcon />
+            </button>
           </div>
           <div className="bdi-side-body"><MenuBody /></div>
         </aside>
@@ -406,15 +414,20 @@ export default function Page() {
           </div>
         ) : null}
         <div className="bdi-topbar">
-          {!desktop ? (
-            <button onClick={() => setMenuOpen((v) => !v)} style={{ border: "none", background: "none", fontSize: 20, cursor: "pointer", padding: 0, lineHeight: 1, color: "#202124" }}>☰</button>
-          ) : null}
+          <span className={desktop ? "bdi-topbar-burger" : undefined} data-show={sideCollapsed ? "true" : "false"} inert={desktop && !sideCollapsed} style={desktop ? undefined : { display: "contents" }}>
+            <button
+                className="icon-btn"
+                onClick={() => (desktop ? toggleSide() : setMenuOpen((v) => !v))}
+                title={desktop ? "แสดงเมนู" : "เมนู"}
+                aria-label={desktop ? "แสดงเมนู" : "เมนู"}>
+                <BurgerIcon />
+              </button>
+          </span>
           <h1 style={{ flex: 1 }}>
             {isUser
               ? (desktop ? (USER_TABS.find((t) => t.id === tab)?.label || "SciMap") : "SciMap")
               : (current?.code ? `${current.code} · ${roleLabels[user.roleCode] || user.roleCode}` : `${current?.title || ""} · ${roleLabels[user.roleCode] || user.roleCode}`)}
           </h1>
-          <ViewSwitch />
           <div className="bdi-avatar" title={user.name}><Icon name="user" size={18} color="#1A73E8" /></div>
         </div>
 
@@ -429,7 +442,7 @@ export default function Page() {
         ) : null}
 
         {isUser ? (
-          <UserApp user={user} tab={tab} onTabChange={setTab} viewMode={view === "auto" ? "auto" : desktop ? "desktop" : "mobile"} />
+          <UserApp user={user} tab={tab} onTabChange={setTab} viewMode="auto" />
         ) : (
           <div className="bdi-page">
             <div className="bdi-page-inner">

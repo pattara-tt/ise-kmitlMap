@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { apiFetch } from "../../lib/api";
 import {
   Btn, Card, Confirm, Field, Input, Modal, Note, Pill, SearchBar, Select,
-  Status, Tabs, Table, Textarea, Tiles, UCHead, useCollection, useStats,
+  Status, Tabs, Table, Textarea, Tiles, UCHead, useCollection, useStats, askConfirm, notify
 } from "../ui";
 import { isoToInput } from "../../lib/datetime";
 import { EVENT_STATE_LABEL, NEWS_STATE_LABEL, eventState, fmt, localNow, newsState, validateRange } from "../../lib/schedule";
@@ -128,7 +128,7 @@ function NewsOverview({ grouped, onEdit, onPatch, onDelete, user }) {
                   {newsState(n) === "live" ? (
                     <Btn kind="ghost" onClick={() => safePatch(n.id, { expireAt: new Date().toISOString() })}>สิ้นสุดการเผยแพร่</Btn>
                   ) : null}
-                  <Btn kind="danger" onClick={() => { if (confirm(`ลบข่าว “${n.title}” ?`)) onDelete(n.id, user).catch(e => alert(`ลบข่าวไม่สำเร็จ: ${e.message}`)); }}>ลบ</Btn>
+                  <Btn kind="danger" onClick={async () => { if (await askConfirm(`ลบข่าว “${n.title}” ?`, { title: "ลบข่าว", confirmLabel: "ลบ", tone: "danger" })) onDelete(n.id, user).catch(e => notify(`ลบข่าวไม่สำเร็จ: ${e.message}`, { title: "เกิดข้อผิดพลาด", type: "error" })); }}>ลบ</Btn>
                 </div>
               </Card>
             ))}
@@ -345,7 +345,7 @@ function EventOverview({ grouped, cats, onEdit, onPatch, onDelete, user }) {
                     <Btn kind="ghost" onClick={() => onEdit(e)}>แก้ไข</Btn>
                     {state === "draft" ? <Btn kind="ok" onClick={() => safePatch(e.id, immediateEventPatch(e))}>เผยแพร่ทันที</Btn> : null}
                     {state === "ongoing" ? <Btn kind="ghost" onClick={() => safePatch(e.id, { endAt: new Date().toISOString() })}>สิ้นสุดกิจกรรม</Btn> : null}
-                    <Btn kind="danger" onClick={() => { if (confirm(`ลบกิจกรรม “${e.name}” ?`)) onDelete(e.id, user).catch(err => alert(`ลบกิจกรรมไม่สำเร็จ: ${err.message}`)); }}>ลบ</Btn>
+                    <Btn kind="danger" onClick={async () => { if (await askConfirm(`ลบกิจกรรม “${e.name}” ?`, { title: "ลบกิจกรรม", confirmLabel: "ลบ", tone: "danger" })) onDelete(e.id, user).catch(err => notify(`ลบกิจกรรมไม่สำเร็จ: ${err.message}`, { title: "เกิดข้อผิดพลาด", type: "error" })); }}>ลบ</Btn>
                   </div>
                 </Card>
               );
@@ -651,9 +651,9 @@ function CategoryModule({ user }) {
                 render: (c) => (
                   <div style={{ display: "flex", gap: 6 }}>
                     <Btn kind="ghost" onClick={() => setEditing(c)}>แก้ไข</Btn>
-                    <Btn kind="danger" onClick={() => {
+                    <Btn kind="danger" onClick={async() => {
                       if (c.count > 0) return alert(`ลบไม่ได้ — หมวดหมู่นี้ถูกใช้งานอยู่ ${c.count} รายการ\nกรุณาย้ายรายการเหล่านั้นไปหมวดหมู่อื่นก่อน`);
-                      if (confirm(`ลบหมวดหมู่ “${c.name}” ?`)) destroy(c.id, user);
+                      if (await askConfirm(`ลบหมวดหมู่ “${c.name}” ?`, { title: "ลบหมวดหมู่", confirmLabel: "ลบ", tone: "danger" })) destroy(c.id, user);
                     }}>ลบ</Btn>
                   </div>
                 ),

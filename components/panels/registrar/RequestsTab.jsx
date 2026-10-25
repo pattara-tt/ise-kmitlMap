@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Btn, Card, Field, Input, SearchBar, Select, Status, Table, Textarea, useCollection} from "../../ui";
+import { useRef, useState } from "react";
+import { Btn, Card, Field, Input, SearchBar, Select, Status, Table, Textarea, useCollection, notify, askConfirm } from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
+import RequestDetail from "../admin/RequestDetail";
 
 const FIELD_LABEL = {
   name: "ชื่อห้อง",
@@ -32,6 +33,9 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [q, setQ] = useState("");
   const [sortBy, setSortBy] = useState("oldest");
+  const [view, setView] = useState("pending"); // "pending" | "history"
+  const [resultFilter, setResultFilter] = useState(""); // "" | "approved" | "rejected"
+  const [selectedHistory, setSelectedHistory] = useState(null);
 
   const forwardedAt = (r) => String(r.reviewedAt || r.createdAt || "");
 
@@ -56,6 +60,32 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
       return c !== 0 ? c : String(a.id || "").localeCompare(String(b.id || ""));
     });
 
+  // คำร้องที่ฝ่ายทะเบียนคนนี้เป็นผู้พิจารณาขั้นสุดท้าย (อนุมัติ / ไม่อนุมัติ)
+  const historyRequests = requests
+    .filter((r) => (r.status === "approved" || r.status === "rejected") && r.reviewedBy === user?.id)
+    .filter((r) => !resultFilter || r.status === resultFilter)
+    .filter((r) => {
+      const requestUser = users.find((u) => u.id === r.userId);
+      const room = rooms.find((x) => x.id === r.roomId);
+      return ((requestUser?.email || "") + (room?.name || "") + (r.id || "") + (r.subject || ""))
+        .toLowerCase()
+        .includes(q.toLowerCase());
+    })
+    .sort((a, b) => String(b.reviewedAt || "").localeCompare(String(a.reviewedAt || "")));
+
+  if (selectedHistory) {
+    return (
+      <RequestDetail
+        request={selectedHistory}
+        user={user}
+        onBack={async () => {
+          await reloadRequests();
+          setSelectedHistory(null);
+        }}
+      />
+    );
+  }
+
   if (selectedRequest) {
     return (
       <RegistrarRequestDetail
@@ -79,7 +109,34 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
 
   return (
     <>
-      <h3>คำร้องที่รอดำเนินการ ({processingRequests.length})</h3>
+      <h3>คำร้อง</h3>
+
+      {/* สลับมุมมอง: แท็บขีดเส้นใต้ */}
+      <div role="tablist" style={{ display: "flex", gap: 22, borderBottom: "1px solid #DADCE0", marginBottom: 14 }}>
+        {[
+          { key: "pending", label: "รอดำเนินการ" },
+          { key: "history", label: "ดำเนินการแล้ว" },
+        ].map((t) => {
+          const active = view === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setView(t.key)}
+              style={{
+                padding: "8px 2px", marginBottom: -1, background: "none", cursor: "pointer",
+                font: "inherit", fontSize: 14, fontWeight: 700,
+                border: "none", borderBottom: `2px solid ${active ? "#1A73E8" : "transparent"}`,
+                color: active ? "#1A73E8" : "#5F6368",
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
       <SearchBar
         value={q}
@@ -88,58 +145,80 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
       />
 
       <div style={{ maxWidth: 260, marginBottom: 12 }}>
-        <Field label="เรียงลำดับ">
-          <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            <option value="oldest">รับเรื่องเก่าสุด</option>
-            <option value="newest">รับเรื่องล่าสุด</option>
-          </Select>
-        </Field>
-      </div>      
+        {view === "pending" ? (
+          <Field label="เรียงลำดับ">
+            <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="oldest">รับเรื่องเก่าสุด</option>
+              <option value="newest">รับเรื่องล่าสุด</option>
+            </Select>
+          </Field>
+        ) : (
+          <Field label="กรองตามผลการพิจารณา">
+            <Select value={resultFilter} onChange={(e) => setResultFilter(e.target.value)}>
+              <option value="">ทั้งหมด</option>
+              <option value="approved">อนุมัติ</option>
+              <option value="rejected">ไม่อนุมัติ</option>
+            </Select>
+          </Field>
+        )}
+      </div>
 
-      <Table
-        columns={[
-          {
-            key: "id",
-            label: "เลขที่",
-          },
-          {
-            key: "userId",
-            label: "ผู้ยื่น",
-            render: (r) => {
-              const requestUser = users.find((u) => u.id === r.userId);
-              return requestUser?.email || r.userId || "-";
+      {view === "pending" ? (
+        <Table
+          columns={[
+            { key: "id", label: "เลขที่" },
+            {
+              key: "userId",
+              label: "ผู้ยื่น",
+              render: (r) => users.find((u) => u.id === r.userId)?.email || r.userId || "-",
             },
-          },
-          {
-            key: "subject",
-            label: "หัวข้อ",
-          },
-          {
-            key: "roomId",
-            label: "สถานที่",
-            render: (r) => {
-              const room = rooms.find((room) => room.id === r.roomId);
-              return room?.name || r.roomId || "-";
+            { key: "subject", label: "หัวข้อ" },
+            {
+              key: "roomId",
+              label: "สถานที่",
+              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || r.roomId || "-",
             },
-          },
-          {
-            key: "reviewedAt",
-            label: "วันที่รับเรื่อง",
-            render: (r) => formatDateTime(r.reviewedAt),
-          },
-          {
-            key: "action",
-            label: "การดำเนินการ",
-            render: (r) => (
-              <Btn onClick={() => setSelectedRequest(r)}>
-                ตรวจสอบ
-              </Btn>
-            ),
-          },
-        ]}
-        rows={processingRequests}
-        empty="ไม่มีคำร้องที่รอดำเนินการ"
-      />
+            { key: "reviewedAt", label: "วันที่รับเรื่อง", render: (r) => formatDateTime(r.reviewedAt) },
+            {
+              key: "action",
+              label: "การดำเนินการ",
+              render: (r) => <Btn onClick={() => setSelectedRequest(r)}>ตรวจสอบ</Btn>,
+            },
+          ]}
+          rows={processingRequests}
+          empty="ไม่มีคำร้องที่รอดำเนินการ"
+        />
+      ) : (
+        <Table
+          columns={[
+            { key: "id", label: "เลขที่" },
+            {
+              key: "userId",
+              label: "ผู้ยื่น",
+              render: (r) => users.find((u) => u.id === r.userId)?.email || r.userId || "-",
+            },
+            { key: "subject", label: "หัวข้อ" },
+            {
+              key: "roomId",
+              label: "สถานที่",
+              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || r.roomId || "-",
+            },
+            { key: "status", label: "ผลการพิจารณา", render: (r) => <Status value={r.status} /> },
+            { key: "reviewedAt", label: "วันที่พิจารณา", render: (r) => formatDateTime(r.reviewedAt) },
+            {
+              key: "action",
+              label: "",
+              render: (r) => (
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <Btn kind="ghost" onClick={() => setSelectedHistory(r)}>ดูรายละเอียด</Btn>
+                </div>
+              ),
+            },
+          ]}
+          rows={historyRequests}
+          empty="ยังไม่มีคำร้องตามเงื่อนไขดังกล่าว"
+        />
+      )}
     </>
   );
 }
@@ -171,6 +250,9 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
   const [form, setForm] = useState(initialAfter);
 
   const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false); // ตัดสินใจแล้ว → ห้ามกดซ้ำ
+  const busyRef = useRef(false); // กันกดซ้ำในจังหวะที่ state ยังไม่อัปเดต
+  const actionable = request.status === "processing" && !done;
   const [note, setNote] = useState(request.note || "");
 
   const requestUser = users.find((u) => u.id === request.userId);
@@ -196,24 +278,35 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
   };
 
   async function approve() {
-    if (!request.roomId) return;
+    if (!request.roomId || !actionable || busyRef.current) return;
 
-    // Re-read catalog so a newly-created type can be approved without page reload.
     setActionError("");
+
     if (missingType || roomTypesLoading) {
-      setActionError("ยังไม่สามารถอนุมัติได้: ต้องเลือกประเภทห้องที่มีในระบบก่อน");
+      setActionError(
+        "ไม่สามารถอนุมัติได้: ต้องเลือกประเภทห้องที่มีในระบบก่อน"
+      );
       return;
     }
+
+    const confirmed = await askConfirm(
+      `ยืนยันอนุมัติคำร้องเลขที่ ${request.id} หรือไม่?\n\nข้อมูลที่แก้ไขจะอัปเดตข้อมูลห้องจริงในระบบ`,
+      {
+        title: "ยืนยันการอนุมัติคำร้อง",
+        confirmLabel: "อนุมัติและบันทึก",
+        cancelLabel: "กลับไปตรวจสอบ",
+        tone: "question",
+      }
+    );
+
+    if (!confirmed || busyRef.current) return;
+
+    busyRef.current = true;
     setSaving(true);
 
     try {
-      /* 1. เอาข้อมูลที่ Registrar แก้ใน after ไปอัปเดตห้องจริง */
       await patchRoom(request.roomId, form, user);
 
-      /*
-       * 2. เก็บ after ที่แก้แล้วกลับเข้า request
-       * 3. เปลี่ยน processing -> approved
-       */
       await patchRequest(
         request.id,
         {
@@ -226,36 +319,79 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
         user
       );
 
-      await onBack();
+      setDone(true);
+
+      await notify("อนุมัติคำร้องและบันทึกข้อมูลห้องแล้ว", {
+        title: "อนุมัติสำเร็จ",
+        tone: "success",
+      });
+
+      await onBack(); // ออกจากหน้านี้ทันที ไม่ให้กดอนุมัติซ้ำ
     } catch (error) {
-      setActionError(error?.message || "บันทึกและอนุมัติคำร้องไม่สำเร็จ");
+      await notify(
+        `อนุมัติคำร้องไม่สำเร็จ: ${error?.message || "เกิดข้อผิดพลาด"}`,
+        {
+          title: "ไม่สามารถอนุมัติได้",
+          tone: "error",
+        }
+      );
     } finally {
+      busyRef.current = false;
       setSaving(false);
     }
   }
 
   async function reject() {
-    setSaving(true);
+  if (!actionable || busyRef.current) return;
 
-    try {
-      // ไม่แตะข้อมูลห้อง และไม่เก็บ after ที่แก้ไว้
-      // แค่ปิดคำร้องเป็น rejected พร้อมบันทึกผู้พิจารณา/วันที่/หมายเหตุ
-      await patchRequest(
-        request.id,
-        {
-          status: "rejected",
-          note,
-          reviewedBy: user?.id || "",
-          reviewedAt: new Date().toISOString(),
-        },
-        user
-      );
-
-      await onBack();
-    } finally {
-      setSaving(false);
+  const confirmed = await askConfirm(
+    `ยืนยันปฎืเสธคำร้องเลขที่ ${request.id} หรือไม่?\n\nข้อมูลห้องจะไม่ถูกอัปเดต`,
+    {
+      title: "ยืนยันการปฏิเสธคำร้อง",
+      confirmLabel: "ปฏิเสธ",
+      cancelLabel: "กลับไปตรวจสอบ",
+      tone: "danger",
     }
+  );
+
+  if (!confirmed || busyRef.current) return;
+
+  busyRef.current = true;
+  setSaving(true);
+
+  try {
+    await patchRequest(
+      request.id,
+      {
+        status: "rejected",
+        note,
+        reviewedBy: user?.id || "",
+        reviewedAt: new Date().toISOString(),
+      },
+      user
+    );
+
+    setDone(true);
+
+    await notify("ปฏิเสธคำร้องเสร็จสิ้น", {
+      title: "บันทึกผลการพิจารณาแล้ว",
+      tone: "success",
+    });
+
+    await onBack(); // ออกจากหน้านี้ทันที ไม่ให้กดซ้ำ
+  } catch (error) {
+    await notify(
+      `ไม่สามารถปฏิเสธคำร้องได้: ${error?.message || "เกิดข้อผิดพลาด"}`,
+      {
+        title: "ดำเนินการไม่สำเร็จ",
+        tone: "error",
+      }
+    );
+  } finally {
+    busyRef.current = false;
+    setSaving(false);
   }
+}
 
   return (
     <>
@@ -409,11 +545,11 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
             ยกเลิก
           </Btn>
 
-          <Btn kind="danger" disabled={saving} onClick={reject}>
+          <Btn kind="danger" disabled={saving || !actionable} onClick={reject}>
             ไม่อนุมัติ
           </Btn>
 
-          <Btn kind="ok" disabled={saving || roomTypesLoading || missingType} onClick={approve}>
+          <Btn kind="ok" disabled={saving || !actionable || roomTypesLoading || missingType} onClick={approve}>
             {saving ? "กำลังบันทึก..." : "บันทึกและอนุมัติ"}
           </Btn>
         </div>

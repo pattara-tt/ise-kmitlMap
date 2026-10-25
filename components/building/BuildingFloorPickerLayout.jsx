@@ -1,5 +1,7 @@
 "use client";
 
+import { Icon } from "../ui";
+
 export default function BuildingFloorPickerLayout({ view }) {
   const {
     b,
@@ -49,7 +51,7 @@ export default function BuildingFloorPickerLayout({ view }) {
     width: "min(430px, calc(100% - 24px))"
   }}>
 
-        <div style={{
+    <div className="reg-search-bar" style={{
       background: "#fff",
       border: "1px solid #DADCE0",
       borderRadius: 12,
@@ -76,14 +78,14 @@ export default function BuildingFloorPickerLayout({ view }) {
           </div>
 
 
-          <input value={search} onChange={e => {
+      <input value={search} onChange={e => {
         setSearch(e.target.value);
         setSearchOpen(true);
       }} onFocus={() => {
         if (search.trim()) {
           setSearchOpen(true);
         }
-      }} placeholder="ค้นหาสถานที่" style={{
+      }} className="no-focus-ring" placeholder="ค้นหาสถานที่" style={{
         flex: 1,
         minWidth: 0,
         border: "none",
@@ -92,14 +94,7 @@ export default function BuildingFloorPickerLayout({ view }) {
         color: "#202124",
         background: "transparent"
       }} />
-
-          <span style={{
-        color: "#5F6368",
-        fontSize: 19
-      }}>
-            🔍
-          </span>
-
+        <Icon name="search" size={19} color="#5F6368" style={{ flex: "none" }} />
         </div>
 
 

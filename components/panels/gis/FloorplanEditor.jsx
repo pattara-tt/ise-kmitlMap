@@ -5,6 +5,7 @@ import { SC8_CENTER, SC8_OUTLINE } from "../../mapConfig";
 import OSMMap from "./OSMMap";
 import { DEFAULT_PLACEMENT } from "./shared";
 import { InfoRow, editorButton, smallEditorButton } from "./EditorShared";
+import { Icon } from "../../ui";
 
 /* =========================================================
    Floorplan Editor
@@ -21,6 +22,7 @@ function FloorplanEditor({
   placement,
   mode = "placement",
   embedded = false,
+  outline = [],
   nodes = [],            // node ของชั้นนี้ ใช้แสดงหมุดเดิม
   edges = [],            // edge ที่จะวาดเป็นเส้น
   nodeById,              // Map(id -> node) สำหรับหาปลายทางของ edge
@@ -186,13 +188,13 @@ function FloorplanEditor({
      Building outline (โหมดจัดวางแปลน)
   ----------------------------------------- */
 
-  const outlinePoints = isPin || embedded ? [] : SC8_OUTLINE?.map(([lat, lon]) => {
-    const p = latLonToPixel(lat, lon);
-    return {
-      x: p.x - centerPixel.x + window.innerWidth / 2,
-      y: p.y - centerPixel.y + (window.innerHeight - 64) / 2
-    };
-  }) || [];
+  const outlinePoints = isPin || embedded || !outline?.length ? [] : outline.map(([lat, lon]) => {
+      const p = latLonToPixel(lat, lon);
+      return {
+        x: p.x - centerPixel.x + window.innerWidth / 2,
+        y: p.y - centerPixel.y + (window.innerHeight - 64) / 2
+      };
+    }) || [];
 
   /* -----------------------------------------
      Node / Edge overlay
@@ -485,7 +487,7 @@ function FloorplanEditor({
             fontSize: 11,
             boxShadow: "0 2px 10px rgba(0,0,0,.2)"
           }}>
-            🔍 ซูม {zoom.toFixed(1)}
+            <Icon name="search" size={13} color="#5F6368" style={{ display: "inline-block", verticalAlign: "-2px", marginRight: 4 }} /> ซูม {zoom.toFixed(1)}
             <input type="range" min="16" max="22" step="0.1" value={zoom}
               onChange={e => changeZoom(Number(e.target.value))}
               style={{ display: "block", width: 140 }} />
@@ -517,7 +519,7 @@ function FloorplanEditor({
             fontSize: 12,
             fontWeight: 700
           }}>
-            🔍 ซูมแผนที่ (Zoom)
+            <Icon name="search" size={13} color="#5F6368" style={{ display: "inline-block", verticalAlign: "-2px", marginRight: 4 }} /> ซูมแผนที่ (Zoom)
           </div>
 
           <input

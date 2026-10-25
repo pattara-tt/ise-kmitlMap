@@ -75,7 +75,7 @@ function SaveMap({
     : [];
 
   const handlePublish = async draftId => {
-    if (!confirm("ยืนยันการเผยแพร่ข้อมูลแผนที่ ขอบเขต และไฟล์ประกอบทั้งหมดขึ้นระบบจริง?")) return;
+    if (!(await askConfirm("ยืนยันการเผยแพร่ข้อมูลแผนที่ ขอบเขต และไฟล์ประกอบทั้งหมดขึ้นระบบจริง?", { title: "เผยแพร่ข้อมูลแผนที่", confirmLabel: "เผยแพร่" }))) return;
     try {
       await patch(draftId, {
         status: "published"
@@ -159,9 +159,6 @@ function SaveMap({
           textAlign: "center"
         }}>
               ไม่มีรายการฉบับร่างค้างอยู่
-              (ข้อมูลเป็นระบบจริงทั้งหมดแล้ว
-              หรือยังไม่ได้สร้างข้อมูลใน
-              UC7/UC8)
             </div> : <div style={{
           display: "flex",
           flexDirection: "column",

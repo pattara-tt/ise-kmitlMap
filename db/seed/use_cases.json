@@ -38,43 +38,43 @@
   {
     "key": "boundary",
     "title": "จัดการขอบเขตแผนผัง",
-    "icon": "🗺️",
+    "icon": "svg:boundary",
     "sortOrder": 6
   },
   {
     "key": "assets",
     "title": "จัดการข้อมูลประกอบแผนผัง",
-    "icon": "🧩",
+    "icon": "svg:puzzle",
     "sortOrder": 7
   },
   {
     "key": "save",
     "title": "บันทึกข้อมูลแผนที่",
-    "icon": "💾",
+    "icon": "svg:save",
     "sortOrder": 8
   },
   {
     "key": "users",
     "title": "ข้อมูลผู้ใช้งาน",
-    "icon": "👥",
+    "icon": "svg:users",
     "sortOrder": 9
   },
   {
     "key": "requests",
     "title": "คำร้อง",
-    "icon": "📋",
+    "icon": "svg:clipboard",
     "sortOrder": 10
   },
   {
     "key": "roles",
     "title": "สิทธิ์ผู้ใช้งาน",
-    "icon": "🔑",
+    "icon": "svg:key",
     "sortOrder": 11
   },
   {
     "key": "status",
     "title": "สถานะบัญชีผู้ใช้งาน",
-    "icon": "🚦",
+    "icon": "svg:user_check",
     "sortOrder": 12
   },
   {
@@ -104,7 +104,7 @@
   {
     "key": "rooms",
     "title": "จัดการรายละเอียดข้อมูลบนแผนที่",
-    "icon": "🗺️",
+    "icon": "svg:pin",
     "sortOrder": 17
   },
   {
@@ -134,13 +134,13 @@
   {
     "key": "room_types",
     "title": "จัดการประเภทห้องและไอคอน",
-    "icon": "🧩",
+    "icon": "svg:category",
     "sortOrder": 18
   },
   {
     "key": "exec_requests",
     "title": "ตรวจสอบคำร้องจากผู้ใช้งานทั่วไป",
-    "icon": "📋",
+    "icon": "svg:clipboard",
     "sortOrder": 2
   },
   {

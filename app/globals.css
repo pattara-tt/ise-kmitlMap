@@ -15,6 +15,11 @@
   --bdi-nav-h: 64px;
   --bdi-topbar-h: 54px;
   --bdi-side-w: 292px;
+  --gm-blue-hover: #D2E3FC;
+  --gm-blue-press: #AECBFA;
+  --gm-tint-hover: rgba(26, 115, 232, .06);
+  --gm-tint-press: rgba(26, 115, 232, .12);
+  --gm-red-soft: #FCE8E6;
 }
 
 html, body { background: var(--gm-bg); color: var(--gm-text); }
@@ -44,29 +49,14 @@ body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; marg
   flex: none;
   background: #fff;
   border-right: 1px solid var(--gm-line);
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
-.bdi-side-body { flex: 1; }
+.bdi-side-body { flex: 1; min-height: 0; overflow-y: auto; }
 .bdi-shell[data-view="desktop"] .bdi-nav { display: none; }
 /* จอคอมกว้างมาก → จำกัดความกว้างเนื้อหาให้อ่านง่าย ไม่ยืดจนล้า */
 .bdi-shell[data-view="desktop"] .bdi-page > .bdi-page-inner { max-width: 1120px; margin: 0 auto; }
-
-/* ---------- โหมดมือถือบนจอคอม: แสดงเป็นกรอบโทรศัพท์กลางจอ ---------- */
-@media (min-width: 760px) {
-  body:has(.bdi-shell[data-view="mobile"]) { background: #0e1116; }
-  .bdi-shell[data-view="mobile"] {
-    width: min(430px, 96vw);
-    height: min(932px, 94dvh);
-    margin: 3dvh auto 0;
-    border-radius: 40px;
-    border: 7px solid #1c1c1e;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, .55), 0 0 0 1.5px #3a3a3c;
-    overflow: hidden;
-    position: relative;
-  }
-}
 
 /* ==== Top bar ==== */
 .bdi-topbar {
@@ -99,17 +89,12 @@ body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; marg
 
 /* ตารางสถิติ — ปรับจำนวนคอลัมน์ตามความกว้างจอเอง */
 .bdi-stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
-.bdi-tile { border-radius: 14px; padding: 14px; background: #fff; border: 1px solid var(--gm-line); text-align: center; box-shadow: 0 1px 3px rgba(60, 64, 67, .15); }
+.bdi-tile { border-radius: 14px; padding: 14px; background: #fff; border: 1px solid var(--gm-line); text-align: center; box-shadow: 0 1px 3px rgba(60, 64, 67, .15); display: flex; flex-direction: column; justify-content: center; }
 .bdi-tile b { display: block; font-size: clamp(20px, 4.5vw, 28px); color: var(--gm-blue); }
 .bdi-tile span { font-size: 12px; color: var(--gm-muted); }
 
 .bdi-h3 { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 0 6px; font-size: 15px; font-weight: 800; color: var(--gm-text); }
 .bdi-h3 a { font-size: 12px; color: var(--gm-blue); text-decoration: none; }
-
-/* ==== ปุ่มสลับมุมมอง มือถือ / คอม ==== */
-.bdi-viewswitch { display: flex; gap: 2px; background: #F1F3F4; border-radius: 999px; padding: 3px; flex: none; }
-.bdi-viewswitch button { border: none; background: transparent; cursor: pointer; border-radius: 999px; padding: 5px 9px; font-size: 13px; line-height: 1; color: var(--gm-muted); }
-.bdi-viewswitch button.on { background: #fff; color: var(--gm-blue); box-shadow: 0 1px 3px rgba(60, 64, 67, .25); }
 
 /* ==== แผนที่ ==== */
 .bdi-mapwrap .leaflet-container { background: #fff; }
@@ -172,3 +157,297 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity:
 @media (prefers-reduced-motion: reduce) {
   .scimap-registrar-search-hit { animation: none; }
 }
+
+/* ==================================================================
+   แถบเมนูซ้าย: พับเก็บได้ในโหมดคอม
+   ================================================================== */
+.bdi-side { transition: width .22s ease, border-color .22s ease; }
+.bdi-side > * { min-width: var(--bdi-side-w); } /* กันเนื้อหาในแถบบีบตัวระหว่างกำลังพับ */
+/* ป้องกัน header ของ sidebar กว้างล้นจนปุ่ม collapse ตกขอบ */
+.bdi-side > .bdi-side-header {
+  box-sizing: border-box;
+}
+.bdi-side[data-collapsed="true"] { width: 0; border-right-color: transparent; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .bdi-side { transition: none; } }
+
+/* ==================================================================
+   Focus effect นุ่ม ๆ ของ input / select / textarea ทั้งระบบ
+   (ใช้ !important เพราะสไตล์เดิมเป็น inline) — ช่องไหนไม่อยากได้ใส่ class="no-focus-ring"
+   ================================================================== */
+:is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], .no-focus-ring) {
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+:is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], .no-focus-ring):focus {
+  border-color: #8AB4F8 !important;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, .10) !important;
+  outline: none !important;
+}
+
+/* ==================================================================
+   Hover / กดค้าง / focus ของปุ่ม-แท็บ-เมนู ให้อยู่ในโทนเดียวกับธีม (ขาว + ฟ้า)
+   ไม่ใช้ filter: brightness() เพราะปุ่มขาวจะกลายเป็นเทา ใช้ background-image ซ้อนสีทับแทน
+   ================================================================== */
+button { transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease; }
+
+/* focus ของปุ่ม/ลิงก์/แท็บ: โชว์กรอบเฉพาะตอนใช้คีย์บอร์ด (Tab) คลิกเมาส์แล้วไม่ค้าง */
+button:focus:not(:focus-visible), [role="tab"]:focus:not(:focus-visible) { outline: none; }
+:is(button, a, summary, [role="tab"]):focus-visible { outline: 2px solid var(--gm-blue); outline-offset: 2px; }
+.bdi-tabs [role="tab"]:focus-visible { outline-offset: -2px; }
+
+.bdi-tabs [role="tab"] { border-radius: 8px 8px 0 0; }
+.bdi-nav button .ic { transition: background-color .15s ease; }
+
+@media (hover: hover) and (pointer: fine) {
+  /* ทั่วไป: ฟ้าจาง ๆ */
+  button:not(:disabled):hover { background-image: linear-gradient(var(--gm-tint-hover), var(--gm-tint-hover)) !important; }
+
+  /* ปุ่มทึบ: เข้มขึ้นในเฉดเดิม */
+  :is(.sm-b-primary, .sm-b-ok, .sm-btn.primary, .sm-btn.danger, .bdi-btn:not(.ghost), .wb-startbtn,
+      button[style*="background: rgb(26, 115, 232)"], button[style*="background:#1A73E8"],
+      button[style*="background: rgb(24, 128, 56)"], button[style*="background:#188038"],
+      button[style*="background: rgb(217, 48, 37)"], button[style*="background:#D93025"]):not(:disabled):hover {
+    background-image: linear-gradient(rgba(0, 0, 0, .08), rgba(0, 0, 0, .08)) !important;
+  }
+
+  /* ปุ่มอันตรายแบบขอบแดง */
+  .sm-b-danger:not(:disabled):hover { background-image: linear-gradient(rgba(217, 48, 37, .06), rgba(217, 48, 37, .06)) !important; border-color: #F28B82 !important; }
+  /* ปุ่มขอบเทา/ขาว: ขอบเป็นฟ้าอ่อน */
+  :is(.sm-b-ghost, .sm-btn.ghost):not(:disabled):hover { border-color: var(--gm-blue-press) !important; }
+
+  /* แท็บหน้าย่อย (แท็บที่เลือกอยู่คงเดิม) */
+  .bdi-tabs [role="tab"][aria-selected="false"]:hover { color: var(--gm-blue-dark) !important; border-bottom-color: var(--gm-blue-press) !important; }
+
+  /* เมนูล่างมือถือ: ไฮไลต์เฉพาะแคปซูลไอคอน */
+  .bdi-nav button:not(:disabled):hover { background-image: none !important; }
+  .bdi-nav button:not(.on):hover .ic { background: var(--gm-tint-hover); }
+  .bdi-nav button.on:hover .ic { background: #DDE9FD; }
+
+  /* ปุ่มวงกลม (ปิด / ธง / เมนู) */
+  .round-btn:not(:disabled):hover { background: var(--gm-blue-soft) !important; background-image: none !important; color: var(--gm-blue) !important; }
+
+  /* รายการแนะนำในช่องค้นหาสถานที่ */
+  .sm-suggest-item:hover { background: var(--gm-blue-soft); }
+}
+
+/* กดค้าง (ใช้ได้ทั้งเมาส์และจอสัมผัส) */
+button:not(:disabled):active { background-image: linear-gradient(var(--gm-tint-press), var(--gm-tint-press)) !important; }
+:is(.sm-b-primary, .sm-b-ok, .sm-btn.primary, .sm-btn.danger, .bdi-btn:not(.ghost), .wb-startbtn,
+    button[style*="background: rgb(26, 115, 232)"], button[style*="background:#1A73E8"],
+    button[style*="background: rgb(24, 128, 56)"], button[style*="background:#188038"],
+    button[style*="background: rgb(217, 48, 37)"], button[style*="background:#D93025"]):not(:disabled):active {
+  background-image: linear-gradient(rgba(0, 0, 0, .16), rgba(0, 0, 0, .16)) !important;
+}
+.sm-b-danger:not(:disabled):active { background-image: linear-gradient(rgba(217, 48, 37, .12), rgba(217, 48, 37, .12)) !important; }
+.bdi-nav button:not(:disabled):active { background-image: none !important; }
+.bdi-nav button:active .ic { background: var(--gm-blue-hover); }
+.round-btn:not(:disabled):active { background: var(--gm-blue-hover) !important; background-image: none !important; color: var(--gm-blue) !important; }
+
+/* ตัวที่ถูกเลือกอยู่แล้ว (มีสีของตัวเอง): hover แค่เข้มขึ้นนิดเดียวในเฉดเดิม */
+@media (hover: hover) and (pointer: fine) {
+  :is([aria-current], [aria-selected="true"], [aria-pressed="true"], .on):not(:disabled):hover {
+    background-image: linear-gradient(rgba(26, 115, 232, .04), rgba(26, 115, 232, .04)) !important;
+  }
+  /* Hover: เปลี่ยนเฉพาะสีข้อความ ไม่เปลี่ยนพื้นหลัง */
+  .sm-seg button[aria-pressed="false"]:not(:disabled):hover {
+    background-image: none !important;
+    color: var(--gm-blue) !important;
+    text-shadow: 0 0 10px rgba(66, 133, 244, 0.18) !important;
+  }
+}
+
+/* Glow สำหรับข้อความแท็บเข้าสู่ระบบ / ลงทะเบียน */
+@media (hover: hover) and (pointer: fine) {
+  .sm-seg button[aria-pressed="true"],
+  .sm-seg button[aria-pressed="false"]:hover {
+    text-shadow: 0 0 10px rgba(66, 133, 244, 0.18) !important;
+  }
+
+  button.sm-plain:not(:disabled):hover {
+    color: var(--gm-blue) !important;
+    text-shadow: 0 0 10px rgba(66, 133, 244, 0.18) !important;
+  }
+}
+
+/* ปุ่มที่หน้าตาเป็นข้อความ/ลิงก์ ไม่มีกรอบ: ไม่ต้อง hover */
+button.sm-plain:not(:disabled):hover,
+button.sm-plain:not(:disabled):active { background-image: none !important; }
+
+/* ปุ่มไอคอนเปล่า ๆ (ปุ่มซ่อน/แสดง sidebar) */
+.icon-btn {
+  display: inline-grid; place-items: center; flex: none; box-sizing: border-box;
+  width: 36px; height: 36px; padding: 0; margin: 0; border: 0; border-radius: 10px;
+  background: transparent; color: #5F6368; cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn:not(:disabled):hover {
+    background: transparent !important;
+    background-image: none !important;
+    color: var(--gm-blue) !important;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn:not(:disabled):hover {
+    background: transparent !important;
+    background-image: none !important;
+    color: var(--gm-blue) !important;
+  }
+}
+
+/* ==================================================================
+   ปุ่มวงกลม (ธง / ปิด / เมนู) — จัดไอคอนกึ่งกลางทุกขนาดจอ
+   ใช้ SVG ข้างในแทนตัวอักษร ✕ ⚑ ซึ่งแต่ละฟอนต์วางตำแหน่งไม่เท่ากัน
+   ================================================================== */
+.round-btn {
+  display: inline-grid; place-items: center;
+  flex: none; box-sizing: border-box;
+  width: 32px; height: 32px; min-width: 32px; min-height: 32px; aspect-ratio: 1 / 1;
+  padding: 0; margin: 0; border: 0; border-radius: 50%;
+  background: #F1F3F4; color: #5F6368; line-height: 1; cursor: pointer;
+}
+.round-btn.bare { background: transparent; color: #202124; }
+.round-btn > svg { display: block; flex: none; }
+@media (pointer: coarse) { .round-btn { width: 36px; height: 36px; min-width: 36px; min-height: 36px; } }
+
+/* ==================================================================
+   กล่องแจ้งเตือน / ยืนยัน (components/dialogs.jsx)
+   ================================================================== */
+.sm-dialog-backdrop { position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center; padding: 16px; background: rgba(32, 33, 36, .5); animation: smFade .15s ease; }
+.sm-dialog { width: min(400px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; background: #fff; border-radius: 18px; padding: 22px 20px 16px; text-align: center; box-shadow: 0 16px 48px rgba(0, 0, 0, .3); animation: smPop .18s ease; }
+.sm-dialog-icon { width: 48px; height: 48px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; font-weight: 800; line-height: 1; }
+.sm-dialog-title { font-size: 16.5px; font-weight: 800; color: #202124; margin-bottom: 6px; }
+.sm-dialog-msg { font-size: 13.5px; line-height: 1.7; color: #3C4043; white-space: pre-line; overflow-wrap: anywhere; }
+.sm-dialog-details { margin: 14px 0 0; padding: 4px 14px; text-align: left; background: #F8F9FA; border: 1px solid var(--gm-line); border-radius: 12px; }
+.sm-dialog-row { padding: 9px 0; border-bottom: 1px solid #ECEEF0; }
+.sm-dialog-row:last-child { border-bottom: 0; }
+.sm-dialog-row-label { font-size: 11.5px; font-weight: 700; color: #5F6368; margin-bottom: 2px; }
+.sm-dialog-row-value { font-size: 13.5px; line-height: 1.55; color: #202124; overflow-wrap: anywhere; white-space: pre-line; }
+.sm-dialog-from { color: #80868B; text-decoration: line-through; }
+.sm-dialog-arrow { margin: 0 6px; color: #80868B; }
+.sm-dialog-footnote { margin-top: 12px; font-size: 12px; line-height: 1.6; color: #80868B; }
+.sm-dialog-actions { display: flex; gap: 8px; margin-top: 18px; }
+.sm-btn { flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid transparent; font-weight: 800; font-size: 13.5px; cursor: pointer; }
+.sm-btn.primary { background: var(--gm-blue); color: #fff; }
+.sm-btn.danger { background: var(--gm-red); color: #fff; }
+.sm-btn.ghost { background: #fff; color: var(--gm-blue); border-color: var(--gm-line); }
+@keyframes smFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes smPop { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sm-dialog, .sm-dialog-backdrop { animation: none; } }
+
+/* ==================================================================
+   ช่องพิมพ์ค้นหาสถาบัน (components/InstitutionPicker.jsx)
+   ================================================================== */
+.sm-combo { position: relative; overflow: visible; }
+.sm-combo-check { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--gm-green); font-weight: 800; pointer-events: none; }
+.sm-combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  bottom: auto;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+
+  box-sizing: border-box;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+
+  background: #fff;
+  border: 1px solid var(--gm-line);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(60, 64, 67, .16);
+}
+.sm-combo-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border-radius: 8px; font-size: 13.5px; color: var(--gm-text); cursor: pointer; transition: background-color .12s ease, color .12s ease; }
+.sm-combo-item.active { background: var(--gm-blue-soft); color: var(--gm-blue); }
+.sm-combo-item small { flex: none; color: var(--gm-muted); font-weight: 700; }
+.sm-combo-empty { padding: 10px; font-size: 12.5px; color: var(--gm-muted); }
+
+/* ==================================================================
+   Tooltip สังเขปของปุ่มไอคอน — โชว์เฉพาะเมาส์ (hover) และคีย์บอร์ด (focus-visible)
+   จอสัมผัสไม่โชว์ ไม่ค้างหลังแตะ
+   ================================================================== */
+.tip { position: relative; }
+@media (hover: hover) and (pointer: fine) {
+  .tip[data-tip]:hover::after,
+  .tip[data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute; top: calc(100% + 8px); right: -4px; z-index: 50;
+    white-space: nowrap; padding: 6px 10px; border-radius: 8px;
+    background: #3C4043; color: #fff; font-size: 12px; font-weight: 500; line-height: 1.3;
+    box-shadow: 0 2px 8px rgba(60, 64, 67, .35); pointer-events: none;
+    animation: tipIn .12s ease .25s both;
+  }
+}
+@keyframes tipIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+
+/* ───────── ช่องติ๊ก (checkbox) ───────── */
+/* ใช้ !important เพราะบางที่ใช้คอมโพเนนต์ <Input type="checkbox"> ที่ใส่ width/padding/background แบบ inline มา */
+input[type="checkbox"] {
+  -webkit-appearance: none !important; appearance: none !important;
+  box-sizing: border-box !important;
+  width: 18px !important; height: 18px !important; min-width: 18px; flex: none;
+  padding: 0 !important; margin-left: 0; margin-right: 0;
+  border: 2px solid #80868B !important; border-radius: 4px !important;
+  background: #fff !important;
+  cursor: pointer; vertical-align: middle;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+input[type="checkbox"]:checked {
+  border-color: var(--gm-blue) !important;
+  background: var(--gm-blue) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat !important;
+}
+input[type="checkbox"]:indeterminate {
+  border-color: var(--gm-blue) !important;
+  background: var(--gm-blue) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 12h12' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E") center / 14px no-repeat !important;
+}
+input[type="checkbox"]:disabled { opacity: .5; cursor: not-allowed; }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--gm-blue); outline-offset: 2px; }
+
+/* เฉพาะเมาส์/ทัชแพด: กรอบเป็นสีฟ้า (ช่องที่ติ๊กแล้วเข้มขึ้นนิดเดียว) */
+@media (hover: hover) and (pointer: fine) {
+  input[type="checkbox"]:not(:disabled):not(:checked):not(:indeterminate):hover,
+  label:hover > input[type="checkbox"]:not(:disabled):not(:checked):not(:indeterminate) {
+    border-color: var(--gm-blue) !important;
+    background-color: var(--gm-blue-soft) !important;
+  }
+  input[type="checkbox"]:not(:disabled):checked:hover,
+  input[type="checkbox"]:not(:disabled):indeterminate:hover,
+  label:hover > input[type="checkbox"]:not(:disabled):checked,
+  label:hover > input[type="checkbox"]:not(:disabled):indeterminate {
+    border-color: var(--gm-blue-dark) !important;
+    background-color: var(--gm-blue-dark) !important;
+  }
+}
+
+/* search bar ของฝ่ายทะเบียน: ให้ focus เหมือนฝั่งผู้ใช้ทั่วไป (กรอบทั้งแถบเรืองฟ้า ไม่ใช่ตัว input) */
+.reg-search-bar {
+  transition: box-shadow .18s ease, border-color .18s ease;
+}
+.reg-search-bar:focus-within {
+  border-color: transparent !important;
+  box-shadow: 0 0 0 1.5px #8AB4F8, 0 0 0 4px rgba(26, 115, 232, .10) !important;
+}
+
+/* ปุ่มหัวข้อที่พับ/กางได้: ไม่ระบายพื้นหลังตอน hover/กดค้าง เปลี่ยนแค่สีข้อความและลูกศร */
+.acc-toggle:not(:disabled):hover,
+.acc-toggle:not(:disabled):active {
+  background-image: none !important;
+  color: var(--gm-blue) !important;
+}
+.acc-toggle:hover .acc-chev,
+.acc-toggle:active .acc-chev {
+  color: var(--gm-blue) !important;
+}
+
+/* ปุ่มเมนู (burger) บน topbar ฝั่งจอคอม: ยืด/หดความกว้างพร้อมกับ sidebar (.22s เท่ากัน)
+   ให้หัวข้อเลื่อนต่อเนื่อง ไม่กระโดดตอนพับ/ขยาย */
+.bdi-topbar-burger { flex: none; width: 36px; overflow: hidden; opacity: 1; transition: width .22s ease, margin-right .22s ease, opacity .15s ease; }
+.bdi-topbar-burger[data-show="false"] { width: 0; margin-right: -12px; opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .bdi-topbar-burger { transition: none; } }
+
+/* icon-btn: มีแค่ hover เปลี่ยนสีเป็นน้ำเงิน ไม่มีแถบสีจางวาบตอนกด และไม่มีการขยับ */
+.icon-btn:not(:disabled):active { background: transparent !important; background-image: none !important; color: var(--gm-blue) !important; transform: none; }

@@ -26,7 +26,7 @@ export default function PlaceInput({ value, onChange, onPick, onEnter, placehold
       {open ? (
         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bdi-surface-2)", border: "1px solid var(--bdi-line)", borderRadius: 12, boxShadow: "0 2px 10px rgba(60,64,67,.28)", zIndex: 1400, maxHeight: 240, overflowY: "auto", marginTop: 2 }}>
           {sugs.map((sg, i) => (
-            <div key={i} onMouseDown={() => { onPick(sg); setOpen(false); }}
+            <div key={i} className="sm-suggest-item" onMouseDown={() => { onPick(sg); setOpen(false); }}
               style={{ padding: "9px 11px", fontSize: 14, cursor: "pointer", borderBottom: "1px solid var(--bdi-line)", display: "flex", justifyContent: "space-between", gap: 8, color: "#202124" }}>
               <span>{sg.name}</span><span style={{ fontSize: 11, color: "var(--bdi-text-dim)" }}>{sg.src === "landmark" ? "⭐ ที่นิยม" : "OSM"}</span>
             </div>

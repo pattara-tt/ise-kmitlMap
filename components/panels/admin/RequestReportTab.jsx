@@ -1,26 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { Btn, Card, Field, Input, Select, Status, Table, useCollection } from "../../ui";
+import { Btn, Card, Field, Icon, Input, Select, Status, Table, useCollection } from "../../ui";
 import { FIELD_LABEL, formatAdminDateTime } from "./shared";
 import { dayKey, todayKey } from "../../../lib/datetime";
+import { useRefData } from "../../../lib/useRefData";
+
+// ป้ายขั้นตอนของคำร้อง (ใช้ชุดเดียวกับหน้ารายละเอียดคำร้อง) และสีป้ายสถานะในเอกสาร PDF
+const TL_LABEL = {
+  pending: "ส่งคำร้อง",
+  processing: "ตรวจสอบแล้ว ส่งต่อให้ฝ่ายทะเบียน",
+  approved: "อนุมัติคำร้อง",
+  rejected: "ไม่อนุมัติคำร้อง",
+  cancelled: "ยกเลิกคำร้อง",
+};
+const TL_COLOR = {
+  pending: "#B06000", processing: "#1A73E8", approved: "#188038", rejected: "#D93025", cancelled: "#5F6368",
+};
+const CHIP_COLOR = {
+  pending: ["#FEF3C7", "#92400E"],
+  processing: ["#E8F0FE", "#174EA6"],
+  approved: ["#DCFCE7", "#166534"],
+  rejected: ["#FEE2E2", "#991B1B"],
+  cancelled: ["#F1F3F4", "#5F6368"],
+};
 
 // ── UC14 จัดทำสรุปคำร้อง ───────────────────────
-function RequestReport({
-  onBack
-}) {
-  const {
-    items: requests
-  } = useCollection("requests");
-  const {
-    items: users
-  } = useCollection("users");
-  const {
-    items: rooms
-  } = useCollection("rooms");
-  const {
-    items: editLogs
-  } = useCollection("editLogs");
+function RequestReport({ onBack }) {
+  const { items: requests } = useCollection("requests");
+  const { items: users } = useCollection("users");
+  const { items: rooms } = useCollection("rooms");
+  const { items: editLogs } = useCollection("editLogs");
+  const { roleLabels } = useRefData(true);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -318,103 +329,180 @@ function RequestReport({
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
-  function exportPDF(rows) {
-    const body = rows.map((request, index) => `
-          <section class="request">
-            <h2>รายการที่ ${index + 1}</h2>
+  // ลำดับขั้นการดำเนินการของคำร้อง — สร้างด้วยวิธีเดียวกับหน้ารายละเอียดคำร้อง (RequestDetail)
+  function buildTimeline(request) {
+    const events = [];
+    editLogs
+      .filter(l => l.requestId === request.id)
+      .sort((a, b) => String(a.editedAt).localeCompare(String(b.editedAt)))
+      .forEach(l => {
+        let status = null;
+        try {
+          const after = typeof l.after === "string" ? JSON.parse(l.after) : l.after;
+          status = after?.status || null;
+        } catch {}
+        if (!status) return;
+        if (events.length && events[events.length - 1].status === status) return;
+        events.push({ status, userId: l.userId, at: l.editedAt });
+      });
+    if (!events.length || events[0].status !== "pending") {
+      events.unshift({ status: "pending", userId: request.userId, at: request.createdAt });
+    }
+    if (events[events.length - 1].status !== request.status) {
+      events.push({ status: request.status, userId: request.reviewedBy, at: request.reviewedAt });
+    }
+    const waiting =
+      request.status === "pending" ? "รอผู้ดูแลระบบตรวจสอบ"
+      : request.status === "processing" ? "รอฝ่ายทะเบียนพิจารณา"
+      : null;
+    return { events, waiting };
+  }
+  function actorOf(ev) {
+    const actor = users.find(u => u.id === ev.userId);
+    return {
+      who: actor?.name || emailOf(ev.userId),
+      role: actor?.roleCode ? (roleLabels[actor.roleCode] || actor.roleCode) : ""
+    };
+  }
 
-                ${selectedFields.filter(field => !HIDE_IF_EMPTY.includes(field) || getExportValue(request, field)).map(field => `
-                  <div class="field">
-                    <div class="label">
-                      ${escapeHtml(FIELD_LABELS[field])}
-                    </div>
-                    <div class="value">
-                      ${escapeHtml(field === "before" || field === "after" ? formatChangedDataHTML(getExportValue(request, field)) : getExportValue(request, field)).replace(/\n/g, "<br />")}
-                    </div>
-                  </div>
-                `).join("")}
-          </section>
-        `).join("");
+  // PDF แบบ B: 1 คำร้อง = 1 หน้า (หัวเลขที่ + สถานะ, ข้อมูลหลัก, ตารางก่อน/หลังแก้ไข, ลำดับขั้นการดำเนินการ)
+  function exportPDF(rows) {
+    const SHORT_FIELDS = ["applicant", "createdAt", "location", "operator", "operatedAt", "reviewer", "reviewedAt"];
+    const WIDE_FIELDS = ["subject", "detail", "note"];
+    const valueOf = (request, field) => {
+      const v = getExportValue(request, field);
+      return field === "createdAt" && v ? formatAdminDateTime(v) : v;
+    };
+    const cell = (label, value, wide) => `
+            <div class="cell${wide ? " wide" : ""}">
+              <div class="k">${escapeHtml(label)}</div>
+              <div class="v">${escapeHtml(value || "-").replace(/\n/g, "<br />")}</div>
+            </div>`;
+    const asObject = v => v && typeof v === "object" ? v : {};
+    const rangeText = `ช่วงวันที่: ${startDate || "ทั้งหมด"} ถึง ${endDate || "ทั้งหมด"} | จำนวน ${rows.length} รายการ`;
+
+    const pages = rows.map((request, index) => {
+      const visible = field => selectedFields.includes(field) && (!HIDE_IF_EMPTY.includes(field) || getExportValue(request, field));
+      const [chipBg, chipFg] = CHIP_COLOR[request.status] || CHIP_COLOR.cancelled;
+      const band = `
+          <div class="band">
+            <span class="rid">${escapeHtml(selectedFields.includes("id") ? request.id : `รายการที่ ${index + 1}`)}</span>
+            ${selectedFields.includes("status") ? `<span class="chip" style="background:${chipBg};color:${chipFg}">${escapeHtml(STATUS_LABELS[request.status] || request.status || "")}</span>` : ""}
+          </div>`;
+      const shortCells = SHORT_FIELDS.filter(visible).map(f => cell(FIELD_LABELS[f], valueOf(request, f))).join("");
+      const wideCells = WIDE_FIELDS.filter(f => selectedFields.includes(f) && (f !== "note" || (request.note && !["approved", "rejected"].includes(request.status)))).map(f => cell(FIELD_LABELS[f], valueOf(request, f), true)).join("");
+
+      let changes = "";
+      const showBefore = selectedFields.includes("before");
+      const showAfter = selectedFields.includes("after");
+      if (showBefore || showAfter) {
+        const before = asObject(request.before);
+        const after = asObject(request.after);
+        const keys = [...new Set([...Object.keys(after), ...Object.keys(before)])];
+        if (keys.length) {
+          changes = `
+          <h3 class="sec">ข้อมูลที่ขอแก้ไข</h3>
+          <table>
+            <tr><th>ข้อมูล</th>${showBefore ? "<th>ข้อมูลเดิม</th>" : ""}${showAfter ? "<th>ข้อมูลที่ขอแก้ไข</th>" : ""}</tr>
+            ${keys.map(key => `<tr>
+              <td>${escapeHtml(FIELD_LABEL[key] || key)}</td>
+              ${showBefore ? `<td>${escapeHtml(before[key] ?? "-")}</td>` : ""}
+              ${showAfter ? `<td${before[key] !== after[key] ? ' class="chg"' : ""}>${escapeHtml(after[key] ?? "-")}</td>` : ""}
+            </tr>`).join("")}
+          </table>`;
+        }
+      }
+
+      const { events, waiting } = buildTimeline(request);
+      const route = events.map(ev => actorOf(ev).role).filter(Boolean).filter((r, i, a) => i === 0 || r !== a[i - 1]);
+      const timeline = events.map((ev, i) => {
+        const { who, role } = actorOf(ev);
+        const color = TL_COLOR[ev.status] || "#1F2937";
+        const note = (ev.status === "approved" || ev.status === "rejected") && i === events.length - 1 && request.note
+          ? `<div class="tl-at">หมายเหตุ: ${escapeHtml(request.note)}</div>` : "";
+        return `
+            <div class="tl-item">
+              <div class="rail"><span class="dot" style="background:${color}"></span></div>
+              <div class="tl-body">
+                <div class="tl-title" style="color:${color}">${escapeHtml(TL_LABEL[ev.status] || ev.status)}</div>
+                <div class="tl-who">โดย ${escapeHtml(who)}${role ? ` (${escapeHtml(role)})` : ""}</div>
+                <div class="tl-at">${escapeHtml(formatAdminDateTime(ev.at))}</div>
+                ${note}
+              </div>
+            </div>`;
+      }).join("") + (waiting ? `
+            <div class="tl-item">
+              <div class="rail"><span class="dot hollow"></span></div>
+              <div class="tl-body"><div class="tl-wait">${escapeHtml(waiting)}</div></div>
+            </div>` : "");
+
+      return `
+        <section class="page">
+          <div class="run">สรุปคำร้อง · ${escapeHtml(rangeText)}</div>
+          ${band}
+          <div class="grid">${shortCells}</div>
+          ${wideCells}
+          ${changes}
+          <h3 class="sec">ลำดับขั้นการดำเนินการ</h3>
+          ${route.length ? `<div class="route"><span class="k">เส้นทางคำร้อง</span> ${route.map(escapeHtml).join(' <span class="arr">→</span> ')}</div>` : ""}
+          <div class="tl">${timeline}</div>
+          <div class="foot"><span>SciMap · สรุปคำร้อง</span><span>รายการที่ ${index + 1} จาก ${rows.length}</span></div>
+        </section>`;
+    }).join("");
+
     const html = `
       <!DOCTYPE html>
       <html lang="th">
       <head>
         <meta charset="UTF-8" />
         <title>สรุปคำร้อง</title>
-
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Thai:wght@400;600;700&display=swap" />
         <style>
+          @page { size: A4; margin: 14mm; }
+          * { box-sizing: border-box; }
           body {
-            font-family: Arial, sans-serif;
-            padding: 25px;
+            margin: 0;
+            font-family: 'Inter', 'Noto Sans Thai', 'Tahoma', sans-serif;
             color: #202124;
             font-size: 13px;
             line-height: 1.6;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
-
-          h1 {
-            font-size: 22px;
-            margin-bottom: 8px;
-          }
-
-          .meta {
-            font-size: 12px;
-            color: #5F6368;
-            margin-bottom: 24px;
-          }
-
-          .request {
-            border: 1px solid #DADCE0;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 15px;
-            page-break-inside: avoid;
-          }
-
-          .request h2 {
-            font-size: 16px;
-            margin: 0 0 14px;
-          }
-
-          .field {
-            margin-bottom: 10px;
-          }
-
-          .label {
-            font-weight: 700;
-            margin-bottom: 2px;
-          }
-
-          .value {
-            white-space: normal;
-            overflow-wrap: anywhere;
-            word-break: break-word;
-          }
-
-          @media print {
-            body {
-              padding: 0;
-            }
-
-            .request {
-              page-break-inside: avoid;
-            }
-          }
+          .page { min-height: 255mm; display: flex; flex-direction: column; page-break-after: always; }
+          .page:last-child { page-break-after: auto; }
+          .run { font-size: 11px; color: #5F6368; margin-bottom: 8px; }
+          .band { display: flex; justify-content: space-between; align-items: center; background: #E8F0FE; border-radius: 8px; padding: 10px 16px; margin-bottom: 14px; }
+          .rid { font-size: 18px; font-weight: 700; color: #174EA6; }
+          .chip { font-size: 12px; font-weight: 600; padding: 2px 12px; border-radius: 999px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-bottom: 10px; }
+          .cell { break-inside: avoid; }
+          .cell.wide { margin-bottom: 10px; }
+          .k { font-size: 11px; color: #5F6368; }
+          .v { overflow-wrap: anywhere; word-break: break-word; }
+          .sec { font-size: 14px; font-weight: 700; margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #DADCE0; }
+          table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+          th { background: #F1F3F4; text-align: left; font-weight: 600; padding: 6px 10px; border: 1px solid #DADCE0; }
+          td { padding: 6px 10px; border: 1px solid #DADCE0; vertical-align: top; overflow-wrap: anywhere; }
+          td.chg { font-weight: 600; }
+          .route { margin-bottom: 10px; }
+          .arr { color: #9AA0A6; margin: 0 4px; }
+          .tl-item { display: grid; grid-template-columns: 20px 1fr; column-gap: 12px; break-inside: avoid; }
+          .rail { position: relative; display: flex; justify-content: center; }
+          .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 7px; z-index: 1; }
+          .dot.hollow { border: 2px solid #9AA0A6; background: #fff; }
+          .tl-item:not(:last-child) .rail::after { content: ""; position: absolute; top: 17px; bottom: 0; width: 1px; background: #DADCE0; }
+          .tl-body { padding-bottom: 14px; }
+          .tl-title { font-weight: 700; }
+          .tl-who { font-size: 12.5px; color: #3C4043; overflow-wrap: anywhere; }
+          .tl-at { font-size: 12px; color: #5F6368; }
+          .tl-wait { color: #5F6368; font-style: italic; }
+          .foot { margin-top: auto; padding-top: 6px; border-top: 1px solid #DADCE0; display: flex; justify-content: space-between; font-size: 11px; color: #80868B; }
         </style>
       </head>
 
       <body>
-        <h1>สรุปคำร้อง</h1>
-
-        <div class="meta">
-          ช่วงวันที่:
-          ${startDate || "ทั้งหมด"}
-          ถึง
-          ${endDate || "ทั้งหมด"}
-          |
-          จำนวน ${rows.length} รายการ
-        </div>
-
-        ${body}
+        ${pages}
       </body>
       </html>
     `;
@@ -426,8 +514,17 @@ function RequestReport({
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.onload = () => {
-      printWindow.focus();
-      printWindow.print();
+      const go = () => {
+        printWindow.focus();
+        printWindow.print();
+      };
+      // รอฟอนต์ไทยโหลดเสร็จก่อนสั่งพิมพ์ (ไม่เกิน 2 วินาที) ไม่งั้นตัวอักษรจะเป็นฟอนต์สำรอง
+      const ready = printWindow.document.fonts?.ready;
+      if (ready) {
+        Promise.race([ready, new Promise(r => setTimeout(r, 2000))]).then(go);
+      } else {
+        go();
+      }
     };
   }
   function escapeHtml(value) {
@@ -537,9 +634,10 @@ function RequestReport({
         marginBottom: 20
       }}>
           <Field label="ค้นหาคำร้อง">
-            <Input type="text" placeholder="🔎 ค้นหาคำร้อง" value={search} onChange={e => setSearch(e.target.value)} style={{
-            width: "100%"
-          }} />
+            <div style={{ position: "relative" }}>
+              <Icon name="search" size={16} color="#5F6368" style={{ position: "absolute", left: 11, top: 12, pointerEvents: "none" }} />
+              <Input type="text" placeholder="ค้นหาคำร้อง" value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", paddingLeft: 32 }} />
+            </div>
           </Field>
 
           <Field label="กรองตามสถานะ">

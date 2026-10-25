@@ -217,7 +217,7 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
   }
 
   async function deleteNode(node) {
-    if (!confirm(`ลบ node ${nodeLabel(node)}? Edge ที่เชื่อมกับ node นี้จะถูกลบตามด้วย`)) return;
+    if (!(await askConfirm(`ลบ node ${nodeLabel(node)}? Edge ที่เชื่อมกับ node นี้จะถูกลบตามด้วย`, { title: "ลบ node", confirmLabel: "ลบ", tone: "danger" }))) return;
     setBusy(true);
     try {
       await nodesApi.destroy(node.id, user);
@@ -250,7 +250,7 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
   }
 
   async function deleteEdge(edge) {
-    if (!confirm(`ลบ edge ${edge.id}?`)) return;
+    if (!(await askConfirm(`ลบ edge ${edge.id}?`, { title: "ลบ edge", confirmLabel: "ลบ", tone: "danger" }))) return;
     setBusy(true);
     try {
       await edgesApi.destroy(edge.id, user);
@@ -407,7 +407,7 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
           setPage("editor");
         }}
       >
-        ไปยังหน้าแผนที่ →
+        ไปยังหน้าแผนที่
       </Btn>
     </div>
   </Card>
@@ -438,7 +438,7 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button type="button" onClick={() => { setPage("select"); setMode("node"); resetNode(); resetEdge(); }} 
             style={{ border: "1px solid #DADCE0", borderRadius: 7, padding: "6px 10px", background: "#fff", color: "#4774e8", cursor: "pointer" }}>
-              ← เปลี่ยนอาคาร / ชั้น
+              เปลี่ยนอาคาร / ชั้น
           </button>
           <button type="button" style={modeBtn(mode === "node")} onClick={stopEdgeMode}>ปักหมุด Node</button>
           <button type="button" style={modeBtn(mode === "edge")} onClick={startEdgeMode}>กำหนด Edge</button>

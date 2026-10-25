@@ -11,9 +11,36 @@ import { DEFAULT_PLACEMENT, todayStr } from "./shared";
 import BoundaryPointEditor from "./BoundaryPointEditor";
 import Boundary from "./BoundaryTab";
 
-export default function Assets({
-  user
-}) {
+// อ่านจุดขอบเขตจาก mapBoundaries.geometry → [[lat, lon], ...]
+function getBoundaryPoints(boundary) {
+  let raw = boundary?.geometry ?? boundary?.points ?? null;
+  if (typeof raw === "string") {
+    try { raw = JSON.parse(raw); } catch { raw = null; }
+  }
+  // เผื่อ API ส่งมาในรูป GeoJSON { coordinates: [[...]] }
+  if (raw && !Array.isArray(raw) && Array.isArray(raw.coordinates)) raw = raw.coordinates;
+  if (Array.isArray(raw) && Array.isArray(raw[0]) && Array.isArray(raw[0][0])) raw = raw[0]; // ring แรก
+  if (!Array.isArray(raw)) return [];
+
+  const pts = raw
+    .map(p => Array.isArray(p)
+      ? [Number(p[0]), Number(p[1])]
+      : [Number(p?.lat), Number(p?.lon ?? p?.lng)])
+    .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b))
+    // ถ้าค่าแรกเกิน 90 แปลว่าเป็น [lon, lat] ให้สลับ
+    .map(([a, b]) => (Math.abs(a) > 90 ? [b, a] : [a, b]));
+  return pts.length >= 3 ? pts : [];
+}
+
+// จุดกึ่งกลางของขอบเขต → [lat, lon] ใช้เป็นตำแหน่งเริ่มต้นของแผนที่ตอนวางแผนผัง
+function boundaryCenter(points) {
+  if (!points || !points.length) return null;
+  const lat = points.reduce((s, p) => s + p[0], 0) / points.length;
+  const lon = points.reduce((s, p) => s + p[1], 0) / points.length;
+  return [lat, lon];
+}
+
+export default function Assets({ user }) {
   const {
     data: mapData
   } = useMapData();
@@ -243,6 +270,16 @@ export default function Assets({
     if (form.kind !== "floorplan") {
       return alert("ระบบจัดตำแหน่งบนแผนที่รองรับเฉพาะผังชั้น SVG");
     }
+
+    const boundaryId =
+      selectedBuilding?.boundaryId ||
+      boundaries.find(boundary =>
+        boundary.type === "building" &&
+        boundary.selectableForAssets !== false &&
+        (boundary.buildingId === selectedBuilding?.id ||
+          (!boundary.buildingId && boundary.name === selectedBuilding?.name))
+      )?.id || null;
+
     const floorRow = selectedFloors.find(f => f.id === form.floorId);
     setEditingAsset({
       id: null,
@@ -253,22 +290,15 @@ export default function Assets({
       buildingName: selectedBuilding?.name || "อาคาร",
       floorNo: floorRow?.floorNo || "",
       __new: true,
-      boundaryId: 
-        selectedBuilding?.boundaryId || 
-        boundaries.find(boundary =>
-        boundary.type === "building" &&
-        boundary.selectableForAssets !== false &&
-        (boundary.buildingId === selectedBuilding?.id ||
-          (!boundary.buildingId &&
-            boundary.name === selectedBuilding?.name))
-        )?.id || null,
-
-        customFloor: form.customFloor || "",
+      boundaryId,
+      customFloor: form.customFloor || "",
     });
+
+    const bCenter = boundaryCenter(getBoundaryPoints(boundaries.find(b => b.id === boundaryId)));
 
     setDraftPlacement({
       ...DEFAULT_PLACEMENT,
-      center: [...SC8_CENTER]
+      center: bCenter || [...SC8_CENTER]
     });
     setEditorOpen(true);
   };
@@ -283,11 +313,19 @@ export default function Assets({
     }
     const floorRow = buildings.flatMap(b => b.floors || []).find(f => f.id === asset.floorId);
     const buildingRow = buildings.find(b => b.id === floorRow?.buildingId);
+    const boundaryId = boundaries.find(boundary =>
+      boundary.type === "building" &&
+      (boundary.buildingId === buildingRow?.id ||
+        (!boundary.buildingId && boundary.name === buildingRow?.name))
+    )?.id || null;
+
     setEditingAsset({
       ...asset,
       buildingName: buildingRow?.name || "อาคาร",
-      floorNo: floorRow?.floorNo || ""
+      floorNo: floorRow?.floorNo || "",
+      boundaryId
     });
+
     setDraftPlacement(asset.placement ? {
       ...DEFAULT_PLACEMENT,
       ...asset.placement,
@@ -370,7 +408,12 @@ export default function Assets({
   ----------------------------------------- */
 
   if (editorOpen && editingAsset && draftPlacement) {
-    return <FloorplanEditor asset={editingAsset} placement={draftPlacement} onChange={setDraftPlacement} onCancel={() => {
+    return <FloorplanEditor 
+      asset={editingAsset} 
+      placement={draftPlacement} 
+      outline={getBoundaryPoints(boundaries.find(b=>b.id === editingAsset.boundaryId))} // <--- เพิ่มบรรทัดนี้
+      onChange={setDraftPlacement} 
+      onCancel={() => {
       setEditorOpen(false);
       setEditingAsset(null);
       setDraftPlacement(null);
@@ -703,7 +746,7 @@ export default function Assets({
                   🗺️ ปรับตำแหน่ง
                 </Btn> : null}
 
-              <Btn kind="danger" onClick={() => confirm("ลบไฟล์ประกอบนี้?") && destroy(a.id, user)}>
+              <Btn kind="danger" onClick={async () => (await askConfirm("ลบไฟล์ประกอบนี้?", { title: "ลบไฟล์ประกอบ", confirmLabel: "ลบ", tone: "danger" })) && destroy(a.id, user)}>
                 ลบ
               </Btn>
             </div>
