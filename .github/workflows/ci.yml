@@ -57,3 +57,15 @@ jobs:
           PSQL="psql -d legacy" ./deploy/migrate.sh
           PSQL="psql -d legacy" ./deploy/migrate.sh          # รอบสอง ต้องไม่มีอะไรค้าง
           test "$(PSQL='psql -d legacy' ./deploy/migrate.sh --status | grep -c 'ค้าง  ')" = "0"
+
+  # Continuous Deployment: deploy ขึ้น VM เมื่อ push เข้า refactor และ CI ข้างบนผ่านทั้งหมด
+  # รันบน self-hosted runner ที่ติดตั้งบน VM เอง (VM เข้าจากข้างนอกไม่ได้ จึงให้ VM เป็นฝ่ายถามหา job จาก GitHub)
+  # ห้ามเปิดให้ pull_request รัน job นี้ (repo เป็น public)
+  deploy:
+    name: deploy ขึ้น VM
+    needs: [app, database]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/refactor'
+    runs-on: [self-hosted, kmitl-prod]
+    concurrency: deploy
+    steps:
+      - run: cd ~/ise-kmitlMap && ./deploy/deploy.sh
