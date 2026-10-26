@@ -49,7 +49,7 @@ export default function SearchPanel({ view }) {
               <div className="gm-route-inputs">
                 <span className="gm-origin-dot" />
                 <span className="gm-dest-pin" />
-                <PlaceInput value={sFrom} onChange={setSFrom} onEnter={doSearch} onPick={async sg => {
+                <PlaceInput value={sFrom} onChange={setSFrom} onEnter={doSearch} searchNodes={indoorSearchNodes} onPick={async sg => {
         let coord = sg.coord;
         if (sg.src === "landmark" && sg.lm) {
           try {
@@ -60,10 +60,11 @@ export default function SearchPanel({ view }) {
         setSFrom(sg.name);
         ctx.current.placeCache[sg.name] = {
           coord,
-          name: sg.name
+          name: sg.name,
+          nodeId: sg.nodeId || null
         };
       }} placeholder="ตำแหน่งของคุณ" />
-                <PlaceInput value={sTo} onChange={setSTo} onEnter={doSearch} onPick={async sg => {
+                <PlaceInput value={sTo} onChange={setSTo} onEnter={doSearch} searchNodes={indoorSearchNodes} onPick={async sg => {
         let coord = sg.coord;
         if (sg.src === "landmark" && sg.lm) {
           try {
@@ -74,7 +75,8 @@ export default function SearchPanel({ view }) {
         setSTo(sg.name);
         ctx.current.placeCache[sg.name] = {
           coord,
-          name: sg.name
+          name: sg.name,
+          nodeId: sg.nodeId || null
         };
       }} placeholder="ปลายทาง" />
               </div>

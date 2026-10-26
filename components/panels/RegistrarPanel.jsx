@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react"; // useEffect ใช้ซิงก์ activeTab ตาม uc prop (ดูด้านล่าง)
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Btn, Card, Field, Input, Pill, SearchBar, Table, Textarea, useCollection } from "../ui";
 import { useRefData } from "../../lib/useRefData";
+import { clearMapDataCache } from "../../lib/useMapData";
 
 const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
   ssr: false,
@@ -21,7 +22,7 @@ import RoomTypesManager from "./registrar/RoomTypesManager";
 // — ถ้าไม่ส่งมา (หรือค่าอื่น) fallback เป็น "rooms" เหมือนเดิม
 export default function RegistrarPanel({ uc, user, onNavigate }) {
   const [selected, setSelected] = useState({ building: null, floor: "1" });
-  const [activeTab, setActiveTab] = useState(uc === "floors" ? "floors" : "rooms"); // 'rooms' หรือ 'floors'
+  const [activeTab, setActiveTab] = useState(uc === "floors" ? "floors" : "rooms"); // 'rooms', 'floors' or 'building'
   const [focusRoom, setFocusRoom] = useState(null); // ห้องที่ถูกกดจาก node บนแผนที่ ให้ RoomsManager โฟกัส/แสดงข้อมูลให้
   const [tableSearchNodeId, setTableSearchNodeId] = useState(null);
   const [panelFullscreen, setPanelFullscreen] = useState(false); // แผงจัดการด้านล่างขยายเต็มจอหรือไม่
@@ -63,7 +64,7 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
 
   // ใช้ดูว่าชั้นที่กำลังเปิดอยู่มีรายละเอียดชั้นบันทึกไว้หรือไม่ เพื่อโชว์ต่อท้ายหัวข้อแผงจัดการ
   const { items: floorItems } = useCollection("floors");
-  const { buildings } = useRefData();
+  const { items: buildings } = useCollection("buildings");
 
   if (uc === "requests") { return <RegistrarRequestsTab user={user} onNavigate={onNavigate} />; }
   if (uc === "room_types") { return <RoomTypesManager user={user} />; }
@@ -178,6 +179,12 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
                 >
                   ข้อมูลชั้น
                 </button>
+                <button
+                  onClick={() => setActiveTab("building")}
+                  style={{ border: "none", padding: "4px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", background: activeTab === "building" ? "#fff" : "transparent", color: activeTab === "building" ? "#1A73E8" : "#5F6368" }}
+                >
+                  ข้อมูลตึก
+                </button>
               </div>
             </div>
 
@@ -203,14 +210,99 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
           <div style={{ padding: 20, overflowY: "auto", flex: 1, minHeight: 0 }}>
             {activeTab === "rooms" ? (
               <RoomsManager building={selected.building} floor={selected.floor} user={user} focusRoom={focusRoom} setFocusRoom={setFocusRoom} onSearchMatch={setTableSearchNodeId} />
-            ) : (
+            ) : activeTab === "floors" ? (
               <FloorsManager building={selected.building} floor={selected.floor} user={user} />
+            ) : (
+              <BuildingDetailsManager building={selected.building} user={user}
+                onRenamed={(name) => setSelected((current) => ({ ...current, building: name }))} />
             )}
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function BuildingDetailsManager({ building, user, onRenamed }) {
+  const { items: buildings, patch: patchBuilding } = useCollection("buildings");
+  const { items: assets, create: createAsset, patch: patchAsset } = useCollection("mapAssets");
+  const buildingRow = buildings.find((item) =>
+    item.name === building || item.code === building || item.id === building
+  );
+  const photoKey = buildingRow ? `building-photo:${buildingRow.id}` : null;
+  const photoRecord = assets.find((asset) => asset.kind === "buildingPhoto" && asset.name === photoKey);
+  const savedPhoto = photoRecord?.file || (buildingRow?.code?.toUpperCase() === "SC8" ? "/data/places/sc8.png" : "");
+  const [name, setName] = useState("");
+  const [photo, setPhoto] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    setName(buildingRow?.name || "");
+    setPhoto(savedPhoto);
+    setNotice("");
+  }, [buildingRow?.id, buildingRow?.name, savedPhoto]);
+
+  const choosePhoto = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 1_500_000) {
+      setNotice("เลือกภาพ PNG, JPG หรือ WebP ขนาดไม่เกิน 1.5 MB");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(String(reader.result || ""));
+    reader.onerror = () => setNotice("อ่านไฟล์รูปภาพไม่สำเร็จ");
+    reader.readAsDataURL(file);
+  };
+
+  const save = async () => {
+    if (!buildingRow || saving || !name.trim()) return;
+    setSaving(true);
+    setNotice("");
+    try {
+      const nextName = name.trim();
+      if (nextName !== buildingRow.name) {
+        await patchBuilding(buildingRow.id, { name: nextName }, user);
+      }
+      if (photo !== savedPhoto) {
+        if (photoRecord) {
+          await patchAsset(photoRecord.id, { file: photo, status: "published" }, user);
+        } else if (photo) {
+          await createAsset({ name: photoKey, kind: "buildingPhoto", file: photo, floorId: null, status: "published" }, user);
+        }
+      }
+      clearMapDataCache();
+      if (nextName !== buildingRow.name) onRenamed?.(nextName);
+      setNotice("บันทึกชื่อและรูปอาคารเรียบร้อยแล้ว");
+    } catch (error) {
+      setNotice(`บันทึกไม่สำเร็จ: ${error?.message || String(error)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <Card>
+    <b style={{ fontSize: 14, color: "#202124" }}>ข้อมูลตึก</b>
+    <p style={{ color: "#5F6368", fontSize: 12.5, lineHeight: 1.6 }}>
+      ชื่อและรูปอาคารจะใช้ในการ์ดข้อมูลตึกของหน้า User โดยผังและพิกัดยังจัดการใน GIS
+    </p>
+    <Field label="รหัสอาคาร"><Input value={buildingRow?.code || ""} disabled /></Field>
+    <Field label="ชื่ออาคาร">
+      <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="ชื่ออาคาร" />
+    </Field>
+    <Field label="รูปอาคาร (PNG, JPG, WebP สูงสุด 1.5 MB)">
+      <input type="file" accept="image/png,image/jpeg,image/webp" onChange={choosePhoto} />
+    </Field>
+    {photo && <img src={photo} alt="ตัวอย่างรูปอาคาร" style={{ display: "block", width: "100%", maxWidth: 420, height: 190, objectFit: "cover", borderRadius: 12, marginTop: 12 }} />}
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+      <Btn onClick={save} disabled={!buildingRow || saving || !name.trim() || (name.trim() === buildingRow.name && photo === savedPhoto)}>
+        {saving ? "กำลังบันทึก…" : "บันทึกข้อมูลตึก"}
+      </Btn>
+      {notice && <span role="status" style={{ fontSize: 12.5, color: notice.startsWith("บันทึกไม่สำเร็จ") ? "#B3261E" : "#188038" }}>{notice}</span>}
+    </div>
+  </Card>;
 }
 
 const splitTeacherNames = (value) => {

@@ -76,7 +76,12 @@ export function usePlaceActions({
     }
     const c = ctx.current;
     if (c.searchPlaceMarker && map) map.removeLayer(c.searchPlaceMarker);
-    if (c.L && map) {
+    c.searchPlaceMarker = null;
+    // Building cards already have a persistent building icon at this position.
+    // A second red search pin covers that icon (especially after GPS recentering).
+    // Indoor rooms already have their own icon; its red search-hit highlight
+    // should remain visible instead of being covered by an extra red pin.
+    if (meta.kind !== "building" && !meta.nodeId && c.L && map) {
       c.searchPlaceMarker = c.L.marker([finalCoord[1], finalCoord[0]], {
         icon: c.L.divIcon({
           className: "",
@@ -89,17 +94,18 @@ export function usePlaceActions({
     }
     setPlaceCard({
       name,
+      kind: meta.kind || null,
       coord: finalCoord,
       nodeId: meta.nodeId || null,
       floor: meta.floor || null,
       icon: meta.icon || "📍",
       extract: meta.extract || null,
       image: meta.image || null,
-      loading: !meta.extract,
+      loading: meta.kind !== "building" && !meta.extract,
       error: false
     });
     // ดึง PLACE_INFO แม้มี extract แล้ว เพื่อไม่ให้รูปสถานที่ที่แนบไว้ (เช่น SC8) หาย
-    if (!meta.extract || !meta.image) {
+    if (meta.kind !== "building" && (!meta.extract || !meta.image)) {
       const info = await fetchPlaceInfo(name);
       setPlaceCard(prev => prev && prev.name === name ? {
         ...prev,

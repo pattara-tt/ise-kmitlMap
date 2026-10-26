@@ -26,8 +26,8 @@ export function useMapEffect08({
     c.kmitlOverlay = null;
   }
   
-  // ถ้ายังไม่ได้เปิดตึก และยังซูมไม่ถึงระดับที่กำหนด
-  if (!kmitlOpen && mapZoom < 16) return;
+  // Registrar flow: floor plan appears only after explicitly selecting a building.
+  if (!kmitlOpen) return;
   
   const shownFloor = kmitlOpen ? kmitlFloor : "1";
   
@@ -55,7 +55,8 @@ export function useMapEffect08({
     f.svg,
     targetBounds,
       {
-        opacity: 0.88,
+        // Keep the public floor plan visually consistent with Registrar.
+        opacity: 0.96,
         interactive: false,
         pane: "bdiFloorPane",
         zIndex: 1,
@@ -66,6 +67,6 @@ export function useMapEffect08({
   c.kmitlOverlayAssetId = f.assetId || null;
   c.kmitlOverlayPlacement = f.placement || null;
   
-  }, [kmitlOpen,kmitlFloor,kmitlCalibrate,mapZoom,effectiveFloors,
+  }, [kmitlOpen,kmitlFloor,kmitlCalibrate,mapZoom,effectiveFloors,buildingBounds,
   ]);
 }

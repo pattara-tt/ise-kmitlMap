@@ -33,7 +33,7 @@ services:
       PGHOST: db
       PGPORT: "5432"
       PGUSER: ${POSTGRES_USER:-kmitlmap}
-      PGDATABASE: ${POSTGRES_DB:-kmitlmap}
+      PGDATABASE: kmitlmap_seed
       PGPASSWORD: ${POSTGRES_PASSWORD:?ต้องกำหนด POSTGRES_PASSWORD ในไฟล์ .env}
     volumes:
       - ./db/migrations/002_event_room_type_override.sql:/migrations/002_event_room_type_override.sql:ro
@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: 4000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-kmitlmap}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-kmitlmap}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-kmitlmap}:${POSTGRES_PASSWORD}@db:5432/kmitlmap_seed
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}
     depends_on:
       migrate:

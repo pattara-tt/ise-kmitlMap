@@ -421,7 +421,7 @@ export function mergeIndoorGraph(outdoorNodes, buildingGraphs = BUILDING_GRAPHS,
 }
 
 // Dijkstra บนกราฟรวม (นอกตึก+ในตึก) — cost = ระยะทางจริงล้วนๆ ไม่มีตัวคูณร่ม/แสงสว่าง/เวลา
-export function graphRoute(nodes, start, end) {
+export function graphRoute(nodes, start, end, { fromNodeKey = null, toNodeKey = null } = {}) {
   if (!nodes || !nodes.size || !start || !end) return null;
   // จุดเริ่ม/จบ = โหนดใกล้สุด (≤120 ม.)
   let sk = null, ek = null, sd = 120, ed = 120;
@@ -429,6 +429,13 @@ export function graphRoute(nodes, start, end) {
     const d1 = haversine(start, n.pt); if (d1 < sd) { sd = d1; sk = k; }
     const d2 = haversine(end, n.pt); if (d2 < ed) { ed = d2; ek = k; }
   }
+  // Room-to-room navigation must use the rooms' actual routing nodes. Their
+  // geographic coordinates can be so close that nearest-node search chooses
+  // the same corridor/exterior vertex for both endpoints.
+  const fromIndoorKey = fromNodeKey && `IN:kmitl:${fromNodeKey}`;
+  const toIndoorKey = toNodeKey && `IN:kmitl:${toNodeKey}`;
+  if (fromIndoorKey && nodes.has(fromIndoorKey)) sk = fromIndoorKey;
+  if (toIndoorKey && nodes.has(toIndoorKey)) ek = toIndoorKey;
   if (!sk || !ek || sk === ek) return null;
   const dist = new Map(), prev = new Map();
   const heap = [[0, sk]]; dist.set(sk, 0);

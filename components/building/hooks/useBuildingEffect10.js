@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 
-export function useBuildingEffect10({ ctx, curFloor, floorEdges, floorNodes, openKey }) {
+export function useBuildingEffect10({ ctx, curFloor, floorEdges, floorNodes, layersReady, openKey }) {
   useEffect(() => {const {L, map,} = ctx.current;
-    if (!L || !map) {return;}
+    if (!L || !map || !layersReady) {return;}
   
     for (const layer of ctx.current.graphLayer) {
       if (map.hasLayer(layer)) map.removeLayer(layer);
@@ -55,5 +55,6 @@ export function useBuildingEffect10({ ctx, curFloor, floorEdges, floorNodes, ope
     curFloor,
     floorNodes,
     floorEdges,
+    layersReady,
   ]);
 }

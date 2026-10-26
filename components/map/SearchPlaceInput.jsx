@@ -40,11 +40,13 @@ export default function SearchPlaceInput({
 
       // node ที่ใช้แสดงหมุด เช่น จุดกลางห้อง
       const markerNode = KMITL_ALL_NODES[entry.markerId || entry.id];
-      if (!routeNode || !markerNode || !Number.isFinite(routeNode.lat) || !Number.isFinite(routeNode.lon) || !Number.isFinite(markerNode.lat) || !Number.isFinite(markerNode.lon)) {
+      const routeCoord = entry.coord || (routeNode && [routeNode.lon, routeNode.lat]);
+      const markerCoord = entry.markerCoord || (markerNode && [markerNode.lon, markerNode.lat]);
+      if (!routeCoord || !markerCoord || !routeCoord.every(Number.isFinite) || !markerCoord.every(Number.isFinite) || Math.abs(markerCoord[1]) > 90 || Math.abs(markerCoord[0]) > 180) {
         return [];
       }
       // ห้องใช้ rooms.type เป็น source of truth; categories เป็นของกิจกรรม/สถานที่ชั่วคราว ไม่ใช้จัดประเภทห้อง
-      const words = [displayName, entry.name, entry.id, routeNode.label, markerNode.label, room?.code, room?.type, ...(entry.aliases || [])].filter(Boolean);
+      const words = [displayName, entry.name, entry.id, routeNode?.label, markerNode?.label, room?.code, room?.type, ...(entry.aliases || [])].filter(Boolean);
       const matched = words.some(word => {
         const normalizedWord = normalizeSearch(word);
         return normalizedWord.includes(q) || q.includes(normalizedWord);
@@ -53,14 +55,14 @@ export default function SearchPlaceInput({
       return [{
         name: displayName,
         // ใช้พิกัดกลางห้องสำหรับแสดงหมุด
-        coord: [markerNode.lon, markerNode.lat],
+        coord: markerCoord,
         src: "indoor-node",
         // node ประตูสำหรับนำทาง
         nodeId: entry.id,
         routeNodeId: entry.id,
         // node กลางห้องสำหรับแสดงผล
         markerNodeId: entry.markerId || entry.id,
-        floor: KMITL_NODE_FLOOR[entry.id] || "1",
+        floor: entry.floor || KMITL_NODE_FLOOR[entry.id] || "1",
         extract: entry.extract,
         icon: entry.icon,
         subtitle: room?.type || ""

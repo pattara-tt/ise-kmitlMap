@@ -1,25 +1,29 @@
 "use client";
 
 import { useEffect } from "react";
+import { getNodeIcon } from "../../building/nodePresentation";
+import { resolveRoomNodeIcon } from "../../building/roomTypeIcon";
+import { registrarMarkerHtml } from "../../building/registrarMarker";
 
 export function useMapEffect07({ 
   KMITL_ALL_NODES,
   KMITL_NODE_FLOOR,
   ctx,
   indoorSearchNodes,
+  kmitlOpen,
   mapReady,
   mapRef,
   nodeIdByKey,
   openPlaceCard,
   rooms,
+  roomTypes,
   chips,
   CHIP_NODE_TYPES
  }) {
   useEffect(() => {
     const c = ctx.current, L = c.L, m = mapRef.current;
-    if (!L || !m || !mapReady) return;
+    if (!L || !m || !mapReady || kmitlOpen) return;
     const layer = L.layerGroup().addTo(m);
-    const iconFor = (type) => (type === "Toilet" ? "/data/icon/toilet.svg" : "/data/icon/room.svg");
     for (const entry of indoorSearchNodes) {
       const room = rooms.find((r) => r.nodeId === (entry.internalId || nodeIdByKey[entry.id]));
       const displayName = room?.name || entry.name;
@@ -27,15 +31,16 @@ export function useMapEffect07({
       const chipKey = Object.keys(CHIP_NODE_TYPES || {}).find((k) => CHIP_NODE_TYPES[k].includes(routeNode?.type));
       if (chipKey && !chips?.[chipKey]) continue;
   
-      if (!entry.markerId) continue; // ยังไม่มีจุดกลางจริง (เช่นห้องน้ำตอนนี้) — ข้ามไปก่อน จนกว่าจะมีพิกัด
-      const center = KMITL_ALL_NODES[entry.markerId];
+      // Display at the actual Registrar/GIS node, not the legacy route-center node.
+      const center = routeNode;
       if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lon)) continue;
-      const src = iconFor(routeNode?.type);
+      const icon = resolveRoomNodeIcon(room, roomTypes, getNodeIcon(routeNode));
+      const size = icon.type === "room" || icon.type === "toilet" ? 24 : 26;
       L.marker([center.lat, center.lon], {
         icon: L.divIcon({
           className: "",
-          html: `<img src="${src}" alt="" style="width:20px;height:20px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))" />`,
-          iconSize: [20, 20], iconAnchor: [10, 10],
+          html: registrarMarkerHtml({ iconHtml: icon.html, iconType: icon.type, size }),
+          iconSize: [size, size], iconAnchor: [size / 2, size / 2],
         }),
         zIndexOffset: 700,
       })
@@ -43,7 +48,7 @@ export function useMapEffect07({
         // กดหมุดแล้วเปิดการ์ดสถานที่ชุดเดียวกับผลการค้นหา — มีข้อมูลห้อง ปุ่มนำทาง และปุ่มแจ้งปัญหา
         .on("click", () => openPlaceCard(displayName, [center.lon, center.lat], {
           nodeId: entry.id,
-          markerNodeId: entry.markerId,
+          markerNodeId: entry.id,
           floor: KMITL_NODE_FLOOR[entry.id] || "1",
           icon: entry.icon,
           extract: entry.extract,
@@ -51,5 +56,5 @@ export function useMapEffect07({
         .addTo(layer);
     }
     return () => m.removeLayer(layer);
-  }, [mapReady, rooms, indoorSearchNodes, nodeIdByKey, chips, CHIP_NODE_TYPES]);
+  }, [mapReady, kmitlOpen, rooms, roomTypes, indoorSearchNodes, nodeIdByKey, chips, CHIP_NODE_TYPES]);
 }

@@ -10,6 +10,7 @@ export function useBuildingEffect12({
   ctx,
   curFloor,
   floorNodes,
+  layersReady,
   focusedNodeId,
   searchedNodeId,
   setSearchedNodeId,
@@ -23,7 +24,7 @@ export function useBuildingEffect12({
  }) {
   useEffect(() => {
     const {L,map,} = ctx.current;
-    if (!L || !map) {return;}
+    if (!L || !map || !layersReady) {return;}
   
     // clear
     for (const marker of ctx.current.poiLayer) {
@@ -39,6 +40,9 @@ export function useBuildingEffect12({
       if (!Number.isFinite(node?.lat) || !Number.isFinite(node?.lon)) {
         continue;
       }
+      // Same as the public map: exterior is a route connector, not a second door marker.
+      // Keep it in the graph for navigation; hide only its visual icon.
+      if (node.__routeConnector || String(node.type || "").toLowerCase() === "exterior") continue;
   
       const room = roomByNodeRef.current[id];
   
@@ -159,6 +163,7 @@ export function useBuildingEffect12({
     openKey,
     curFloor,
     floorNodes,
+    layersReady,
     b,
   ]);
 }

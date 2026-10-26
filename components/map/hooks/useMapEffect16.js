@@ -40,6 +40,10 @@ export function useMapEffect16({
         if (!from && c.myLocation) { sCoord = c.myLocation; sName = "ตำแหน่งของฉัน"; }
         const resolve = async (x) => { if (!x) return null; const pc = c.placeCache && c.placeCache[x]; if (pc) return pc; return (await resolvePlace(x)) || (await geocodeNominatim(x)); };
         const [gFrom, gTo] = await Promise.all([resolve(from), resolve(to)]);
+        // An indoor room selection carries its real GIS routing node key.
+        // Prefer those nodes over coordinate-only nearest-node snapping.
+        c.lastFromNodeId = gFrom?.nodeId || null;
+        c.lastToNodeId = gTo?.nodeId || null;
         if (from) { if (gFrom) { sCoord = gFrom.coord; sName = gFrom.name; } else note = `หา "${from}" ไม่เจอ (ใช้ สจล. แทน) — ลองพิมพ์ชื่อให้ชัดขึ้น`; }
         if (to) { if (gTo) { eCoord = gTo.coord; eName = gTo.name; } else note = (note ? note + " · " : "") + `หา "${to}" ไม่เจอ (ใช้สถานีแอร์พอร์ตลิงก์ลาดกระบังแทน)`; }
         // ใช้ graphRoute (Dijkstra บนกราฟ OSM + กราฟในตึกทั้งหมด) เป็นแหล่งเดียว — ไม่มี ORS/`/api/route` แล้ว
@@ -151,7 +155,10 @@ export function useMapEffect16({
         // คำนวณ candidates + คะแนน + วาด (นำทางปกติ — ไม่มีเวลา/ร่ม/สว่างอีกต่อไป)
         c.refresh = (osm, fit) => {
           const cands = c.baseRoutes.map((r, i) => ({ ...r, index: i }));
-          const g = c.walkNet ? graphRoute(c.walkNet, c.lastStart, c.lastEnd) : null;
+          const g = c.walkNet ? graphRoute(c.walkNet, c.lastStart, c.lastEnd, {
+            fromNodeKey: c.lastFromNodeId,
+            toNodeKey: c.lastToNodeId,
+          }) : null;
           if (g) { g.index = cands.length; cands.push(g); }
           if (!cands.length) {
             // เครือข่ายทางเดินโหลดเฉพาะในกรอบ DEMO_BBOX — จุดนอกกรอบจะหาเส้นทางไม่ได้เสมอ จึงแจ้งให้ชัดแทนการให้ลองใหม่

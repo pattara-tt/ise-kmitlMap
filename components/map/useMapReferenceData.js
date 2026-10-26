@@ -7,6 +7,7 @@ import { KMITL_BOUNDS, WALKWAY_NODE_TYPES, getNodeType } from "../mapConfig";
 
 export function useMapReferenceData(mapData) {
   const { items: rooms } = useCollection("rooms");
+  const { items: roomTypes } = useCollection("roomTypes");
   const { items: mapAssetItems } = useCollection("mapAssets");
 
   const indoorSearchNodes = useMemo(() => {
@@ -38,6 +39,9 @@ export function useMapReferenceData(mapData) {
           id: node.nodeKey,
           internalId: node.id,
           markerId: center?.nodeKey || null,
+          coord: [Number(node.x), Number(node.y)],
+          markerCoord: center ? [Number(center.x), Number(center.y)] : [Number(node.x), Number(node.y)],
+          floor: String(floor?.floorNo || "1"),
           name: room?.name || node.name || node.nodeKey,
           aliases: [room?.code, room?.teacher, node.nodeKey, typeInfo.label].filter(Boolean),
           extract: `${typeInfo.label || "สถานที่"}${
@@ -75,5 +79,5 @@ export function useMapReferenceData(mapData) {
 
   const buildingBounds = mapData.data?.building?.bounds || KMITL_BOUNDS;
 
-  return { rooms, indoorSearchNodes, nodeIdByKey, effectiveFloors, buildingBounds };
+  return { rooms, roomTypes, indoorSearchNodes, nodeIdByKey, effectiveFloors, buildingBounds };
 }

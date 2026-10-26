@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 export default function PlaceCardPanel({ view }) {
   const { CompassIcon, navigateFromCard, openReportForm, placeCard, setPlaceCard,
-    rooms = [], nodeIdByKey = {}, floorRecords = [] } = view;
+    rooms = [], nodeIdByKey = {}, floorRecords = [], showBuildingFloorplan } = view;
   const [expanded, setExpanded] = useState(false);
   const [naturalH, setNaturalH] = useState(0); // ความสูงจริงของส่วนรายละเอียด (px)
   const [dragH, setDragH] = useState(null); // ความสูงส่วนรายละเอียดระหว่างลาก; null = ไม่ได้ลาก
@@ -77,7 +77,11 @@ export default function PlaceCardPanel({ view }) {
         style={{flex:"none",padding:"10px 16px 0",cursor:"grab",touchAction:"none",userSelect:"none",outline:"none"}}>
         <div style={{padding:"0 0 8px"}}><div style={{width:42,height:5,borderRadius:999,background:"#B8BDC4",margin:"0 auto"}} /></div>
         <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-          <span style={{fontSize:25,lineHeight:1}}>{placeCard.icon || "📍"}</span>
+          {placeCard.kind !== "building" && (
+            <span style={{ fontSize: 25, lineHeight: 1 }}>
+              {placeCard.icon || "📍"}
+            </span>
+          )}
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:800,fontSize:18,color:"#202124"}}>{displayName}</div>
             {!expanded && (typeLabel || floorLabel) && <div style={{marginTop:3,fontSize:12,color:"#5F6368"}}>{[typeLabel, floorLabel].filter(Boolean).join(" · ")}</div>}
@@ -106,12 +110,13 @@ export default function PlaceCardPanel({ view }) {
                 <div><b>อาจารย์/ผู้รับผิดชอบ:</b> {room.teacher && room.teacher !== "-" ? room.teacher : "-"}</div>
               </div>}
               {!hasRoomDetails && description && <><div style={{fontWeight:800,fontSize:13,color:"#3C4043",marginBottom:5}}>รายละเอียดสถานที่</div><div style={{fontSize:13.5,color:"#5F6368",lineHeight:1.6}}>{description}</div></>}
-              {!hasRoomDetails && !description && <div style={{fontSize:13,color:"#80868B"}}>สถานที่นี้ยังไม่มีข้อมูลห้องเพิ่มเติมในระบบ</div>}
+              {!hasRoomDetails && !description && placeCard.kind !== "building" && <div style={{fontSize:13,color:"#80868B"}}>สถานที่นี้ยังไม่มีข้อมูลห้องเพิ่มเติมในระบบ</div>}
             </div>
           </div>
         </div>
 
-        <button onClick={navigateFromCard} className="sm-b-primary" style={{width:"100%",marginTop:13,padding:"12px 0",border:"none",borderRadius:12,background:"#1A73E8",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}><CompassIcon size={16} color="#fff" /> เส้นทางไปที่นี่</button>
+        {placeCard.kind === "building" && <button onClick={showBuildingFloorplan} className="sm-b-primary" style={{width:"100%",marginTop:13,padding:"12px 0",border:"none",borderRadius:12,background:"#1A73E8",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:"-3px",marginRight:6}}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21v-4h6v4M8 7h2m4 0h2M8 11h2m4 0h2"/></svg>แสดงรายละเอียดผังตึก</button>}
+        <button onClick={navigateFromCard} className="sm-b-primary" style={{width:"100%",marginTop:placeCard.kind === "building" ? 8 : 13,padding:"12px 0",border:"none",borderRadius:12,background:placeCard.kind === "building" ? "#F1F5F9" : "#1A73E8",color:placeCard.kind === "building" ? "#334155" : "#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}><CompassIcon size={16} color={placeCard.kind === "building" ? "#334155" : "#fff"} /> เส้นทางไปที่นี่</button>
         {!expanded && <div onClick={()=>setExpanded(true)} style={{textAlign:"center",fontSize:11.5,color:"#80868B",marginTop:8,cursor:"pointer"}}>ลากขึ้นเพื่อดูข้อมูลเพิ่มเติม</div>}
       </div>
     </div>

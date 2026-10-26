@@ -189,8 +189,15 @@ export default function BuildingFloorPicker({
   const floorNodes = useMemo(() => {
     if (!b) return {};
 
+    // The exterior connector behind the building is a walkway in the Registrar
+    // presentation. Preserve the original GIS node/edges for routing.
+    const asDisplayNode = (node) => String(node?.type || "").toLowerCase() === "exterior"
+      ? { ...node, type: "path", __routeConnector: true }
+      : node;
+
     if (String(curFloor) === "1") {
-      return KMITL_FLOOR1_NODES || {};
+      return Object.fromEntries(Object.entries(KMITL_FLOOR1_NODES || {})
+        .map(([key, node]) => [key, asDisplayNode(node)]));
     }
 
     const result = {};
@@ -200,11 +207,11 @@ export default function BuildingFloorPicker({
     )) {
       const nodeFloor = KMITL_NODE_FLOOR?.[id];
       if (String(nodeFloor) === String(curFloor)) {
-        result[id] = node;
+        result[id] = asDisplayNode(node);
       }
     }
     return result;
-  }, [b, curFloor]);
+  }, [b, curFloor, mapData.data]);
 
   const floorEdges = useMemo(() => {
     const floorNodeIds = new Set(Object.keys(floorNodes));
@@ -243,7 +250,7 @@ export default function BuildingFloorPicker({
     const key = Object.keys(BUILDINGS).find((k) => BUILDINGS[k].name === building);
     setOpenKey(key || null);
     if (floor) setCurFloor(floor);
-  }, [building, floor]);
+  }, [building, floor, mapData.data]);
 
   useEffect(() => {
     if (!building) {
@@ -338,10 +345,10 @@ export default function BuildingFloorPicker({
 
 
   /* Floor SVG */
-  useBuildingEffect09({ b, ctx, curFloor, mergedFloors, openKey });
+  useBuildingEffect09({ b, ctx, curFloor, layersReady, mergedFloors, openKey });
 
   // Draw graph edges 
-  useBuildingEffect10({ ctx, curFloor, floorEdges, floorNodes, openKey });
+  useBuildingEffect10({ ctx, curFloor, floorEdges, floorNodes, layersReady, openKey });
 
   // เก็บ ref ของ roomByNode ล่าสุดไว้ให้ click handler อ่านได้เสมอ
   // (ไม่งั้น handler ที่ผูกไว้ตอนสร้าง marker ครั้งแรกจะเห็นแต่ข้อมูลห้อง ณ ตอนนั้น ไม่ใช่ข้อมูลล่าสุด)
@@ -437,6 +444,7 @@ export default function BuildingFloorPicker({
     ctx,
     curFloor,
     floorNodes,
+    layersReady,
     focusedNodeId: focusedNodeKey,
     searchedNodeId: activeSearchNodeId,
     setSearchedNodeId,

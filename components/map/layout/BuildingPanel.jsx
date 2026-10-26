@@ -7,15 +7,30 @@ export default function BuildingPanel({ view }) {
     kmitlFloor,
     kmitlOpen,
     nav,
+    openBuildingInfo,
     setKmitlFloor,
     setKmitlOpen
   } = view;
   return kmitlOpen && !nav?.active ? <>
+        {!KMITL_FLOORS.find(x => x.id === kmitlFloor)?.svg ? <div style={{
+          position: "absolute", top: 196, left: 14, zIndex: 1900,
+          background: "#FFFFFF", border: "1px solid #DADCE0", borderRadius: 12,
+          padding: "8px 12px", color: "var(--bdi-text-dim)",
+          fontSize: 12, maxWidth: 220
+        }}>ยังไม่มีไฟล์ผังของชั้นนี้</div> : null}
+        <div style={{
+          position: "absolute",
+          top: 200,
+          right: 10,
+          zIndex: 1900,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 10,
+          maxWidth: "calc(100% - 20px)",
+          pointerEvents: "none"
+        }}>
           <div style={{
-    position: "absolute",
-    top: 200,
-    right: 14,
-    zIndex: 1900,
     background: "#FFFFFF",
     border: "1px solid #DADCE0",
     borderRadius: 12,
@@ -26,7 +41,8 @@ export default function BuildingPanel({ view }) {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    maxWidth: 320
+    maxWidth: 320,
+    pointerEvents: "auto"
   }}>
             <span style={{
       display: "flex",
@@ -46,6 +62,17 @@ export default function BuildingPanel({ view }) {
                   · {KMITL_FLOORS.find(x => x.id === kmitlFloor).detail}
                 </span> : null}
             </span>
+            <button onClick={openBuildingInfo} title="ดูข้อมูลและรูปอาคาร" style={{
+      background: "#E8F0FE",
+      border: "1px solid #C6DAFC",
+      borderRadius: 8,
+      padding: "5px 8px",
+      color: "#174EA6",
+      fontSize: 11,
+      fontWeight: 700,
+      whiteSpace: "nowrap",
+      cursor: "pointer"
+    }}>ข้อมูลตึก</button>
             <button onClick={() => setKmitlOpen(false)} style={{
       background: "none",
       border: "none",
@@ -58,33 +85,19 @@ export default function BuildingPanel({ view }) {
 
           {/* เครื่องมือสำหรับผู้พัฒนา (ปรับตำแหน่งผัง / ปักหมุด / ทดสอบเส้นทาง) ถูกนำออกจากหน้าผู้ใช้ทั่วไป */}
 
-          {!KMITL_FLOORS.find(x => x.id === kmitlFloor)?.svg ? <div style={{
-    position: "absolute",
-    top: 196,
-    left: 14,
-    zIndex: 1900,
-    background: "#FFFFFF",
-    border: "1px solid #DADCE0",
-    borderRadius: 12,
-    padding: "8px 12px",
-    color: "var(--bdi-text-dim)",
-    fontSize: 12,
-    maxWidth: 220
-  }}>
-              ยังไม่มีไฟล์ผังของชั้นนี้
-            </div> : null}
           <div style={{
-    position: "absolute",
-    right: 10,
-    top: "30%",
-    zIndex: 1900,
     display: "flex",
     flexDirection: "column",
-    gap: 8
+    gap: 8,
+    maxHeight: "min(50vh, 360px)",
+    overflowY: "auto",
+    padding: "2px 4px 5px",
+    pointerEvents: "auto"
   }}>
             {effectiveFloors.map(f => <button key={f.id} onClick={() => setKmitlFloor(f.id)} style={{
       width: 38,
       height: 38,
+      flexShrink: 0,
       borderRadius: 12,
       border: "none",
       cursor: "pointer",
@@ -99,6 +112,7 @@ export default function BuildingPanel({ view }) {
                 {f.label}
               </button>)}
           </div>
+        </div>
 
         </> : null;
 }

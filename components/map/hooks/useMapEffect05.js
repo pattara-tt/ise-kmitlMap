@@ -53,7 +53,11 @@ export function useMapEffect05({
       const map = L.map(mapEl.current, { zoomControl: false }).setView(CENTER, ZOOM);
       mapRef.current = map;
       setMapZoom(map.getZoom());
-      setMapReady(true);
+      // Publish readiness in a separate task after the new Leaflet instance exists.
+      // This forces dependent marker effects to reattach after a map recreation.
+      setTimeout(() => {
+        if (!cancelled && mapRef.current === map) setMapReady(true);
+      }, 0);
       // 🏢 เลนแยกสำหรับผัง SVG ตึก — z-index ต่ำกว่า overlayPane เริ่มต้น (400) ที่เส้นทางเดินใช้อยู่
       map.createPane("bdiFloorPane");
       map.getPane("bdiFloorPane").style.zIndex = 350;
@@ -91,19 +95,10 @@ export function useMapEffect05({
       ctx.current.openOnly = (which) => {
         setKmitlOpen(which === "kmitl");
       };
-      // 🏢 แสดงปุ่มเลือกชั้นอัตโนมัติ เมื่อ SVG/อาคารอยู่บริเวณกึ่งกลางหน้าจอ
+      // Building selection is explicit: centering/zooming alone must not show room icons.
       ctx.current.updateCenteredBuilding = () => {
         if (!map || ctx.current.navActive || ctx.current.kmitlCalibrateActive) return;
-        if (map.getZoom() < 16) { ctx.current.openOnly(null); return; }
-        const center = map.getCenter();
-        const lat = center.lat, lng = center.lng;
-  
-        const currentFloorObj = KMITL_FLOORS.find(f => f.id === (kmitlFloorRef.current || "1")) || KMITL_FLOORS[0];
-        const activeBounds = currentFloorObj.bounds || KMITL_BOUNDS;
-        const kmitlBoundsL = L.latLngBounds(activeBounds).pad(0.12);
-  
-        if (pipTH(lat, lng, KMITL_OUTLINE) || kmitlBoundsL.contains(center)) return ctx.current.openOnly("kmitl");
-        ctx.current.openOnly(null);
+        if (map.getZoom() < 16) ctx.current.openOnly(null);
       };
       // point-in-polygon แบบเดียวกับที่ mapGeo ใช้ (pip อยู่ใน mapGeo แต่ export เป็น (x,y,ring) ไม่ใช่ (lat,lng,ring) — ห่อไว้ให้ตรงลำดับ)
       function pipTH(lat, lng, ring) {
