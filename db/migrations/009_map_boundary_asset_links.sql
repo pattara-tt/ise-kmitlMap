@@ -1,7 +1,7 @@
 BEGIN;
 
 ALTER TABLE map_boundaries
-    ADD COLUMN IF NOT EXISTS selecteable_for_assets BOOLEAN NOT NULL DEFAULT false;
+    ADD COLUMN IF NOT EXISTS selectable_for_assets BOOLEAN NOT NULL DEFAULT false;
 
 UPDATE map_boundaries
 SET selectable_for_assets = true

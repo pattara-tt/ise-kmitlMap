@@ -155,3 +155,16 @@ cd backend && npm install && npm run dev
 # เทอร์มินัล 2 — frontend
 npm install && npm run dev
 ```
+
+## อัปเดตระบบ (CI/CD)
+
+ไม่ต้อง `docker compose down` — ข้อมูลใน volume ไม่ถูกแตะ
+
+```bash
+./deploy/deploy.sh          # pull → สำรองฐาน → build → migrate → เปลี่ยน container → ตรวจ health
+./deploy/migrate.sh --status   # ดูว่ามี migration ค้างไหม (ไม่แก้ฐานข้อมูล)
+```
+
+- `migrate.sh` จดชื่อไฟล์ที่รันแล้วไว้ในตาราง `schema_migrations` และรันเฉพาะไฟล์ที่ยังไม่เคยรัน ครั้งแรกบนฐานเดิมมันตรวจสภาพฐานแล้วจด baseline ให้เอง
+- กติกา: ไฟล์ migration ต้องรันซ้ำได้ (`IF NOT EXISTS` ฯลฯ) และห้ามแก้ไฟล์ที่ push ไปแล้ว ถ้าผิดให้เขียนไฟล์ใหม่แก้
+- GitHub Actions: `ci.yml` ตรวจทุก push/PR (เทสต์, build, สร้างฐานใหม่จาก schema+seed, อัปเกรดฐานเดิมด้วย migrate.sh) · `deploy.yml` deploy ขึ้น VM อัตโนมัติเมื่อ CI ของ push เข้า `refactor` ผ่าน (กดรันเองได้ที่แท็บ Actions) ต้องตั้ง Secrets: `VM_HOST`, `VM_USER`, `VM_SSH_KEY` (และ `VM_APP_DIR` ถ้า path ไม่ใช่ `~/ise-kmitlMap`)

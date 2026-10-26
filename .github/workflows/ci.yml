@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, refactor]
+  pull_request:
+
+jobs:
+  app:
+    name: ตรวจโค้ด + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: cd backend && npm ci
+      - run: node scripts/build-seed.js
+      - run: npm run test:seed
+      - run: npm run test:mock
+      - run: npm run build
+
+  database:
+    name: ตรวจ schema / seed / migration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: ci }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: ci
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: cd backend && npm ci
+      - run: node scripts/build-seed.js
+
+      - name: ฐานใหม่ = schema + seed-base (+ demo)
+        run: |
+          createdb fresh
+          psql -v ON_ERROR_STOP=1 -q -d fresh -f db/schema.sql
+          psql -v ON_ERROR_STOP=1 -q -d fresh -f db/seed-base.sql
+          psql -v ON_ERROR_STOP=1 -q -d fresh -f db/seed-demo.sql
+          psql -v ON_ERROR_STOP=1 -q -d fresh -f db/seed-base.sql   # รันซ้ำได้
+
+      - name: ฐานเดิม (schema ก่อน migration 009) อัปเกรดด้วย migrate.sh
+        run: |
+          createdb legacy
+          git show 1d33092:db/schema.sql | psql -v ON_ERROR_STOP=1 -q -d legacy
+          PSQL="psql -d legacy" ./deploy/migrate.sh
+          PSQL="psql -d legacy" ./deploy/migrate.sh          # รอบสอง ต้องไม่มีอะไรค้าง
+          test "$(PSQL='psql -d legacy' ./deploy/migrate.sh --status | grep -c 'ค้าง  ')" = "0"
