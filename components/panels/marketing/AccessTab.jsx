@@ -11,7 +11,8 @@ export default function Access({ user }) {
   const { items, patch } = useCollection("institutionAccess");
   const { items: accessModules, create: createAccessModule, destroy: destroyAccessModule } = useCollection("institutionAccessModules");
   const { items: users } = useCollection("users");
-  const { items: history } = useCollection("accessHistory");
+  const { items: history, reload: reloadHistory } = useCollection("accessHistory");
+  const [optimisticHistory, setOptimisticHistory] = useState([]);
   const [q, setQ] = useState("");
   const [staffViewId, setStaffViewId] = useState(null); // รหัสสถาบันที่กำลังดูรายชื่อเจ้าหน้าที่
 
@@ -47,15 +48,23 @@ export default function Access({ user }) {
     if (currentStatus === accessStatus) {
       return;
     }
-    const confirmed = await askConfirm(`เปลี่ยนสิทธิ์ ${row.institutionName || row.institutionId} เป็น “${config.label}” หรือไม่?`, { title: "เปลี่ยนสิทธิ์สถาบัน", confirmLabel: "เปลี่ยนสิทธิ์" });
+    const confirmed = window.confirm(`เปลี่ยนสิทธิ์ ${row.institutionName || row.institutionId} เป็น “${config.label}” หรือไม่?`);
     if (!confirmed) return;
     const previousStatus = currentStatus;
 
-    // เปลี่ยนหน้าจอทันที
-    setStatusOverrides(prev => ({
-      ...prev,
-      [row.id]: accessStatus
-    }));
+    // แสดงสถานะและประวัติบนหน้าจอทันทีระหว่างรอ Backend
+    const optimisticId = `optimistic-${row.id}-${Date.now()}`;
+    const optimisticEntry = {
+      id: optimisticId,
+      accessId: row.id,
+      institutionName: row.institutionName || row.institutionId,
+      beforeStatus: previousStatus,
+      afterStatus: accessStatus,
+      changedAt: new Date().toISOString(),
+      actorName: user?.name || "ผู้ใช้งาน"
+    };
+    setStatusOverrides(prev => ({ ...prev, [row.id]: accessStatus }));
+    setOptimisticHistory(prev => [optimisticEntry, ...prev]);
     try {
       const updated = await patch(row.id, {
         accessStatus,
@@ -68,8 +77,15 @@ export default function Access({ user }) {
         ...prev,
         [row.id]: confirmedStatus
       }));
+      // โหลดประวัติจริงหลังบันทึกสำเร็จ แล้วลบรายการชั่วคราวเพื่อป้องกันข้อมูลซ้ำ
+      try {
+        await reloadHistory();
+      } finally {
+        setOptimisticHistory(prev => prev.filter(h => h.id !== optimisticId));
+      }
       alert(`อัปเดตสถานะ ${config.label} เรียบร้อย`);
     } catch (error) {
+      setOptimisticHistory(prev => prev.filter(h => h.id !== optimisticId));
       // ถ้า backend ไม่สำเร็จ ให้ย้อนกลับ
       setStatusOverrides(prev => ({
         ...prev,
@@ -302,12 +318,12 @@ export default function Access({ user }) {
         ประวัติการเปลี่ยนสิทธิ์
       </div>
 
-      {history.length === 0 ? <div style={{
+      {[...optimisticHistory, ...history].length === 0 ? <div style={{
       fontSize: 13,
       color: "#5F6368"
     }}>
           ยังไม่มีประวัติ
-        </div> : history.slice(0, 20).map(h => <Card key={h.id}>
+        </div> : [...optimisticHistory, ...history].slice(0, 20).map(h => <Card key={h.id}>
               <div style={{
         fontSize: 13,
         color: "#202124"

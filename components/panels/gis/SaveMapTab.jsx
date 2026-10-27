@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMapData } from "../../../lib/useMapData";
-import { Btn, Card, Field, Input, Select, Status, Textarea, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Select, Status, Textarea, UCHead, useCollection, askConfirm, notify } from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
 import NodeEdgeTab from "./NodeEdgeTab";
 import { todayStr } from "./shared";
@@ -75,7 +75,9 @@ function SaveMap({
     : [];
 
   const handlePublish = async draftId => {
-    if (!(await askConfirm("ยืนยันการเผยแพร่ข้อมูลแผนที่ ขอบเขต และไฟล์ประกอบทั้งหมดขึ้นระบบจริง?", { title: "เผยแพร่ข้อมูลแผนที่", confirmLabel: "เผยแพร่" }))) return;
+    if (!(await askConfirm("ยืนยันการเผยแพร่ข้อมูลแผนที่ ขอบเขต และไฟล์ประกอบทั้งหมดขึ้นระบบจริง?", 
+      { title: "เผยแพร่ข้อมูลแผนที่", confirmLabel: "เผยแพร่" }))) 
+      return;
     try {
       await patch(draftId, {
         status: "published"

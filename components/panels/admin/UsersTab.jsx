@@ -27,6 +27,7 @@ function Users({ user }) {
 
   const rows = users
     .filter(isManageableUser)
+    .filter(u => !user?.institutionId || String(u.institutionId) === String(user.institutionId))
     .filter(u => !role || u.roleCode === role)
     .filter(u => !statusFilter || u.status === statusFilter)
     .filter(u => (u.email || "").toLowerCase().includes(q.toLowerCase()))

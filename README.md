@@ -86,7 +86,7 @@ docker compose up -d --build  # เปิด http://localhost
 
 ```bash
 export DATABASE_URL='postgresql://user:password@localhost:5432/kmitlmap'
-export SESSION_IDLE_MINUTES=30
+export SESSION_MAX_DAYS=7
 cd backend && npm start
 ```
 
@@ -195,4 +195,4 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/00N_name.sql
 - `.env` ถูก ignore ห้าม commit; `.env.example` มีแต่ placeholder
 - ถ้ารหัสผ่าน PostgreSQL เคยอยู่ใน Git history ให้เปลี่ยนรหัสจริงทันที (การถอดไฟล์ออกจาก tracking ไม่ลบจากประวัติ)
 - `POST /api/auth` ยอมรับ `role` จาก client ตอนสมัคร และ generic `/api/data/:name` มีการจำกัดสิทธิ์เพียงบาง collection จึงต้องออกแบบสิทธิ์ใหม่ก่อนใช้งานจริง
-- `SESSION_IDLE_MINUTES` (ค่าเริ่มต้น 30) กำหนดเวลา idle timeout ของ session
+- `SESSION_MAX_DAYS` (ค่าเริ่มต้น 7) อายุ session นับจากเวลา login ไม่มี idle timeout เปิดค้างไว้ได้จนครบอายุ; session เก็บในตาราง `auth_sessions` (สร้างอัตโนมัติ) จึงไม่หลุดเมื่อ restart backend

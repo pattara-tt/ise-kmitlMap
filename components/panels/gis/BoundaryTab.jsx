@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMapData, clearMapDataCache } from "../../../lib/useMapData";
-import { Btn, Card, Field, Input, Pill, Select, Status, Table, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Pill, Select, Status, Table, UCHead, useCollection,notify, askConfirm } from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
 import BoundaryPointEditor from "./BoundaryPointEditor";
 
@@ -170,6 +170,7 @@ function Boundary({ user }) {
       `ยืนยันการเพิ่มคณะนี้หรือไม่?\n\nID: ${id}\nชื่อคณะ: ${name}\n\nโปรดตรวจสอบ ID ให้ถูกต้อง เพราะไม่ควรเปลี่ยนภายหลัง`,
       { title: "ยืนยันการเพิ่มคณะ", confirmLabel: "เพิ่มคณะ" }
     );
+
     if (!confirmed) return;
 
     setSavingFaculty(true);
@@ -365,23 +366,49 @@ function Boundary({ user }) {
       `เส้นเชื่อม (edge) ${edges.length} รายการ`,
       "\nกู้คืนไม่ได้ ยืนยันการลบหรือไม่?",
     ].filter(Boolean).join("\n");
-    if (!confirm(lines)) return;
+
+    const confirmed = await askConfirm(lines, {
+      title: "ยืนยันการลบขอบเขต",
+      confirmLabel: "ลบ",
+    });
+
+    if (!confirmed) return;
 
     const failed = [];
+
     const safeDestroy = async (api, row, label) => {
       try { await api.destroy(row.id, user); }
       catch (err) { failed.push(`${label} ${row.name || row.nodeKey || row.id}: ${err?.message || "ลบไม่สำเร็จ"}`); }
     };
 
-    // ลบจากล่างขึ้นบน: edge → node → แผนผัง → ขอบเขต
+    try {
+      // ลบจากล่างขึ้นบน: edge → node → แผนผัง → ขอบเขต
     for (const e of edges) await safeDestroy(edgesApi, e, "edge");
     for (const n of nodes) await safeDestroy(nodesApi, n, "node");
     for (const a of assets) await safeDestroy(assetsApi, a, "แผนผัง");
-    for (const b of ordered) await safeDestroy({ destroy }, b, "ขอบเขต");
-
+    for (const b of ordered) {
+      await safeDestroy({ destroy }, b, "ขอบเขต");
+    }
+    
     clearMapDataCache();
-    if (failed.length) alert(`ลบไม่สำเร็จ ${failed.length} รายการ:\n${failed.slice(0, 8).join("\n")}`);
-  };
+
+    if (failed.length > 0) {
+          notify(
+            `ลบไม่สำเร็จ ${failed.length} รายการ: ${failed.slice(0, 8).join(", ")}`,
+            "error"
+          );
+        } else {
+          notify("ลบขอบเขตและข้อมูลที่เกี่ยวข้องเรียบร้อยแล้ว", "success");
+        }
+      } catch (err) {
+        console.error("Delete boundary error:", err);
+
+        notify(
+          err?.message || "เกิดข้อผิดพลาดในการลบขอบเขต",
+          "error"
+        );
+      }  
+    };
 
 
   return <>
@@ -617,31 +644,16 @@ function Boundary({ user }) {
         gap: 6,
         flexWrap: "wrap"
       }}>
-                {/* แก้ไขพิกัด */}
-                <Btn kind="ghost" onClick={() => openEditBoundaryEditor(r)}>
-                  🗺️ แก้ไขจุด
-                </Btn>
+        {/* แก้ไขพิกัด */}
+        <Btn kind="ghost" onClick={() => openEditBoundaryEditor(r)}>
+          🗺️ แก้ไขจุด
+        </Btn>
 
-                {/* Publish / Draft */}
-                {r.status === "draft" ? <Btn kind="ok" onClick={() => patch(r.id, {
-                  status: "published",
-                  selectableForAssets: r.type == "building",
-                  updatedAt: new Date().toISOString()
-                }, user)}>
-                    เผยแพร่
-                  </Btn> : <Btn kind="ghost" onClick={() => patch(r.id, {
-                    status: "draft",
-                    selectableForAssets: false,
-                    updatedAt: new Date().toISOString()
-                  }, user)}>
-                    ถอนกลับร่าง
-                  </Btn>}
-
-                {/* Delete */}
-                <Btn kind="danger" onClick={() => deleteBoundary(r)}>
-                  ลบ
-                </Btn>
-              </div>
+        {/* Delete */}
+        <Btn kind="danger" onClick={() => deleteBoundary(r)}>
+          ลบ
+        </Btn>
+      </div>
     }]} rows={items} />
 
         
