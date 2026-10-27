@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import { useCollection} from "../ui";
 import { formatDateTime } from "../../lib/datetime";
 import { KMITL_BOUNDS, WALKWAY_NODE_TYPES, getNodeType } from "../mapConfig";
+import { getNodeIcon } from "../building/nodePresentation";
+import { resolveRoomNodeIcon } from "../building/roomTypeIcon";
 
 export function useMapReferenceData(mapData) {
   const { items: rooms } = useCollection("rooms");
@@ -35,6 +37,7 @@ export function useMapReferenceData(mapData) {
         const center = centersByName.get(String(node.name || "").trim().toLowerCase());
         const floor = floorById.get(node.floorId);
         const typeInfo = getNodeType(node.type);
+        const resolvedIcon = resolveRoomNodeIcon(room, roomTypes, getNodeIcon(node));
         return {
           id: node.nodeKey,
           internalId: node.id,
@@ -48,9 +51,11 @@ export function useMapReferenceData(mapData) {
             floor ? ` · ${floor.name || `ชั้น ${floor.floorNo}`}` : ""
           }`,
           icon: typeInfo.icon || "📍",
+          iconHtml: resolvedIcon.html,
+          iconType: resolvedIcon.type,
         };
       });
-  }, [mapData.data, rooms]);
+  }, [mapData.data, rooms, roomTypes]);
 
   const nodeIdByKey = useMemo(
     () => Object.fromEntries((mapData.data?.nodes || []).map((node) => [node.nodeKey, node.id])),
