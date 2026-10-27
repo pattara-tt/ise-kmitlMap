@@ -18,5 +18,5 @@ export function useBuildingEffect08({ ctx, layersReady, mapBounds, mapData, open
     } catch (e) {
       // Leaflet may reject bounds while the container is being resized.
     }
-  }, [openKey, layersReady, mapData.data]);
+  }, [openKey, layersReady, mapBounds, mapData.data]);
 }

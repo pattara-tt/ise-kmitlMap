@@ -2,7 +2,7 @@
 
 import BuildingFloorPickerLayout from "./building/BuildingFloorPickerLayout";
 import { useBuildingSearch } from "./building/useBuildingSearch";
-import { normalize, getNodeIcon, getNodeTypeLabel, isExteriorNode } from "./building/nodePresentation";
+import { getNodeIcon, getNodeTypeLabel } from "./building/nodePresentation";
 import { resolveRoomNodeIcon } from "./building/roomTypeIcon";
 import { useBuildingEffect06 } from "./building/hooks/useBuildingEffect06";
 import { useBuildingEffect08 } from "./building/hooks/useBuildingEffect08";
@@ -14,20 +14,218 @@ import { useBuildingEffect13 } from "./building/hooks/useBuildingEffect13";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMapData } from "../lib/useMapData";
+import { apiFetch } from "../lib/api";
 import { loadLeaflet } from "./mapGeo";
 import { drawGoogleLikeBaseMap } from "./mapBaseLayer";
-import {
-  BUILDINGS,
-  CENTER,
-  getNodeType,
-  KMITL_ALL_NODES,
-  KMITL_NODE_FLOOR,
-  KMITL_FLOOR1_NODES,
-  KMITL_FLOOR1_EDGES,
-  KMITL_ALL_EDGES,
-  KMITL_EXTERIOR_LINKS,
-} from "./mapConfig";
+import { CENTER } from "./mapConfig";
 import { useCollection } from "./ui";
+
+/* Registrar data helpers */
+// Registrar joins GIS geometry to existing records by ID. These adapters do not
+// write data, publish drafts, or change the public map's shared configuration.
+
+const textId = (value) => (
+  typeof value === "string" || typeof value === "number"
+    ? String(value).trim()
+    : ""
+);
+
+const hasIdentifier = (value) => (
+  value !== null && value !== undefined &&
+  !(typeof value === "string" && !value.trim())
+);
+
+function coordinate(value, limit) {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && Math.abs(number) <= limit ? number : null;
+}
+
+function point(value) {
+  if (!Array.isArray(value) || value.length < 2) return null;
+  const lat = coordinate(value[0], 90);
+  const lon = coordinate(value[1], 180);
+  return lat === null || lon === null ? null : [lat, lon];
+}
+
+function jsonValue(value) {
+  if (typeof value !== "string") return value;
+  try { return JSON.parse(value); } catch { return null; }
+}
+
+function polygon(value) {
+  const raw = jsonValue(value);
+  if (!Array.isArray(raw) || raw.length < 3) return null;
+  const points = raw.map(point);
+  if (points.some((entry) => !entry)) return null;
+  const unique = Array.from(new Map(points.map((entry) => [entry.join(","), entry])).values());
+  if (unique.length < 3) return null;
+
+  // Subtract an origin before the cross product: latitude/longitude magnitudes
+  // are much larger than a building footprint. Ignore numerical rounding only.
+  const [originLat, originLon] = unique[0];
+  const vectors = unique.slice(1).map(([lat, lon]) => [lat - originLat, lon - originLon]);
+  const baseline = vectors.reduce((best, entry) => (
+    Math.hypot(...entry) > Math.hypot(...best) ? entry : best
+  ));
+  const extent = Math.max(...vectors.flat().map(Math.abs));
+  const magnitude = Math.max(1, ...unique.flat().map(Math.abs));
+  const tolerance = Number.EPSILON * 32 * magnitude * extent;
+  const hasArea = vectors.some(([lat, lon]) => (
+    Math.abs(baseline[0] * lon - baseline[1] * lat) > tolerance
+  ));
+  return hasArea ? points : null;
+}
+
+function boundsOf(points) {
+  const lats = points.map(([lat]) => lat);
+  const lons = points.map(([, lon]) => lon);
+  return [
+    [Math.min(...lats), Math.min(...lons)],
+    [Math.max(...lats), Math.max(...lons)],
+  ];
+}
+
+function rectangle(value) {
+  const raw = jsonValue(value);
+  if (!Array.isArray(raw) || raw.length !== 2) return null;
+  const corners = raw.map(point);
+  if (corners.some((entry) => !entry)) return null;
+  const [[south, west], [north, east]] = boundsOf(corners);
+  if (south === north || west === east) return null;
+  return [[south, west], [south, east], [north, east], [north, west]];
+}
+
+function modifiedAt(row) {
+  const time = Date.parse(row.updatedAt || row.createdAt || "");
+  return Number.isFinite(time) ? time : 0;
+}
+
+function latestValidBoundary(rows) {
+  for (const row of rows.slice().sort((a, b) => modifiedAt(b) - modifiedAt(a))) {
+    const outline = polygon(row.geometry);
+    if (outline) return { row, outline };
+  }
+  return null;
+}
+
+function buildingFloors(building, rows) {
+  const byNumber = new Map();
+  for (const floor of rows) {
+    if (!floor || floor.status === "deleted" || !textId(floor.id)) continue;
+    if (textId(floor.buildingId) && textId(floor.buildingId) !== textId(building.id)) continue;
+    const number = textId(floor.floorNo);
+    if (!number) continue;
+    byNumber.set(number, {
+      ...floor,
+      id: number,
+      apiId: floor.id,
+      floorRecordId: floor.id,
+      label: floor.name || "ชั้น " + number,
+      svg: floor.svg || null,
+      detail: floor.note || null,
+    });
+  }
+  return Array.from(byNumber.values()).sort((a, b) => (
+    a.id.localeCompare(b.id, undefined, { numeric: true })
+  ));
+}
+
+function createRegistrarBuildingRegistry(options = {}) {
+  const { buildings = [], boundaries = [], floors = [] } = options;
+  const rows = (Array.isArray(buildings) ? buildings : []).filter((row) => row && textId(row.id));
+  const boundaryRows = (Array.isArray(boundaries) ? boundaries : []).filter((row) => (
+    row && row.type === "building" && row.status !== "deleted"
+  ));
+  const explicitFloors = Object.prototype.hasOwnProperty.call(options, "floors");
+  const floorRows = Array.isArray(floors) ? floors : [];
+  const names = new Map();
+  for (const row of rows) {
+    if (row.name) names.set(row.name, (names.get(row.name) || 0) + 1);
+  }
+
+  const registry = {};
+  for (const building of rows) {
+    const id = textId(building.id);
+    const linked = boundaryRows.filter((row) => textId(row.buildingId) === id);
+    const legacy = names.get(building.name) === 1
+      ? boundaryRows.filter((row) => !hasIdentifier(row.buildingId) && row.name === building.name)
+      : [];
+    const selected = latestValidBoundary(linked) || latestValidBoundary(legacy);
+    const outline = selected?.outline || polygon(building.outline) || rectangle(building.bounds);
+    if (!outline) continue;
+
+    const key = "db:" + id;
+    const sourceFloors = explicitFloors
+      ? floorRows.filter((floor) => floor && textId(floor.buildingId) === id)
+      : (Array.isArray(building.floors) ? building.floors : []);
+    registry[key] = {
+      ...building,
+      key,
+      bounds: boundsOf(outline),
+      outline,
+      floors: buildingFloors(building, sourceFloors),
+      boundaryId: selected?.row.id || null,
+      boundaryStatus: selected?.row.status || null,
+      __db: true,
+    };
+  }
+  return registry;
+}
+
+function createRegistrarGraph({ buildingId, floors = [], nodes = [], edges = [] } = {}) {
+  const id = textId(buildingId);
+  const floorById = new Map((Array.isArray(floors) ? floors : [])
+    .filter((floor) => id && floor && textId(floor.id) && floor.status !== "deleted" && textId(floor.buildingId) === id)
+    .map((floor) => [textId(floor.id), floor]));
+  const selectedNodes = [];
+  for (const node of Array.isArray(nodes) ? nodes : []) {
+    if (!node || !textId(node.id)) continue;
+    const floor = floorById.get(textId(node.floorId));
+    if (!floor) continue;
+    const position = point([node.y, node.x]);
+    if (!position) continue;
+    const key = textId(node.nodeKey) || textId(node.id);
+    selectedNodes.push([key, {
+      ...node,
+      nodeKey: key,
+      nodeId: node.id,
+      lat: position[0],
+      lon: position[1],
+      label: node.name || node.label || key,
+    }]);
+  }
+  const nodesByKey = Object.fromEntries(selectedNodes);
+  const nodeKeyById = Object.fromEntries(selectedNodes.map(([key, node]) => [node.id, key]));
+  const nodeFloorByKey = Object.fromEntries(selectedNodes.map(([key, node]) => [
+    key, textId(floorById.get(textId(node.floorId)).floorNo) || textId(node.floorId),
+  ]));
+  const scopedIds = new Map(selectedNodes.map(([key, node]) => [textId(node.id), key]));
+  const scopedEdges = [];
+  for (const edge of Array.isArray(edges) ? edges : []) {
+    if (!edge) continue;
+    const from = scopedIds.get(textId(edge.fromNodeId));
+    const to = scopedIds.get(textId(edge.toNodeId));
+    if (from && to) scopedEdges.push([from, to, { ...edge }]);
+  }
+  return { nodesByKey, nodeKeyById, nodeFloorByKey, edges: scopedEdges };
+}
+
+function resolveRegistrarBuilding(registry, { buildingId, building } = {}) {
+  const entries = Object.values(registry || {});
+  const id = textId(buildingId);
+  if (hasIdentifier(buildingId)) {
+    return id ? entries.find((entry) => textId(entry.id) === id) || null : null;
+  }
+  const value = textId(building);
+  if (!value) return null;
+  const exact = entries.find((entry) => textId(entry.id) === value || entry.key === value);
+  if (exact) return exact;
+  const matches = entries.filter((entry) => entry.name === value || entry.code === value);
+  return matches.length === 1 ? matches[0] : null;
+}
+/* End Registrar data helpers */
 
 // Room names and descriptions are editable by users; Leaflet popup HTML must
 // escape these values before interpolating them into its HTML template.
@@ -39,27 +237,86 @@ const escapePopupText = (value) => String(value ?? "")
   .replace(/'/g, "&#39;");
 
 
-// พิกัดขอบเขต [[lat, lon], ...] -> จุดที่ใช้ได้
-const toPoints = (geometry) =>
-  (Array.isArray(geometry) ? geometry : [])
-    .map((p) => [Number(p?.[0]), Number(p?.[1])])
-    .filter(([a, c]) => Number.isFinite(a) && Number.isFinite(c));
-
-// จุด -> bounds [[south, west], [north, east]]
-const boundsOfPoints = (pts) => {
-  if (!pts || !pts.length) return null;
-  const lats = pts.map((p) => p[0]);
-  const lons = pts.map((p) => p[1]);
-  return [[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]];
-};
-
 /* label สำหรับ Popup*/
 
 /* node ที่ถือว่าเป็นจุดทางเข้า/ทางออก */
 
+const EMPTY_ROWS = { nodes: [], edges: [] };
+
+// A Registrar selection must never reuse another building's graph. Keep these
+// rows local instead of replacing the public map's legacy mapConfig objects.
+function useRegistrarGraph({ buildingId, floors, primaryData }) {
+  const selectedId = buildingId == null ? null : String(buildingId);
+  const [revision, setRevision] = useState(0);
+  const [state, setState] = useState({
+    buildingId: null, ...EMPTY_ROWS, loading: false, error: null,
+  });
+
+  useEffect(() => {
+    const onChanged = (event) => {
+      if (["nodes", "edges", "floors"].includes(event.detail?.name)) {
+        setRevision((value) => value + 1);
+      }
+    };
+    window.addEventListener("scimap:collection-changed", onChanged);
+    return () => window.removeEventListener("scimap:collection-changed", onChanged);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    if (!selectedId) {
+      setState({ buildingId: null, ...EMPTY_ROWS, loading: false, error: null });
+      return () => { active = false; controller.abort(); };
+    }
+
+    const matchingPrimary = primaryData?.building?.id != null &&
+      String(primaryData.building.id) === selectedId;
+    if (matchingPrimary && revision === 0) {
+      setState({
+        buildingId: selectedId,
+        nodes: primaryData.nodes || [], edges: primaryData.edges || [],
+        loading: false, error: null,
+      });
+      return () => { active = false; controller.abort(); };
+    }
+
+    setState({ buildingId: selectedId, ...EMPTY_ROWS, loading: true, error: null });
+    apiFetch(`/api/map/graph?building=${encodeURIComponent(selectedId)}`, {
+      signal: controller.signal,
+    }).then((response) => {
+      if (!active) return;
+      setState({
+        buildingId: selectedId,
+        nodes: response.nodes || [], edges: response.edges || [],
+        loading: false, error: null,
+      });
+    }).catch((error) => {
+      if (!active || error.name === "AbortError") return;
+      setState({ buildingId: selectedId, ...EMPTY_ROWS, loading: false, error });
+    });
+
+    return () => { active = false; controller.abort(); };
+  }, [selectedId, primaryData, revision]);
+
+  // Effects run after rendering. Scope even this first render after a selection
+  // change so no old markers can appear briefly under the new building's name.
+  const current = state.buildingId === selectedId ? state : EMPTY_ROWS;
+  const graph = useMemo(() => createRegistrarGraph({
+    buildingId: selectedId, floors, nodes: current.nodes, edges: current.edges,
+  }), [selectedId, floors, current.nodes, current.edges]);
+
+  return {
+    ...graph,
+    loading: Boolean(selectedId) && (state.buildingId !== selectedId || state.loading),
+    error: state.buildingId === selectedId ? state.error : null,
+  };
+}
+
 /* Main component */
 export default function BuildingFloorPicker({
   building,
+  buildingId = null,
   floor,
   onChange,
   onSelectRoom,
@@ -82,58 +339,31 @@ export default function BuildingFloorPicker({
     searchLayer: null,
   });
 
-  /* ทะเบียนอาคาร: อาคารเดิมใน BUILDINGS (Sc8) + อาคารที่เพิ่มใหม่จาก UC7/UC8 (ฐานข้อมูล)
-     อาคารใหม่ใช้ shape เดียวกับ BUILDINGS ({ id, name, bounds, outline, floors }) จึงใช้กับ effect เดิมได้ */
-  const { items: boundaries } = useCollection("mapBoundaries");
-  const { items: edgeRows } = useCollection("edges");
+  // Geometry is owned by GIS; metadata and graph remain linked by stable IDs.
+  // Only buildings returned by the guarded map API can enter this registry.
+  const { items: boundaries, loading: boundariesLoading } = useCollection("mapBoundaries");
+  const { items: floorRecords, loading: floorsLoading } = useCollection("floors");
+  const { items: allRooms } = useCollection("rooms");
+  const { items: roomTypes } = useCollection("roomTypes");
+  const { items: mapAssets } = useCollection("mapAssets");
+  const [floorsLoaded, setFloorsLoaded] = useState(false);
+  useEffect(() => {
+    if (!floorsLoading) setFloorsLoaded(true);
+  }, [floorsLoading]);
 
-  const buildingRegistry = useMemo(() => {
-    const registry = { ...BUILDINGS };
-    const staticIds = new Set(Object.values(BUILDINGS).map((x) => String(x.id)));
-    const staticNames = new Set(Object.values(BUILDINGS).map((x) => x.name));
-    const dbBuildings = Array.isArray(mapData.data?.buildings) ? mapData.data.buildings : [];
+  const registryFloors = useMemo(() => !floorsLoaded && floorsLoading
+    ? (mapData.data?.buildings || []).flatMap((entry) =>
+      (entry.floors || []).map((row) => ({ ...row, buildingId: entry.id })))
+    : floorRecords, [mapData.data, floorRecords, floorsLoading, floorsLoaded]);
 
-    for (const bd of dbBuildings) {
-      if (staticIds.has(String(bd.id)) || staticNames.has(bd.name)) continue;
-
-      const boundary = (boundaries || []).find(
-        (x) =>
-          x.type === "building" &&
-          x.status !== "deleted" &&
-          (x.buildingId ? x.buildingId === bd.id : x.name === bd.name)
-      );
-      const outline = toPoints(boundary?.geometry);
-      const bounds =
-        (outline.length >= 3 ? boundsOfPoints(outline) : null) ||
-        (Array.isArray(bd.bounds) && bd.bounds.length === 2 ? bd.bounds : null);
-      if (!bounds) continue; // ไม่มีขอบเขต/พิกัด วางบนแผนที่ไม่ได้
-
-      registry[`db:${bd.id}`] = {
-        id: bd.id,
-        code: bd.code,
-        name: bd.name,
-        bounds,
-        outline: outline.length >= 3 ? outline : null,
-        floors: (bd.floors || [])
-          .slice()
-          .sort((a, z) => Number(a.floorNo) - Number(z.floorNo))
-          .map((f) => ({ id: String(f.floorNo), label: f.name || `ชั้น ${f.floorNo}` })),
-        __db: true,
-      };
-    }
-    return registry;
-  }, [mapData.data, boundaries]);
-
-  // nodeKey ของ node ที่อยู่ในฐานข้อมูล (ใช้กับอาคารที่เพิ่มใหม่)
-  const dbNodeKeyById = useMemo(
-    () => Object.fromEntries((mapData.data?.nodes || []).map((n) => [n.id, n.nodeKey])),
-    [mapData.data]
-  );
+  const buildingRegistry = useMemo(() => createRegistrarBuildingRegistry({
+    buildings: mapData.data?.buildings || [], boundaries, floors: registryFloors,
+  }), [mapData.data, boundaries, registryFloors]);
 
   /* State*/
 
   const [openKey, setOpenKey] = useState(
-    () => Object.keys(buildingRegistry).find((k) => buildingRegistry[k].name === building) || null
+    () => resolveRegistrarBuilding(buildingRegistry, { buildingId, building })?.key || null
   );
 
   const [curFloor, setCurFloor] = useState(floor || "1");
@@ -145,12 +375,10 @@ export default function BuildingFloorPicker({
   // ใช้บอก effect fit/lock ให้รู้ว่าตอนนี้อ่าน buildingLayers[openKey] ได้แล้วจริง ๆ
   const [layersReady, setLayersReady] = useState(false);
 
-  // ข้อมูลผังจากฝ่ายแผนที่ + รายละเอียดห้องจากฝ่ายทะเบียน 
-  const { items: floorRecords } = useCollection("floors");
-  const { items: allRooms } = useCollection("rooms");
-  const { items: roomTypes } = useCollection("roomTypes");
-  const { items: mapAssets } = useCollection("mapAssets");
   const b = openKey ? buildingRegistry[openKey] || null : null;
+  const graph = useRegistrarGraph({
+    buildingId: b?.id, floors: registryFloors, primaryData: mapData.data,
+  });
 
   const mergedFloors = useMemo(() => {
     if (!b) return [];
@@ -176,6 +404,7 @@ export default function BuildingFloorPicker({
     // ค่อยอัปโหลดผังตามทีหลัง
     for (const record of floorRecords || []) {
       if (
+        record.status === "deleted" ||
         record.buildingId !== b.id ||
         record.floorNo == null
       ) continue;
@@ -197,12 +426,13 @@ export default function BuildingFloorPicker({
     //   ตรงนี้ดูแค่ว่าเป็น floorplan และมีไฟล์จริง ไม่สน status/published
     for (const asset of mapAssets || []) {
       if (
+        asset.status === "deleted" ||
         asset.kind !== "floorplan" ||
         !asset.floorId ||
         !asset.file
       ) continue;
 
-      const assetFloor = (floorRecords || []).find((f) => f.id === asset.floorId && f.buildingId === b.id);
+      const assetFloor = (floorRecords || []).find((f) => f.status !== "deleted" && f.id === asset.floorId && f.buildingId === b.id);
       if (!assetFloor) continue;
       const floorId = String(assetFloor.floorNo);
       const base = (b.floors || []).find((f) => String(f.id) === floorId);
@@ -237,7 +467,7 @@ export default function BuildingFloorPicker({
 
     const nextFloor = String(mergedFloors[mergedFloors.length - 1].id);
     setCurFloor(nextFloor);
-    onChangeRef.current?.({ building: b.name, floor: nextFloor });
+    onChangeRef.current?.({ building: b.name, buildingId: b.id, floor: nextFloor });
   }, [b, curFloor, mergedFloors]);
 
   /* Current rooms */
@@ -250,69 +480,28 @@ export default function BuildingFloorPicker({
 
   const floorNodes = useMemo(() => {
     if (!b) return {};
-
-    // The exterior connector behind the building is a walkway in the Registrar
-    // presentation. Preserve the original GIS node/edges for routing.
-    const asDisplayNode = (node) => String(node?.type || "").toLowerCase() === "exterior"
-      ? { ...node, type: "path", __routeConnector: true }
-      : node;
-
-    // อาคารที่เพิ่มใหม่: อ่าน node ของชั้นนั้นจากฐานข้อมูล (พิกัดเดียวกับหน้าแผนที่ผู้ใช้)
-    if (b.__db) {
-      const floorRec = (floorRecords || []).find(
-        (f) => f.buildingId === b.id && String(f.floorNo) === String(curFloor)
-      );
-      const result = {};
-      if (!floorRec) return result;
-      for (const n of mapData.data?.nodes || []) {
-        if (n.floorId !== floorRec.id) continue;
-        result[n.nodeKey] = asDisplayNode({
-          id: n.id,
-          floorId: n.floorId,
-          lat: Number(n.y),
-          lon: Number(n.x),
-          type: n.type,
-          label: n.name || n.nodeKey,
-        });
-      }
-      return result;
-    }
-
-    if (String(curFloor) === "1") {
-      return Object.fromEntries(Object.entries(KMITL_FLOOR1_NODES || {})
-        .map(([key, node]) => [key, asDisplayNode(node)]));
-    }
-
-    const result = {};
-
-    for (const [id, node] of Object.entries(
-      KMITL_ALL_NODES || {}
-    )) {
-      const nodeFloor = KMITL_NODE_FLOOR?.[id];
-      if (String(nodeFloor) === String(curFloor)) {
-        result[id] = asDisplayNode(node);
-      }
-    }
-    return result;
-  }, [b, curFloor, mapData.data, floorRecords]);
+    return Object.fromEntries(Object.entries(graph.nodesByKey)
+      .filter(([key]) => String(graph.nodeFloorByKey[key]) === String(curFloor))
+      .map(([key, node]) => [key, String(node.type || "").toLowerCase() === "exterior"
+        ? { ...node, type: "path", __routeConnector: true } : node]));
+  }, [b?.id, curFloor, graph.nodesByKey, graph.nodeFloorByKey]);
 
   const floorEdges = useMemo(() => {
     const floorNodeIds = new Set(Object.keys(floorNodes));
-    if (b?.__db) {
-      return (edgeRows || [])
-        .map((e) => [dbNodeKeyById[e.fromNodeId], dbNodeKeyById[e.toNodeId]])
-        .filter(([from, to]) => from && to && floorNodeIds.has(from) && floorNodeIds.has(to));
+    return graph.edges.filter(([from, to]) => floorNodeIds.has(from) && floorNodeIds.has(to));
+  }, [floorNodes, graph.edges]);
+
+  const nodeKeyById = graph.nodeKeyById;
+  const exteriorNodeKeys = useMemo(() => {
+    const keys = new Set();
+    for (const [from, to, edge] of graph.edges) {
+      if (String(edge?.edgeType || "").toLowerCase() !== "exterior") continue;
+      const outsideIsFrom = String(graph.nodesByKey[from]?.type || "").toLowerCase() === "exterior";
+      keys.add(outsideIsFrom ? to : from);
     }
-    return (KMITL_ALL_EDGES || KMITL_FLOOR1_EDGES || []).filter(([from, to]) => floorNodeIds.has(from) && floorNodeIds.has(to));
-  }, [b, curFloor, floorNodes, mapData.data, edgeRows, dbNodeKeyById]);
-
-
-  const nodeKeyById = useMemo(() => ({
-    ...Object.fromEntries(
-      Object.entries(KMITL_ALL_NODES || {}).map(([key, node]) => [node.nodeId || node.id, key])
-    ),
-    ...dbNodeKeyById,
-  }), [mapData.data, dbNodeKeyById]);
+    return keys;
+  }, [graph.edges, graph.nodesByKey]);
+  const isExteriorNode = (key) => exteriorNodeKeys.has(key);
 
   /* Match room กับ node */
   const roomByNode = useMemo(() => {
@@ -338,32 +527,29 @@ export default function BuildingFloorPicker({
 
   /* Sync props */
   useEffect(() => {
-    const key = Object.keys(buildingRegistry).find((k) => buildingRegistry[k].name === building);
-    setOpenKey(key || null);
-    if (floor) setCurFloor(floor);
-  }, [building, floor, mapData.data, buildingRegistry]);
+    const selectedBuilding = resolveRegistrarBuilding(buildingRegistry, { buildingId, building });
+    setOpenKey(selectedBuilding?.key || null);
+    if (floor != null) setCurFloor(String(floor));
+  }, [buildingId, building, floor, buildingRegistry]);
 
   useEffect(() => {
-    if (!building) {
+    if (!buildingId && !building) {
       setSearch("");
       setSearchedNodeId(null);
     }
-  }, [building]);
+  }, [buildingId, building]);
 
 
-  /* Map bounds — loaded from normalized buildings.bounds via /api/map/buildings */
-  // รวมขอบเขตของ Sc8 + อาคารที่เพิ่มใหม่ทุกหลัง เพื่อให้มุมมองแคมปัสครอบคลุมทุกอาคาร
+  // Fit the campus view around every selectable GIS building.
   const mapBounds = useMemo(() => {
-    const list = [
-      mapData.data?.building?.bounds,
-      ...Object.values(buildingRegistry).filter((x) => x.__db).map((x) => x.bounds),
-    ].filter((bb) => Array.isArray(bb) && bb.length === 2);
-    if (!list.length) return [];
+    const bounds = Object.values(buildingRegistry).map((entry) => entry.bounds)
+      .filter((value) => Array.isArray(value) && value.length === 2);
+    if (!bounds.length) return mapData.data?.building?.bounds || [];
     return [
-      [Math.min(...list.map((bb) => bb[0][0])), Math.min(...list.map((bb) => bb[0][1]))],
-      [Math.max(...list.map((bb) => bb[1][0])), Math.max(...list.map((bb) => bb[1][1]))],
+      [Math.min(...bounds.map((value) => value[0][0])), Math.min(...bounds.map((value) => value[0][1]))],
+      [Math.max(...bounds.map((value) => value[1][0])), Math.max(...bounds.map((value) => value[1][1]))],
     ];
-  }, [mapData.data, buildingRegistry]);
+  }, [buildingRegistry, mapData.data]);
 
   /* Fit building */
   const fitBuilding = (map,poly) => {
@@ -417,8 +603,10 @@ export default function BuildingFloorPicker({
     mapRef,
     onChangeRef,
     setCurFloor,
+    layersReady,
     setLayersReady,
     setOpenKey,
+    setSearchedNodeId,
   });
 
 
@@ -430,7 +618,7 @@ export default function BuildingFloorPicker({
     if ( map && layer) {
       fitBuilding(map,layer.poly);
     }
-  }, [openKey, layersReady]);
+  }, [openKey, layersReady, buildingRegistry]);
 
   /* =======================================================
      ล็อคแผนที่ให้อยู่แค่บริเวณตึกที่กำลังแก้ไข (เฉพาะฝ่ายทะเบียน)
@@ -443,7 +631,7 @@ export default function BuildingFloorPicker({
 
   useEffect(() => {
     if (!openKey && layersReady) fitCampus();
-  }, [openKey, layersReady, mapData.data]);
+  }, [openKey, layersReady, mapBounds]);
 
 
   /* Floor SVG */
@@ -470,7 +658,8 @@ export default function BuildingFloorPicker({
     prevFocusedRef.current = focusedNodeKey || null;
   }, [focusedNodeKey]);
   const tableSearchNodeKey = nodeKeyById[tableSearchNodeId] || tableSearchNodeId;
-  const activeSearchNodeId = tableSearchNodeKey || searchedNodeId;
+  const searchedNodeKey = nodeKeyById[searchedNodeId] || searchedNodeId;
+  const activeSearchNodeId = tableSearchNodeKey || searchedNodeKey;
 
   /* สร้าง html ของ popup + tooltip จาก node/room ปัจจุบัน — ใช้ทั้งตอนสร้าง marker ครั้งแรก
      และตอนอัปเดตเนื้อหา popup ที่เปิดค้างอยู่ทันทีที่ข้อมูลห้องถูกแก้ไข */
@@ -602,7 +791,8 @@ export default function BuildingFloorPicker({
 
   // Search 
   const { searchResults, selectSearch } = useBuildingSearch({
-    search, allRooms, floorRecords, b, nodeKeyById, floorNodes, roomByNode,
+    search, allRooms, floorRecords: registryFloors, b, buildingRegistry,
+    nodesByKey: graph.nodesByKey, nodeKeyById, floorNodes, roomByNode,
     setSearchOpen, ctx, setOpenKey, setCurFloor, onChangeRef, fitBuilding,
     openKey, curFloor, building, onSelectRoomRef, setSearchedNodeId,
   });
@@ -616,17 +806,31 @@ export default function BuildingFloorPicker({
       elRef.current
     );
     return () => ro.disconnect();
-  }, []);
+  }, [layersReady]);
 
   // RETURN
-  if (mapData.loading) return <div style={{ padding: 16, color: "#5F6368" }}>กำลังโหลดข้อมูลแผนที่…</div>;
+  if (mapData.loading && !mapData.data) return <div style={{ padding: 16, color: "#5F6368" }}>กำลังโหลดข้อมูลแผนที่…</div>;
   if (mapData.error) return <div style={{ padding: 16, color: "#D93025" }}>โหลดข้อมูลแผนที่ไม่สำเร็จ: {mapData.error.message}</div>;
+
+  let notice = null;
+  if (b && !mergedFloors.length && !floorsLoading) {
+    notice = "อาคารนี้ยังไม่มีข้อมูลชั้น สามารถเพิ่มรายละเอียดอาคารได้ที่แผงด้านล่าง";
+  } else if (b && graph.loading) {
+    notice = "กำลังโหลดจุดห้องของอาคารนี้…";
+  } else if (b && graph.error) {
+    notice = "โหลดจุดห้องไม่สำเร็จ: " + graph.error.message;
+  } else if (b && !graph.loading && !Object.keys(floorNodes).length) {
+    notice = "ชั้นนี้ยังไม่มีจุดห้องจากฝ่ายแผนที่ สามารถแก้ไขข้อมูลอาคารและชั้นได้ที่แผงด้านล่าง";
+  } else if (!b && !boundariesLoading && !floorsLoading && !Object.keys(buildingRegistry).length) {
+    notice = "ยังไม่มีข้อมูลอาคารบนแผนที่ กรุณาตรวจสอบอาคารที่ฝ่าย GIS เพิ่มไว้";
+  }
 
   const view = {
     b,
     curFloor,
     elRef,
-    floorRecords,
+    floorRecords: registryFloors,
+    notice,
     height,
     mergedFloors,
     onChangeRef,
@@ -639,7 +843,7 @@ export default function BuildingFloorPicker({
       setSearchedNodeId(null);
       setSearch("");
       setSearchOpen(false);
-      onChangeRef.current?.({ building: null, floor: "1" });
+      onChangeRef.current?.({ building: null, buildingId: null, floor: "1" });
       fitCampus();
     },
     setCurFloor,

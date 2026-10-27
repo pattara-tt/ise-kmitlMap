@@ -8,6 +8,7 @@ export default function BuildingFloorPickerLayout({ view }) {
     curFloor,
     elRef,
     floorRecords,
+    notice,
     height,
     mergedFloors,
     onChangeRef,
@@ -152,7 +153,7 @@ export default function BuildingFloorPickerLayout({ view }) {
           }}>
                           {(() => {
               const fr = (floorRecords || []).find(f => f.id === item.room.floorId);
-              return `${b?.name || "อาคาร"} · ชั้น ${fr?.floorNo || "-"}`;
+              return `${item.buildingName || "อาคาร"} · ชั้น ${item.floorNo ?? fr?.floorNo ?? "-"}`;
             })()}
                         </span>}
 
@@ -168,6 +169,14 @@ export default function BuildingFloorPickerLayout({ view }) {
       {/* ===================================================
           Legend
           =================================================== */}
+
+      {notice && <div role="status" aria-live="polite" style={{
+        position: "absolute", left: 12, bottom: b ? 58 : 12, zIndex: 1100,
+        maxWidth: "min(520px, calc(100% - 24px))", padding: "9px 12px",
+        background: "rgba(255,255,255,.96)", border: "1px solid #DADCE0",
+        borderRadius: 10, color: "#5F6368", fontSize: 12, lineHeight: 1.5,
+        boxShadow: "0 2px 8px rgba(0,0,0,.12)", pointerEvents: "none",
+      }}>{notice}</div>}
 
       {b && <div style={{
     position: "absolute",
@@ -262,7 +271,7 @@ export default function BuildingFloorPickerLayout({ view }) {
 
           {/* Floors */}
 
-          <div style={{
+          {mergedFloors.length > 0 && <div style={{
       background: "#fff",
       border: "1px solid #DADCE0",
       borderRadius: 24,
@@ -280,6 +289,7 @@ export default function BuildingFloorPickerLayout({ view }) {
           setSearchedNodeId(null);
           onChangeRef.current?.({
             building: b.name,
+            buildingId: b.id,
             floor: f.id
           });
         }} style={{
@@ -297,7 +307,7 @@ export default function BuildingFloorPickerLayout({ view }) {
                     </button>;
       })}
 
-          </div>
+          </div>}
 
         </div> : <div style={{
     position: "absolute",
@@ -313,7 +323,7 @@ export default function BuildingFloorPickerLayout({ view }) {
     color: "#3C4043",
     boxShadow: "0 2px 8px rgba(0,0,0,.12)"
   }}>
-          🏢 กดเลือกอาคาร
+          🏢 กดเลือกป้ายอาคาร แล้วเลือกชั้นและจุดห้อง
         </div>}
 
     </div>;

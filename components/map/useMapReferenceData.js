@@ -91,11 +91,7 @@ export function useMapReferenceData(mapData, selectedBuildingId = null, boundari
           iconType: resolvedIcon.type,
         };
       });
-<<<<<<< HEAD
-  }, [mapData.data, rooms, roomTypes]);
-=======
   }, [mapData.data, allBuildings, rooms, roomTypes]);
->>>>>>> 071cc6632f4ea24aa3b5680354fd0b45ea6df0e7
 
   const nodeIdByKey = useMemo(
     () => Object.fromEntries((mapData.data?.nodes || []).map((node) => [node.nodeKey, node.id])),

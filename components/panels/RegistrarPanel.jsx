@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Btn, Card, Field, Input, Pill, SearchBar, Table, Textarea, useCollection } from "../ui";
-import { useRefData } from "../../lib/useRefData";
 import { clearMapDataCache } from "../../lib/useMapData";
 
 const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
@@ -21,7 +20,7 @@ import RoomTypesManager from "./registrar/RoomTypesManager";
 // รับ uc ("rooms" หรือ "floors") จาก app/page.jsx เพื่อกำหนด sub-flow ของ UC16
 // — ถ้าไม่ส่งมา (หรือค่าอื่น) fallback เป็น "rooms" เหมือนเดิม
 export default function RegistrarPanel({ uc, user, onNavigate }) {
-  const [selected, setSelected] = useState({ building: null, floor: "1" });
+  const [selected, setSelected] = useState({ building: null, buildingId: null, floor: "1" });
   const [activeTab, setActiveTab] = useState(uc === "floors" ? "floors" : "rooms"); // 'rooms', 'floors' or 'building'
   const [focusRoom, setFocusRoom] = useState(null); // ห้องที่ถูกกดจาก node บนแผนที่ ให้ RoomsManager โฟกัส/แสดงข้อมูลให้
   const [tableSearchNodeId, setTableSearchNodeId] = useState(null);
@@ -64,33 +63,41 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
 
   // ใช้ดูว่าชั้นที่กำลังเปิดอยู่มีรายละเอียดชั้นบันทึกไว้หรือไม่ เพื่อโชว์ต่อท้ายหัวข้อแผงจัดการ
   const { items: floorItems } = useCollection("floors");
-  const { items: buildings } = useCollection("buildings");
+  const { items: buildings, loading: buildingsLoading } = useCollection("buildings");
 
   if (uc === "requests") { return <RegistrarRequestsTab user={user} onNavigate={onNavigate} />; }
   if (uc === "room_types") { return <RoomTypesManager user={user} />; }
 
-  const selectedBuilding = buildings.find((b) => b.name === selected.building || b.code === selected.building || b.id === selected.building);
+  // Keep the database identity when a building is renamed or shares another building's name.
+  const legacyMatches = selected.buildingId ? [] : buildings.filter((b) =>
+    b.name === selected.building || b.code === selected.building || b.id === selected.building
+  );
+  const selectedBuilding = selected.buildingId
+    ? buildings.find((b) => b.id === selected.buildingId)
+    : legacyMatches.length === 1 ? legacyMatches[0] : null;
+  const selectedBuildingName = selectedBuilding?.name || selected.building || "";
   const currentFloorData = floorItems.find((f) => f.buildingId === selectedBuilding?.id && String(f.floorNo) === String(selected.floor));
 
-  const panelOpen = !!selected.building;
+  const panelOpen = !!(selected.buildingId || selected.building);
 
   return (
     <div ref={containerRef} className="bdi-fullpanel" style={{ display: "flex", flexDirection: "column", width: "100%", minHeight: 420, overflow: "hidden" }}>
       {/* 1. แผนที่ — อยู่ด้านบนเสมอ ย่อพื้นที่ลงเมื่อแผงจัดการเปิด แทนที่จะให้แผงลอยทับแผนที่ */}
       <div style={{ position: "relative", flex: "1 1 auto", minHeight: 0 }}>
         <BuildingFloorPicker
-          building={selected.building}
+          building={selectedBuildingName}
+          buildingId={selected.buildingId || selectedBuilding?.id || null}
           floor={selected.floor}
           height="100%"
           focusedNodeId={focusRoom?.nodeId || null}
           tableSearchNodeId={tableSearchNodeId}
-          onChange={({ building, floor }) => {
+          onChange={({ building, buildingId, floor }) => {
             // เปลี่ยนอาคารใหม่ → เปิดแผงกลับมา / แค่เปลี่ยนชั้นในอาคารเดิม → คงสถานะย่อไว้
-            if (building !== selected.building) setPanelCollapsed(false);
-            setSelected({ building, floor });
+            if (buildingId !== selected.buildingId) setPanelCollapsed(false);
+            setSelected({ building, buildingId: buildingId || null, floor });
             setFocusRoom(null);
             setTableSearchNodeId(null);
-            setActiveTab("rooms");
+            setActiveTab(floor ? "rooms" : "building");
           }}
           onSelectRoom={(room) => {
             setActiveTab("rooms");
@@ -116,7 +123,7 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
           style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 16px", background: "#F8F9FA", border: "none", borderTop: "1px solid #DADCE0", boxShadow: "0 -2px 10px rgba(0,0,0,0.06)", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#1A73E8" }}
         >
           <span style={{ fontSize: 14 }}>▲</span>
-          <span>{selected.building} · {selected.floor}</span>
+          <span>{selectedBuildingName}{selected.floor ? ` · ชั้น ${selected.floor}` : ""}</span>
           <span style={{ color: "#5F6368", fontWeight: 600 }}>· แสดงแผงจัดการข้อมูล</span>
         </button>
       )}
@@ -159,7 +166,7 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
           <div style={{ padding: "12px 20px", borderBottom: "1px solid #DADCE0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F8F9FA", flex: "0 0 auto" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontWeight: 800, fontSize: 16, color: "#202124" }}>
-                {selected.building} · {selected.floor}
+                {selectedBuildingName}{selected.floor ? ` · ชั้น ${selected.floor}` : ""}
               </span>
               {currentFloorData?.note && (
                 <span style={{ fontSize: 12.5, color: "#5F6368", fontWeight: 500, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -169,13 +176,15 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
               <div style={{ display: "flex", gap: 4, background: "#E8EAED", padding: 3, borderRadius: 8 }}>
                 <button
                   onClick={() => setActiveTab("rooms")}
-                  style={{ border: "none", padding: "4px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", background: activeTab === "rooms" ? "#fff" : "transparent", color: activeTab === "rooms" ? "#1A73E8" : "#5F6368" }}
+                  disabled={!currentFloorData}
+                  style={{ border: "none", padding: "4px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: currentFloorData ? "pointer" : "default", opacity: currentFloorData ? 1 : 0.5, background: activeTab === "rooms" ? "#fff" : "transparent", color: activeTab === "rooms" ? "#1A73E8" : "#5F6368" }}
                 >
                   ข้อมูลห้อง
                 </button>
                 <button
                   onClick={() => setActiveTab("floors")}
-                  style={{ border: "none", padding: "4px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", background: activeTab === "floors" ? "#fff" : "transparent", color: activeTab === "floors" ? "#1A73E8" : "#5F6368" }}
+                  disabled={!currentFloorData}
+                  style={{ border: "none", padding: "4px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: currentFloorData ? "pointer" : "default", opacity: currentFloorData ? 1 : 0.5, background: activeTab === "floors" ? "#fff" : "transparent", color: activeTab === "floors" ? "#1A73E8" : "#5F6368" }}
                 >
                   ข้อมูลชั้น
                 </button>
@@ -208,12 +217,14 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
 
           {/* เนื้อหาฟอร์มจัดการ */}
           <div style={{ padding: 20, overflowY: "auto", flex: 1, minHeight: 0 }}>
-            {activeTab === "rooms" ? (
-              <RoomsManager building={selected.building} floor={selected.floor} user={user} focusRoom={focusRoom} setFocusRoom={setFocusRoom} onSearchMatch={setTableSearchNodeId} />
-            ) : activeTab === "floors" ? (
-              <FloorsManager building={selected.building} floor={selected.floor} user={user} />
+            {!selectedBuilding ? (
+              <Card>{buildingsLoading ? "กำลังโหลดข้อมูลอาคาร…" : "ไม่พบข้อมูลอาคารที่เลือก กรุณาเลือกป้ายอาคารอีกครั้ง"}</Card>
+            ) : activeTab === "rooms" && currentFloorData ? (
+              <RoomsManager key={currentFloorData.id} floorRecord={currentFloorData} user={user} focusRoom={focusRoom} setFocusRoom={setFocusRoom} onSearchMatch={setTableSearchNodeId} />
+            ) : activeTab === "floors" && currentFloorData ? (
+              <FloorsManager key={currentFloorData.id} buildingRecord={selectedBuilding} floorRecord={currentFloorData} user={user} />
             ) : (
-              <BuildingDetailsManager building={selected.building} user={user}
+              <BuildingDetailsManager key={selectedBuilding.id} buildingRecord={selectedBuilding} user={user}
                 onRenamed={(name) => setSelected((current) => ({ ...current, building: name }))} />
             )}
           </div>
@@ -223,12 +234,10 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
   );
 }
 
-function BuildingDetailsManager({ building, user, onRenamed }) {
+function BuildingDetailsManager({ buildingRecord, user, onRenamed }) {
   const { items: buildings, patch: patchBuilding } = useCollection("buildings");
   const { items: assets, create: createAsset, patch: patchAsset } = useCollection("mapAssets");
-  const buildingRow = buildings.find((item) =>
-    item.name === building || item.code === building || item.id === building
-  );
+  const buildingRow = buildings.find((item) => item.id === buildingRecord?.id) || buildingRecord;
   const photoKey = buildingRow ? `building-photo:${buildingRow.id}` : null;
   const photoRecord = assets.find((asset) => asset.kind === "buildingPhoto" && asset.name === photoKey);
   const savedPhoto = photoRecord?.file || (buildingRow?.code?.toUpperCase() === "SC8" ? "/data/places/sc8.png" : "");
@@ -314,6 +323,11 @@ const splitTeacherNames = (value) => {
 const teacherNamesToText = (names) =>
   (Array.isArray(names) ? names : []).map((name) => String(name || "").trim()).filter(Boolean).join(" / ");
 
+const roomFocusKey = (room) => {
+  if (room?.id) return "room:" + room.id;
+  return room?.nodeId ? "node:" + room.nodeId : null;
+};
+
 function RoomTypeSelect({ value, onChange, style }) {
   const { items: roomTypes } = useCollection("roomTypes");
   const ROOM_TYPE_OPTIONS = roomTypes.map((row) => row.name);
@@ -384,12 +398,9 @@ function TeacherInputs({ count, names, onCountChange, onNameChange }) {
 }
 
 // Sub-Component: จัดการห้องพักในชั้นที่เลือก
-function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearchMatch }) {
+function RoomsManager({ floorRecord, user, focusRoom, setFocusRoom, onSearchMatch }) {
   const { items, create, patch, destroy } = useCollection("rooms");
-  const { items: floors } = useCollection("floors");
-  const { buildings } = useRefData();
-  const buildingRow = buildings.find((b) => b.name === building || b.code === building || b.id === building);
-  const floorRow = floors.find((f) => f.buildingId === buildingRow?.id && String(f.floorNo) === String(floor));
+  const floorRow = floorRecord;
   const [q, setQ] = useState("");
   const [form, setForm] = useState({
     code: "", name: "", type: "ห้องเรียน", capacity: 40,
@@ -404,6 +415,14 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
   const [editForm, setEditForm] = useState(null);
   const [isEditing, setIsEditing] = useState(false); // false = แสดงข้อมูลอย่างเดียวก่อนเสมอ, true = เข้าฟอร์มแก้ไขแล้ว
   const [savingRoom, setSavingRoom] = useState(false);
+  const mountedRef = useRef(true);
+  const mutationPendingRef = useRef(false);
+  const selectionRef = useRef({ floorId: null, focusKey: null, version: 0 });
+
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // popup แบบในแอป (แทน confirm()/alert() ของเบราว์เซอร์) — confirmTarget = ห้องที่รอยืนยันลบ, notice = ข้อความแจ้งเตือนหลังบันทึก/ผิดพลาด
   const [confirmTarget, setConfirmTarget] = useState(null);
@@ -413,7 +432,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
   // (ทุกห้องที่เพิ่งถูกเลือกใหม่ ค่าเริ่มต้นคือโหมดดูข้อมูลอย่างเดียวเสมอ เว้นแต่ตั้ง flag นี้ไว้)
   const editIntentRef = useRef(false);
 
-  const currentRooms = items.filter((r) => r.floorId === floorRow?.id);
+  const currentRooms = floorRow?.id ? items.filter((r) => r.floorId === floorRow.id) : [];
 
   // เคลียร์สถานะ override/ฟอร์มเพิ่มห้อง ทุกครั้งที่มีการกด node ใหม่บนแผนที่
   useEffect(() => {
@@ -422,6 +441,37 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
   }, [focusRoom]);
 
   const effectiveFocus = manualOverride ? null : focusRoom;
+  const focusKey = roomFocusKey(effectiveFocus);
+  useLayoutEffect(() => {
+    if (selectionRef.current.floorId !== floorRow?.id || selectionRef.current.focusKey !== focusKey) {
+      selectionRef.current = {
+        floorId: floorRow?.id,
+        focusKey,
+        version: selectionRef.current.version + 1,
+      };
+    }
+  }, [floorRow?.id, focusKey]);
+
+  // A request may finish after the user picks another room or changes floors.
+  // Keep its database result, but only update the form that started the request.
+  const selectionIsCurrent = (selection) => mountedRef.current &&
+    selectionRef.current.version === selection.version &&
+    selectionRef.current.floorId === selection.floorId &&
+    selectionRef.current.focusKey === selection.focusKey;
+  const beginMutation = () => {
+    if (mutationPendingRef.current) return false;
+    mutationPendingRef.current = true;
+    setSavingRoom(true);
+    return true;
+  };
+  const finishMutation = () => {
+    mutationPendingRef.current = false;
+    if (mountedRef.current) setSavingRoom(false);
+  };
+  const updateFocusAfterMutation = (selection, room) => {
+    if (!selectionIsCurrent(selection)) return;
+    setFocusRoom((current) => roomFocusKey(current) === selection.focusKey ? room : current);
+  };
 
   // BuildingFloorPicker ส่งข้อมูลมา 2 แบบ:
   // - ถ้า node นั้นมีห้องอยู่แล้ว: ส่ง record ห้องจริงมาเลย (มี .id)
@@ -429,7 +479,7 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
   // ใช้ .id เทียบกับรายการห้องปัจจุบันเพื่อความชัวร์ (เผื่อข้อมูลถูกแก้ไข/อัปเดตไปแล้ว)
   const matchedRoom =
     effectiveFocus && !effectiveFocus.__isNewNode
-      ? currentRooms.find((r) => r.id === effectiveFocus.id) || effectiveFocus
+      ? currentRooms.find((r) => r.id === effectiveFocus.id) || (effectiveFocus.floorId === floorRow?.id ? effectiveFocus : null)
       : null;
 
   // เมื่อพบห้องที่ตรงกับ node ให้เติมข้อมูลลงฟอร์มแก้ไขทันที (เอาข้อมูลจาก pop-up มาเติมในแถบด้านล่าง)
@@ -518,14 +568,21 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
 
   const confirmDeleteNow = async () => {
     const r = confirmTarget;
-    if (!r) return;
+    if (!r || !beginMutation()) return;
+    const selection = { ...selectionRef.current };
     setConfirmTarget(null);
     try {
       await destroy(r.id, user);
-      backToList();
+      if (!selectionIsCurrent(selection)) return;
+      setManualOverride(true);
+      updateFocusAfterMutation(selection, null);
       setNotice({ title: "สำเร็จ", message: "ลบข้อมูลห้องเรียบร้อยแล้ว" });
     } catch (e) {
-      setNotice({ title: "ลบข้อมูลไม่สำเร็จ", message: e?.message || String(e) });
+      if (selectionIsCurrent(selection)) {
+        setNotice({ title: "ลบข้อมูลไม่สำเร็จ", message: e?.message || String(e) });
+      }
+    } finally {
+      finishMutation();
     }
   };
 
@@ -705,10 +762,12 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
                   code, name, type: String(editForm.type || "").trim(), capacity,
                   teacher: teacherNamesToText(editForm.teachers),
                 };
-                setSavingRoom(true);
+                if (!beginMutation()) return;
+                const selection = { ...selectionRef.current };
                 try {
                   const updated = await patch(matchedRoom.id, changes, user);
                   if (!updated) throw new Error("ไม่พบห้องที่ต้องการแก้ไข");
+                  if (!selectionIsCurrent(selection)) return;
 
                   // patch() บาง backend อาจคืนเฉพาะ field ที่แก้ ทำให้ nodeId/floorId หายไป
                   // ถ้าเอา updated ไปแทน focusRoom ตรง ๆ BuildingFloorPicker จะเสีย focusedNodeId
@@ -735,9 +794,11 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
                   setIsEditing(false);
                   setNotice({ icon: null, title: "สำเร็จ", message: "บันทึกการแก้ไขเรียบร้อยแล้ว" });
                 } catch (error) {
-                  setNotice({ icon: null, title: "บันทึกไม่สำเร็จ", message: error?.message || String(error) });
+                  if (selectionIsCurrent(selection)) {
+                    setNotice({ icon: null, title: "บันทึกไม่สำเร็จ", message: error?.message || String(error) });
+                  }
                 } finally {
-                  setSavingRoom(false);
+                  finishMutation();
                 }
               }}
             >
@@ -789,44 +850,52 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
 
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <Btn
+                disabled={savingRoom}
                 onClick={async () => {
                   if (!form.code.trim() || !form.name.trim()) {
                     return setNotice({ icon: "⚠️", title: "ข้อมูลไม่ครบ", message: "กรุณาระบุรหัสห้องและชื่อห้อง" });
                   }
+                  if (!beginMutation()) return;
+                  const selection = { ...selectionRef.current };
                   // ตาราง rooms มี UNIQUE (building, floor, code) — ถ้ารหัสห้องซ้ำในชั้นเดียวกัน
                   // create() จะ throw ต้องดักไว้ ไม่งั้นปุ่มจะเงียบไปเฉยๆ โดยผู้ใช้ไม่รู้สาเหตุ
-                  let createdRoom;
                   try {
-                    const nodeRow = nodes.find((n) => n.id === form.nodeId || n.nodeKey === form.nodeId);
+                    const nodeRow = nodes.find((n) => n.floorId === floorRow?.id && (n.id === form.nodeId || n.nodeKey === form.nodeId));
+                    if (!nodeRow || !floorRow?.id) throw new Error("ไม่พบจุดห้องในชั้นที่เลือก กรุณาเลือกจุดบนผังใหม่");
 
-                    createdRoom = await create({
+                    const createdRoom = await create({
                       code: form.code,
                       name: form.name,
                       type: form.type,
                       capacity: Number(form.capacity),
                       teacher: teacherNamesToText(form.teachers),
-                      nodeId: nodeRow?.id ?? null,
-                      floorId: floorRow?.id,
+                      nodeId: nodeRow.id,
+                      floorId: floorRow.id,
                     }, user);
+                    if (!selectionIsCurrent(selection)) return;
+                    setForm({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacherCount: 1, teachers: [""], nodeId: "" });
+                    setShowAddForm(false);
+                    if (createdRoom) {
+                      // Keep actual database node/floor IDs even with a partial response.
+                      updateFocusAfterMutation(selection, {
+                        ...createdRoom,
+                        nodeId: createdRoom.nodeId ?? nodeRow.id,
+                        floorId: createdRoom.floorId ?? floorRow.id,
+                      });
+                    }
+                    setNotice({ icon: null, title: "สำเร็จ", message: "เพิ่มข้อมูลห้องเรียบร้อยแล้ว" });
                   } catch (e) {
-                    return setNotice({ icon: null, title: "บันทึกไม่สำเร็จ", message: "อาจมีรหัสห้องนี้อยู่แล้วในชั้นนี้ — " + (e?.message || e) });
+                    if (selectionIsCurrent(selection)) {
+                      setNotice({ icon: null, title: "บันทึกไม่สำเร็จ", message: e?.message || "ไม่สามารถบันทึกข้อมูลห้องได้" });
+                    }
+                  } finally {
+                    finishMutation();
                   }
-                  setForm({ code: "", name: "", type: "ห้องเรียน", capacity: 40, teacherCount: 1, teachers: [""], nodeId: "" });
-                  setShowAddForm(false);
-                  if (createdRoom) {
-                    // create() อาจคืนข้อมูลไม่ครบเช่นเดียวกับ patch() — รักษา nodeId/floorId ไว้
-                    setFocusRoom({
-                      ...createdRoom,
-                      nodeId: createdRoom?.nodeId ?? form.nodeId ?? "",
-                      floorId: createdRoom?.floorId ?? floorRow?.id,
-                    });
-                  }
-                  setNotice({ icon: null, title: "สำเร็จ", message: "เพิ่มข้อมูลห้องเรียบร้อยแล้ว" });
                 }}
               >
-                บันทึกข้อมูลห้อง
+                {savingRoom ? "กำลังบันทึก…" : "บันทึกข้อมูลห้อง"}
               </Btn>
-              <Btn kind="ghost" onClick={() => setShowAddForm(false)}>ยกเลิก</Btn>
+              <Btn kind="ghost" disabled={savingRoom} onClick={() => setShowAddForm(false)}>ยกเลิก</Btn>
             </div>
           </Card>
         )}
@@ -869,7 +938,9 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
             },
           ]}
           rows={rows}
-          empty="ยังไม่มีข้อมูลห้องในชั้นนี้"
+          empty={nodes.some((node) => node.floorId === floorRow?.id)
+            ? "ยังไม่มีรายละเอียดห้อง เลือกจุดห้องบนผังเพื่อเพิ่มข้อมูล"
+            : "ชั้นนี้ยังไม่มีจุดห้องจากฝ่าย GIS สามารถเติมข้อมูลตึกและรายละเอียดชั้นก่อนได้"}
         />
       </div>
       {popupEl}
@@ -880,20 +951,20 @@ function RoomsManager({ building, floor, user, focusRoom, setFocusRoom, onSearch
 // Sub-Component: จัดการรายละเอียดชั้น
 // โครงสร้างชั้นและไฟล์ผัง (SVG) เป็นข้อมูลจาก "ฝ่ายแผนที่" ผ่าน mapAssets
 // ฝ่ายทะเบียนแก้ไขได้เฉพาะ "รายละเอียดชั้น" เท่านั้น ไม่สร้าง/ลบชั้น และไม่แก้ไฟล์ผัง
-function FloorsManager({ building, floor, user }) {
+function FloorsManager({ buildingRecord, floorRecord, user }) {
   const { items, patch } = useCollection("floors");
-  const { buildings } = useRefData();
-  const buildingRow = buildings.find((b) => b.name === building || b.code === building || b.id === building);
   const { items: rooms } = useCollection("rooms");
   const { items: mapAssets } = useCollection("mapAssets");
 
-  const floorData = items.find((f) => f.buildingId === buildingRow?.id && String(f.floorNo) === String(floor));
+  const building = buildingRecord?.name || "";
+  const floor = floorRecord?.floorNo || "";
+  const floorData = items.find((f) => f.id === floorRecord?.id && f.buildingId === buildingRecord?.id) || floorRecord;
 
-  // source of truth ของ "ชั้นที่มีอยู่จริงบนแผนที่" มาจากฝ่ายแผนที่ (UC8/UC9)
+  // GIS owns the floor record and plan. Registrar can add its note before a plan is uploaded/published.
   const mapFloorAsset = mapAssets.find(
     (a) =>
       a.kind === "floorplan" &&
-      a.status === "published" &&
+      a.status !== "deleted" && a.file &&
       a.floorId === floorData?.id
   );
 
@@ -908,7 +979,7 @@ function FloorsManager({ building, floor, user }) {
     setForm({ note: savedNote });
     setIsEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [building, floor, floorData?.id]);
+  }, [floorData?.id]);
 
   const roomCount = rooms.filter(
     (r) => r.floorId === floorData?.id
@@ -922,21 +993,11 @@ function FloorsManager({ building, floor, user }) {
   };
 
   const save = async () => {
-    // ฝ่ายทะเบียนต้องแก้ได้เฉพาะชั้นที่ฝ่ายแผนที่เผยแพร่มาแล้ว
-    if (!mapFloorAsset) {
-      setNotice({
-        icon: "⚠️",
-        title: "ไม่พบข้อมูลชั้นจากฝ่ายแผนที่",
-        message: "ชั้นนี้ยังไม่มีผังที่เผยแพร่จากฝ่ายแผนที่ จึงยังไม่สามารถแก้ไขรายละเอียดได้",
-      });
-      return false;
-    }
-
-    if (!floorData) {
+    if (!floorData || floorData.buildingId !== buildingRecord?.id) {
       setNotice({
         icon: "⚠️",
         title: "ข้อมูลชั้นยังไม่พร้อม",
-        message: "ระบบยังไม่ได้รับข้อมูลชั้นจากฝ่ายแผนที่ กรุณาให้ฝ่ายแผนที่เผยแพร่ผังชั้นอีกครั้ง",
+        message: "ยังไม่พบชั้นของอาคารนี้ กรุณาให้ฝ่าย GIS เพิ่มชั้นก่อน",
       });
       return false;
     }
@@ -963,12 +1024,12 @@ function FloorsManager({ building, floor, user }) {
     />
   );
 
-  if (!mapFloorAsset) {
+  if (!floorData) {
     return (
       <Card>
         <b style={{ fontSize: 13.5, color: "#202124" }}>ผังชั้นของ {building} — ชั้น {floor}</b>
         <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "#FEF7E0", border: "1px solid #FDE293", color: "#7A4F00", fontSize: 12.5, lineHeight: 1.5 }}>
-          ยังไม่พบผังชั้นที่เผยแพร่จากฝ่ายแผนที่ ฝ่ายทะเบียนไม่สามารถสร้างชั้นเองได้
+          ยังไม่มีข้อมูลชั้นจากฝ่าย GIS กรุณาให้ฝ่าย GIS เพิ่มชั้นของอาคารนี้ก่อน
         </div>
         {popupEl}
       </Card>
@@ -986,18 +1047,18 @@ function FloorsManager({ building, floor, user }) {
 
         <div style={{ marginTop: 8 }}>
           <InfoField label="รายละเอียดชั้น" value={savedNote} />
-          <InfoField label="ผังชั้นจากฝ่ายแผนที่" value={mapFloorAsset.name || `ชั้น ${floor}`} />
+          <InfoField label="ผังชั้นจากฝ่ายแผนที่" value={mapFloorAsset?.name || (mapFloorAsset ? `ชั้น ${floor}` : "ยังไม่ได้อัปโหลดผังชั้น")} />
           <InfoField
             label="ไฟล์ผัง (อ่านอย่างเดียว)"
-            value={String(mapFloorAsset.file || "").startsWith("data:") ? "ไฟล์ SVG ที่ฝ่ายแผนที่อัปโหลด" : mapFloorAsset.file}
+            value={String(mapFloorAsset?.file || "").startsWith("data:") ? "ไฟล์ SVG ที่ฝ่ายแผนที่อัปโหลด" : mapFloorAsset?.file || "—"}
           />
 
           <div style={{ fontSize: 11.5, color: "#5F6368", marginTop: -4, marginBottom: 8 }}>
-            อาคาร ชั้น และไฟล์ผังถูกส่งมาจากฝ่ายแผนที่ ฝ่ายทะเบียนแก้ไขเฉพาะรายละเอียดชั้น
+            ฝ่ายทะเบียนเติมรายละเอียดชั้นได้หลัง GIS สร้างชั้นแล้ว ส่วนไฟล์ผังและตำแหน่งให้ฝ่าย GIS จัดการ
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <Btn onClick={() => setIsEditing(true)} disabled={!floorData}>แก้ไขข้อมูลชั้น</Btn>
+            <Btn onClick={() => { setForm({ note: savedNote }); setIsEditing(true); }} disabled={!floorData}>แก้ไขข้อมูลชั้น</Btn>
           </div>
         </div>
         {popupEl}
@@ -1023,7 +1084,7 @@ function FloorsManager({ building, floor, user }) {
           />
         </EditField>
 
-        <InfoField label="ผังชั้นจากฝ่ายแผนที่" value={mapFloorAsset.name || `ชั้น ${floor}`} />
+        <InfoField label="ผังชั้นจากฝ่ายแผนที่" value={mapFloorAsset?.name || (mapFloorAsset ? `ชั้น ${floor}` : "ยังไม่ได้อัปโหลดผังชั้น")} />
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
           <Btn kind="ghost" disabled={saving} onClick={cancelEdit}>ยกเลิก</Btn>

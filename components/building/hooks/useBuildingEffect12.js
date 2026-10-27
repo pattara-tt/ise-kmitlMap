@@ -131,14 +131,16 @@ export function useBuildingEffect12({
             map.setView([node.lat, node.lon,], 20, { animate: true,});
             const room = roomByNodeRef.current[id];
   
-            if (icon.type === "room") {
+            if (room || icon.type === "room") {
                 onSelectRoomRef.current?.(
                 room || {
                     id: null,
-                    nodeId: id,
+                    nodeId: node.nodeId || node.id || id,
                     code: null,
                     name: node.label || id,
                     building: b?.name || building,
+                    buildingId: b?.id || null,
+                    floorId: node.floorId || null,
                     floor: curFloor,
                     __isNewNode: true,
                 }

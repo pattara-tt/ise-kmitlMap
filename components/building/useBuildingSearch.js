@@ -1,96 +1,69 @@
 "use client";
 
 import { useMemo } from "react";
-import { BUILDINGS, KMITL_ALL_NODES } from "../mapConfig";
 import { normalize, getNodeIcon, getNodeTypeLabel } from "./nodePresentation";
 import { logSearch } from "../../lib/searchLog";
 
 export function useBuildingSearch({
-  search,
-  allRooms,
-  floorRecords,
-  b,
-  nodeKeyById,
-  floorNodes,
-  roomByNode,
-  setSearchOpen,
-  ctx,
-  setOpenKey,
-  setCurFloor,
-  onChangeRef,
-  fitBuilding,
-  openKey,
-  curFloor,
-  building,
-  onSelectRoomRef,
-  setSearchedNodeId,
+  search, allRooms, floorRecords, b, buildingRegistry, nodesByKey,
+  nodeKeyById, floorNodes, roomByNode, setSearchOpen, ctx,
+  setOpenKey, setCurFloor, onChangeRef, fitBuilding,
+  onSelectRoomRef, setSearchedNodeId,
 }) {
+  const buildingById = useMemo(() => new Map(
+    Object.values(buildingRegistry).map((entry) => [String(entry.id), entry])
+  ), [buildingRegistry]);
+
   const searchResults = useMemo(() => {
-    const q = normalize(search);
-    if (!q) return [];
+    const query = normalize(search);
+    if (!query) return [];
     const result = [];
 
-    for (const [key, data] of Object.entries(BUILDINGS)) {
-      const text = normalize(`${data.name} ${key}`);
-      if (text.includes(q)) {
-        result.push({ kind: "building", key, name: data.name, icon: "🏢" });
+    for (const [key, entry] of Object.entries(buildingRegistry)) {
+      if (normalize([entry.name, entry.code].filter(Boolean).join(" ")).includes(query)) {
+        result.push({ kind: "building", key, name: entry.name, icon: "🏢" });
       }
     }
 
     for (const room of allRooms || []) {
-      const text = normalize(
-        [
-          room.code,
-          room.name,
-          room.type,
-          room.teacher,
-          (floorRecords || []).find((f) => f.id === room.floorId)?.floorNo,
-          b?.name,
-        ]
-          .filter(Boolean)
-          .join(" ")
-      );
+      const floor = (floorRecords || []).find((row) => row.id === room.floorId);
+      const roomBuilding = floor && buildingById.get(String(floor.buildingId));
+      if (!roomBuilding) continue;
+      const text = normalize([
+        room.code, room.name, room.type, room.teacher,
+        floor.floorNo, roomBuilding.name, roomBuilding.code,
+      ].filter((value) => value != null && value !== "").join(" "));
+      if (!text.includes(query)) continue;
 
-      if (text.includes(q)) {
-        const node = room.nodeId
-          ? KMITL_ALL_NODES[nodeKeyById[room.nodeId] || room.nodeId]
-          : null;
-        result.push({
-          kind: "room",
-          room,
-          node,
-          name: room.name || `ห้อง ${room.code || ""}`,
-          icon: "🚪",
-        });
-      }
+      const nodeKey = nodeKeyById[room.nodeId] || room.nodeId;
+      const node = String(roomBuilding.id) === String(b?.id)
+        ? nodesByKey[nodeKey] : null;
+      result.push({
+        kind: "room", room, node,
+        buildingId: roomBuilding.id,
+        buildingName: roomBuilding.name,
+        floorNo: floor.floorNo,
+        name: room.name || ("ห้อง " + (room.code || "")),
+        icon: "🚪",
+      });
     }
 
     for (const [id, node] of Object.entries(floorNodes)) {
       const text = normalize([id, node.type, node.label].filter(Boolean).join(" "));
-      if (!text.includes(q)) continue;
-      if (roomByNode[id]) continue;
-
+      if (!text.includes(query) || roomByNode[id] || node.__routeConnector) continue;
       const icon = getNodeIcon(node);
       result.push({
-        kind: "node",
-        id,
-        node,
+        kind: "node", id, node,
         name: node.label || getNodeTypeLabel(node),
-        icon:
-          icon.type === "toilet"
-            ? "🚻"
-            : icon.type === "lift"
-              ? "🛗"
-              : icon.type === "stairs"
-                ? "🪜"
-                : icon.type === "exit"
-                  ? "🚪"
-                  : "📍",
+        icon: icon.type === "toilet" ? "🚻"
+          : icon.type === "lift" ? "🛗"
+          : icon.type === "stairs" ? "🪜"
+          : icon.type === "exit" ? "🚪" : "📍",
       });
     }
-
     return result.slice(0, 10);
-  }, [search, allRooms, floorRecords, b, nodeKeyById, floorNodes, roomByNode]);
+  }, [search, allRooms, floorRecords, b?.id, buildingRegistry, buildingById,
+    nodesByKey, nodeKeyById, floorNodes, roomByNode]);
 
   const selectSearch = (item) => {
     setSearchOpen(false);
@@ -98,59 +71,51 @@ export function useBuildingSearch({
     if (!map) return;
 
     if (item.kind === "building") {
+      const entry = buildingRegistry[item.key];
+      if (!entry) return;
+      const firstFloor = entry.floors.find((floor) => String(floor.id) === "1")
+        || entry.floors[0];
+      const floor = firstFloor ? String(firstFloor.id) : "";
       setSearchedNodeId(null);
-      const data = BUILDINGS[item.key];
-      logSearch({ kind: "search", placeLabel: item.name, query: search, buildingId: data?.id });
-      setOpenKey(item.key);
-      setCurFloor("1");
-      onChangeRef.current?.({ building: data.name, floor: "1" });
-      const layer = ctx.current.buildingLayers[item.key];
+      logSearch({ kind: "search", placeLabel: item.name, query: search, buildingId: entry.id });
+      setOpenKey(entry.key);
+      setCurFloor(floor);
+      onChangeRef.current?.({ building: entry.name, buildingId: entry.id, floor });
+      const layer = ctx.current.buildingLayers[entry.key];
       if (layer) fitBuilding(map, layer.poly);
       return;
     }
 
     if (item.kind === "room") {
       const room = item.room;
-      const roomFloor = (floorRecords || []).find((f) => f.id === room.floorId);
-      const roomBuilding = Object.entries(BUILDINGS).find(
-        ([, data]) => data.id === roomFloor?.buildingId
-      );
-      const key = roomBuilding?.[0] || openKey;
-      const floorNo = String(roomFloor?.floorNo || curFloor || "1");
-      const buildingName = roomBuilding?.[1]?.name || b?.name || building;
-      logSearch({ kind: "search", placeLabel: buildingName ? `${item.name} (${buildingName})` : item.name, query: search, buildingId: roomFloor?.buildingId, roomId: room.id });
-
-      setOpenKey(key || null);
-      setCurFloor(floorNo);
-      const nodeKey = nodeKeyById[room.nodeId] || room.nodeId;
-      setSearchedNodeId(item.node && nodeKey ? nodeKey : null);
-      onChangeRef.current?.({ building: buildingName, floor: floorNo });
-
-      const node = item.node;
-      if (node) {
-        setTimeout(() => {
-          map.setView([node.lat, node.lon], 20, { animate: true });
-          onSelectRoomRef.current?.(room);
-        }, 100);
-      } else {
-        onSelectRoomRef.current?.(room);
-      }
+      const floorRow = floorRecords.find((row) => row.id === room.floorId);
+      const entry = floorRow && buildingById.get(String(floorRow.buildingId));
+      if (!entry) return;
+      const floor = String(floorRow.floorNo);
+      logSearch({
+        kind: "search", placeLabel: item.name + " (" + entry.name + ")",
+        query: search, buildingId: entry.id, roomId: room.id,
+      });
+      setOpenKey(entry.key);
+      setCurFloor(floor);
+      // Keep the database node ID while another building's graph is loading.
+      // The picker resolves it to that graph's nodeKey once the request finishes.
+      setSearchedNodeId(room.nodeId || null);
+      onChangeRef.current?.({ building: entry.name, buildingId: entry.id, floor });
+      onSelectRoomRef.current?.(room);
+      const layer = ctx.current.buildingLayers[entry.key];
+      if (layer) fitBuilding(map, layer.poly);
+      if (item.node) map.setView([item.node.lat, item.node.lon], 20, { animate: true });
       return;
     }
 
     if (item.kind === "node") {
-      logSearch({ kind: "search", placeLabel: item.name || item.node?.label, query: search });
+      logSearch({ kind: "search", placeLabel: item.name || item.node?.label, query: search, buildingId: b?.id });
       setSearchedNodeId(item.id);
       const node = item.node;
       map.setView([node.lat, node.lon], 20, { animate: true });
-      const marker = ctx.current.poiLayer.find((m) => {
-        const p = m.getLatLng();
-        return (
-          Math.abs(p.lat - node.lat) < 0.000001 &&
-          Math.abs(p.lng - node.lon) < 0.000001
-        );
-      });
-      if (marker) setTimeout(() => marker.openPopup(), 250);
+      const marker = ctx.current.markersByNodeId?.[item.id];
+      if (marker) marker.openPopup();
     }
   };
 
