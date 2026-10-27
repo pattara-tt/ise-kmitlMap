@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EDGE_TYPES } from "../../../lib/constants";
 import { NODE_TYPES } from "../../mapConfig";
-import { Btn, Card, Field, Input, Select, Status, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Select, Status, useCollection, notify, askConfirm } from "../../ui";
 import { clearMapDataCache} from "../../../lib/useMapData";
 import FloorplanEditor from "./FloorplanEditor";
 import { DEFAULT_PLACEMENT } from "./shared";
@@ -25,7 +25,7 @@ function nodeLabel(n) {
   if (!n) return "-";
   const t = NODE_TYPES.find((x) => x.id === n.type);
   const pos = Number.isFinite(Number(n.x)) && Number.isFinite(Number(n.y)) ? ` ${Number(n.y).toFixed(5)}, ${Number(n.x).toFixed(5)}` : "";
-  return `${t?.icon || "📍"} ${t?.label || n.type || "node"}${pos}`;
+  return `${t?.label || n.type || "node"}`;
 }
 
 export default function NodeEdgeTab({ user, mapData, onPageChange }) {
@@ -220,8 +220,13 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
   }
 
   async function deleteNode(node) {
-    const confirmed = window.confirm(
-      `ลบ node ${nodeLabel(node)}? Edge ที่เชื่อมกับ node นี้จะถูกลบด้วย`
+    const confirmed = await askConfirm(
+      `ลบ node ${nodeLabel(node)}? 
+      และ Edge ที่เชื่อมกับ node นี้จะถูกลบด้วย`,
+      {
+        title: "ยืนยันการลบ Node",
+        confirmLabel: "ลบ",
+      }
     );
 
     if(!confirmed) return;
@@ -258,7 +263,12 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
   }
 
   async function deleteEdge(edge) {
-    const confirmed = window.confirm(`ลบ Edge ${edge.id}?`);
+    const confirmed = await askConfirm(`ลบ Edge ${edge.id}?`,
+      {
+        title: "ยืนยันการลบ Edge",
+        confirmLabel: "ลบ",
+      }
+    );
 
     if(!confirmed) return;
 
