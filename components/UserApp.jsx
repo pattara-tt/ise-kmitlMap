@@ -20,6 +20,11 @@ export default function UserApp({ user, tab, onTabChange, viewMode = "auto" }) {
   const access = accessRows.find((x) => x.institutionId === user.institutionId);
 
   if (accessLoading) return <div className="bdi-page"><div className="bdi-page-inner"><div style={{ padding: 24, color: "#5F6368" }}>กำลังตรวจสอบสิทธิ์สถาบัน…</div></div></div>;
+  const institutionIdentity = `${user.institutionName || ""} ${user.institutionId || ""}`;
+  const hasKmitlMap = /KMITL|สจล|ลาดกระบัง/i.test(institutionIdentity);
+  if (!hasKmitlMap) {
+    return <div className="bdi-page"><div className="bdi-page-inner"><Card><b style={{ fontSize: 16 }}>ยังไม่มีข้อมูลสำหรับสถาบันนี้</b><div style={{ marginTop: 8, fontSize: 13, color: "#5F6368", lineHeight: 1.7 }}>ขณะนี้ระบบยังไม่มีข้อมูลสำหรับสถาบันนี้</div></Card></div></div>;
+  }
   if (access && access.accessStatus && access.accessStatus !== "active") {
     const paused = access.accessStatus === "paused";
     return (

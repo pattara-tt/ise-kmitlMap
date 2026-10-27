@@ -121,6 +121,18 @@ function sameId(a,b){
   }
   return String(a??"")===String(b??"");
 }
+// Scope Admin account management to the Admin's own institution.
+async function sessionUser(req) {
+  return (await list("users")).find((u) => sameId(u.id, req.session.userId)) || null;
+}
+async function isKmitlSession(req) {
+  const user = await sessionUser(req);
+  if (!user?.institutionId) return false;
+  const institutions = await list("institutions");
+  const institution = institutions.find((i) => sameId(i.id, user.institutionId));
+  const identity = `${institution?.name || ""} ${institution?.shortName || ""} ${institution?.id || ""}`;
+  return /KMITL|สจล|ลาดกระบัง/i.test(identity);
+}
 function labelOf(row){ return row?.name || row?.title || row?.label || row?.code || row?.id || row?.moduleCode || row?.useCaseKey || null; }
 async function logAccessModuleChange(accessId,actorId){
   const access=(await list("institutionAccess")).find((row)=>row.id===accessId);
@@ -227,15 +239,18 @@ app.get("/api/ref/use-cases", requireSession, wrap(async(req,res)=>{
   res.json({ok:true,items:ucs.filter(x=>keys.has(x.key) && !String(x.key).startsWith("common_")).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0))});
 }));
 
-app.get("/api/map/buildings", requireSession, wrap(async(_req,res)=>{
+app.get("/api/map/buildings", requireSession, wrap(async(req,res)=>{
+  if (!(await isKmitlSession(req))) return res.status(403).json({ok:false,error:"ยังไม่มีข้อมูลแผนที่สำหรับสถาบันของคุณ"});
   const [buildings,floors]=await Promise.all([list("buildings"),list("floors")]);
   res.json({ok:true,items:buildings.map(b=>({...b,floors:floors.filter(f=>f.buildingId===b.id)}))});
 }));
 app.get("/api/map/floors/:floorId/graph", requireSession, wrap(async(req,res)=>{
+  if (!(await isKmitlSession(req))) return res.status(403).json({ok:false,error:"ยังไม่มีข้อมูลแผนที่สำหรับสถาบันของคุณ"});
   const [nodes,edges]=await Promise.all([list("nodes"),list("edges")]); const ns=nodes.filter(n=>n.floorId===req.params.floorId); const ids=new Set(ns.map(n=>n.id));
   res.json({ok:true,nodes:ns,edges:edges.filter(e=>ids.has(e.fromNodeId)&&ids.has(e.toNodeId))});
 }));
 app.get("/api/map/graph", requireSession, wrap(async(req,res)=>{
+  if (!(await isKmitlSession(req))) return res.status(403).json({ok:false,error:"ยังไม่มีข้อมูลแผนที่สำหรับสถาบันของคุณ"});
   const buildingId=String(req.query.building||""); const [floors,nodes,edges]=await Promise.all([list("floors"),list("nodes"),list("edges")]);
   const fids=new Set(floors.filter(f=>f.buildingId===buildingId).map(f=>f.id)); const ns=nodes.filter(n=>fids.has(n.floorId)); const nids=new Set(ns.map(n=>n.id));
   res.json({ok:true,nodes:ns,edges:edges.filter(e=>nids.has(e.fromNodeId)&&nids.has(e.toNodeId))});
@@ -262,6 +277,11 @@ app.post("/api/events/:id/search", requireSession, wrap(async (req, res) => {
 app.get("/api/data/:name", requireSession, wrap(async(req,res)=>{
   if(!guard(req,res)) return;
   const name=req.params.name; let items=await list(name);
+  if (name === "users" && req.session.role === ROLE.ADMIN) {
+    const actor = await sessionUser(req);
+    if (!actor?.institutionId) return res.status(403).json({ok:false,error:"ไม่พบสถาบันของผู้ดูแลระบบ"});
+    items = items.filter((u) => sameId(u.institutionId, actor.institutionId));
+  }
   // rooms.type มีค่า override ชั่วคราวจากกิจกรรม PR โดยไม่เขียนทับค่าจริงใน rooms
   // จึงคืนค่าเดิมอัตโนมัติทันทีเมื่อกิจกรรมยังไม่เริ่ม/สิ้นสุด/ไม่ได้เผยแพร่
   if(name === "rooms") {
@@ -300,9 +320,12 @@ app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
   }
 
   if (name === "users" && req.session.role === ROLE.ADMIN) {
-      const target = (await list("users")).find((u) => sameId(u.id, id));
-      if (target?.roleCode === ROLE.MARKETING || patch.roleCode === ROLE.MARKETING)
-        return res.status(403).json({ ok: false, error: "ฝ่ายดูแลระบบไม่มีสิทธิ์จัดการบัญชีฝ่ายการตลาด" });
+    const actor = await sessionUser(req);
+    const requested = req.body || {};
+    if (!actor?.institutionId || !sameId(requested.institutionId, actor.institutionId))
+      return res.status(403).json({ ok: false, error: "จัดการบัญชีได้เฉพาะผู้ใช้ในสถาบันของคุณ" });
+    if (requested.roleCode === ROLE.MARKETING)
+      return res.status(403).json({ ok: false, error: "ฝ่ายดูแลระบบไม่มีสิทธิ์จัดการบัญชีฝ่ายการตลาด" });
   }
 
   if (name === "roomTypes" && req.session.role !== ROLE.REGISTRAR) return res.status(403).json({ok:false,error:"เฉพาะฝ่ายทะเบียนที่จัดการประเภทห้องได้"});
@@ -364,6 +387,16 @@ app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
   const auditReason = name === "users" ? (rawPatch.reason || null) : null;
   const patch = { ...rawPatch };
   if (name === "users") delete patch.reason;
+  if (name === "users" && req.session.role === ROLE.ADMIN) {
+    const actor = await sessionUser(req);
+    const target = (await list("users")).find((u) => sameId(u.id, id));
+    if (!actor?.institutionId || !target || !sameId(target.institutionId, actor.institutionId))
+      return res.status(403).json({ ok: false, error: "จัดการบัญชีได้เฉพาะผู้ใช้ในสถาบันของคุณ" });
+    if (patch.institutionId && !sameId(patch.institutionId, actor.institutionId))
+      return res.status(403).json({ ok: false, error: "ไม่สามารถย้ายบัญชีไปยังสถาบันอื่นได้" });
+    if (target.roleCode === ROLE.MARKETING || patch.roleCode === ROLE.MARKETING)
+      return res.status(403).json({ ok: false, error: "ฝ่ายดูแลระบบไม่มีสิทธิ์จัดการบัญชีฝ่ายการตลาด" });
+  }
   if (MARKETING_COLLECTIONS.has(name) && req.session.role !== ROLE.MARKETING)
     return res.status(403).json({ ok: false, error: "เฉพาะฝ่ายการตลาดเท่านั้นที่แก้ไขข้อมูลชุดนี้ได้" });
   if ((name === "nodes" || name === "edges") && ![ROLE.GIS, ROLE.ADMIN].includes(req.session.role))
