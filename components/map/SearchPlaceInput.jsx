@@ -65,6 +65,7 @@ export default function SearchPlaceInput({
         floor: entry.floor || KMITL_NODE_FLOOR[entry.id] || "1",
         extract: entry.extract,
         icon: entry.icon,
+        iconHtml: entry.iconHtml,
         subtitle: room?.type || ""
       }];
     });
@@ -167,9 +168,12 @@ export default function SearchPlaceInput({
         alignItems: "center",
         gap: 10
       }}>
-              <span style={{
-          fontSize: 18
-        }}>{item.icon || "📍"}</span>
+              {item.iconHtml ? (
+                <span aria-hidden="true" style={{width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"none"}}
+                  dangerouslySetInnerHTML={{__html:item.iconHtml}} />
+              ) : (
+                <span style={{fontSize:18}}>{item.icon || "📍"}</span>
+              )}
               <span style={{
           flex: 1,
           minWidth: 0

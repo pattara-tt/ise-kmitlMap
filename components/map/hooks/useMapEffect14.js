@@ -49,19 +49,20 @@ export function useMapEffect14({
       // Exterior is a routing connector outside the building, not a second door.
       // Keep the real Entrance marker visible and preserve the exterior graph node for routing.
       if (WALKWAY_NODE_TYPES.includes(nodeType) || nodeType === "exterior") continue;
-      const chipKey = Object.keys(CHIP_NODE_TYPES).find((k) => CHIP_NODE_TYPES[k].includes(n.type));
-      if (chipKey && !chips[chipKey]) continue; // ชิปหมวดนี้ปิดอยู่ — ข้าม node ประเภทนี้ไป
-      const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
       const entry = indoorSearchNodes.find((x) => x.id === id || x.markerId === id);
       const routeKey = entry?.id || id;
       const internalNodeId = entry?.internalId || nodeIdByKey?.[routeKey];
       const room = rooms?.find((r) => r.nodeId === internalNodeId);
-      const icon = resolveRoomNodeIcon(room, roomTypes, getNodeIcon(n));
-      const size = icon.type === "room" || icon.type === "toilet" ? 24 : 26;
-      // Match the Registrar search-hit appearance on the selected room icon.
       const isSelectedRoom = Boolean(placeCard?.nodeId &&
         (placeCard.nodeId === routeKey || placeCard.nodeId === id ||
          placeCard.nodeId === entry?.markerId || placeCard.nodeId === internalNodeId));
+      const chipKey = Object.keys(CHIP_NODE_TYPES).find((k) => CHIP_NODE_TYPES[k].includes(n.type));
+      // Keep the currently inspected room's icon visible even when its category is filtered.
+      if (chipKey && !chips[chipKey] && !isSelectedRoom) continue;
+      const t = NODE_TYPES.find((x) => x.id === n.type) || NODE_TYPES[0];
+      const icon = resolveRoomNodeIcon(room, roomTypes, getNodeIcon(n));
+      const size = icon.type === "room" || icon.type === "toilet" ? 24 : 26;
+      // Match the Registrar search-hit appearance on the selected room icon.
       const marker = L.marker([n.lat, n.lon], {
         icon: L.divIcon({
           className: "",

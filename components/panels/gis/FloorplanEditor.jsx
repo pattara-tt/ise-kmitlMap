@@ -28,6 +28,7 @@ function FloorplanEditor({
   nodeById,              // Map(id -> node) สำหรับหาปลายทางของ edge
   draft = null,          // { x, y } หมุดใหม่ที่ยังไม่บันทึก
   editingNodeId = null,
+  selectedNodeId = null,
   fromNodeId = "",
   toNodeId = "",
   pickMode = "node",     // "node" = คลิกพื้นที่ว่างเพื่อวางหมุด, "edge" = คลิก node เพื่อเลือกเส้นทาง
@@ -206,7 +207,7 @@ function FloorplanEditor({
   const nodeColor = n => {
     if (n.id === fromNodeId) return "#188038";
     if (n.id === toNodeId) return "#E37400";
-    if (n.id === editingNodeId) return "#1A73E8";
+    if (n.id === selectedNodeId || n.id === editingNodeId) return "#1A73E8";
     return "#EA4335";
   };
   const drawLine = (a, b, key, style) => {

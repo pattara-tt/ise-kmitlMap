@@ -74,9 +74,9 @@ function publishNotification(userId, notification) {
 async function requireSession(req,res,next) {
   const id=req.headers["x-session-id"];
   if(!id) return res.status(401).json({ok:false,error:"กรุณาเข้าสู่ระบบ",code:"NO_SESSION"});
-  const session=getSession(id);
+  const session=await getSession(id);
   if(!session){
-    const reason=getRevokedReason(id);
+    const reason=await getRevokedReason(id);
     if(reason==="ROLE_CHANGED") return res.status(401).json({ok:false,error:"มีการเปลี่ยนแปลงบทบาทของคุณ กรุณาเข้าสู่ระบบใหม่อีกครั้ง",code:reason});
     if(reason==="ACCOUNT_SUSPENDED") return res.status(401).json({ok:false,error:"บัญชีของคุณถูกระงับการใช้งาน โปรดติดต่อผู้ดูแลระบบ",code:reason});
     return res.status(401).json({ok:false,error:"Session หมดอายุ กรุณาเข้าสู่ระบบใหม่",code:"SESSION_EXPIRED"});
@@ -180,7 +180,7 @@ app.get("/api/auth/session", requireSession, wrap(async(req,res)=>{
 
 app.post("/api/auth/logout", wrap(async (req, res) => {
   const id = req.headers["x-session-id"];
-  if (id) destroySession(id);
+  if (id) await destroySession(id);
   res.json({ ok: true });
 }));
 
@@ -206,14 +206,14 @@ app.post("/api/auth", wrap(async(req,res)=>{
       }
     );
 
-    const sessionId=createSession(user,roleCode,[]);
+    const sessionId=await createSession(user,roleCode,[]);
     return res.json({ok:true,user:safeUser(user),sessionId});
   }
   if(body.action==="login"){
     const user=users.find(u=>u.email.toLowerCase()===email);
     if(!user || !user.passwordHash || !(await bcrypt.compare(String(body.password||""),user.passwordHash))) return res.status(401).json({ok:false,error:"อีเมลหรือรหัสผ่านไม่ถูกต้อง"});
     if(user.status!=="active") return res.status(403).json({ok:false,error:"บัญชีของคุณถูกระงับการใช้งาน โปรดติดต่อผู้ดูแลระบบ"});
-    const sessionId=createSession(user,user.roleCode,[]); return res.json({ok:true,user:safeUser(user),sessionId});
+    const sessionId=await createSession(user,user.roleCode,[]); return res.json({ok:true,user:safeUser(user),sessionId});
   }
   return res.status(400).json({ok:false,error:"action ไม่ถูกต้อง"});
 }));
@@ -419,8 +419,8 @@ app.patch("/api/data/:name", requireSession, wrap(async (req, res) => {
     return { row, revokeReason };
   });
   if (!result) return res.status(404).json({ ok: false, error: "ไม่พบรายการ" });
-  if (result.revokeReason) invalidateSession(id, result.revokeReason); // only after COMMIT
-  if (name === "users" && patch.status === "active") clearRevokedForUser(id);
+  if (result.revokeReason) await invalidateSession(id, result.revokeReason); // only after COMMIT
+  if (name === "users" && patch.status === "active") await clearRevokedForUser(id);
   res.json({ ok: true, item: name === "users" ? safeUser(result.row) : result.row });
 }));
 

@@ -635,8 +635,7 @@ export default function Assets({ user }) {
       </Card>
 
 
-      {items.map(a => <Card key={a.id}>
-          <div style={{
+      {items.filter(a => a.kind !== "image").map(a => <Card key={a.id}>          <div style={{
         display: "flex",
         gap: 12,
         alignItems: "center"

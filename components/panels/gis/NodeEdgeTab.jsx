@@ -87,6 +87,7 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
   const [floorId, setFloorId] = useState("");
 
   const [nodeForm, setNodeForm] = useState(EMPTY_NODE);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [edgeForm, setEdgeForm] = useState(EMPTY_EDGE);
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState("select");
@@ -178,6 +179,8 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
 
   // คลิก node: โหมด node = โหลดมาแก้ไข, โหมด edge = เลือกต้นทาง/ปลายทาง
   function handlePickNode(node) {
+    setSelectedNodeId(node.id);
+
     if (mode === "node") {
       setNodeForm({ id: node.id, type: node.type || "path", x: node.x ?? "", y: node.y ?? "" });
       return;
@@ -217,7 +220,12 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
   }
 
   async function deleteNode(node) {
-    if (!(await askConfirm(`ลบ node ${nodeLabel(node)}? Edge ที่เชื่อมกับ node นี้จะถูกลบตามด้วย`, { title: "ลบ node", confirmLabel: "ลบ", tone: "danger" }))) return;
+    const confirmed = window.confirm(
+      `ลบ node ${nodeLabel(node)}? Edge ที่เชื่อมกับ node นี้จะถูกลบด้วย`
+    );
+
+    if(!confirmed) return;
+
     setBusy(true);
     try {
       await nodesApi.destroy(node.id, user);
@@ -250,7 +258,10 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
   }
 
   async function deleteEdge(edge) {
-    if (!(await askConfirm(`ลบ edge ${edge.id}?`, { title: "ลบ edge", confirmLabel: "ลบ", tone: "danger" }))) return;
+    const confirmed = window.confirm(`ลบ Edge ${edge.id}?`);
+
+    if(!confirmed) return;
+
     setBusy(true);
     try {
       await edgesApi.destroy(edge.id, user);
@@ -332,6 +343,7 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
               value={floorId}
               onChange={e => {
                 setFloorId(e.target.value);
+                setSelectedNodeId(null);
                 resetNode();
                 resetEdge();
               }}
@@ -464,6 +476,7 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
           nodeById={nodeById}
           draft={!nodeForm.id && hasDraftPin ? { x: nodeForm.x, y: nodeForm.y } : null}
           editingNodeId={nodeForm.id}
+          selectedNodeId={selectedNodeId}
           fromNodeId={edgeForm.fromNodeId}
           toNodeId={edgeForm.toNodeId}
           onSelectPosition={handlePickPoint}
@@ -519,7 +532,44 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12, marginTop: 14 }}>
-        <section><b style={{ fontSize: 13 }}>Nodes ในชั้นนี้ ({floorNodes.length})</b><div style={{ maxHeight: 280, overflow: "auto", marginTop: 7 }}>{floorNodes.map((n) => <div key={n.id} style={rowStyle}><span><b>{nodeLabel(n)}</b></span><span style={{ display: "flex", gap: 5 }}><Btn kind="ghost" onClick={() => { setMode("node"); setNodeForm({ id: n.id, type: n.type || "path", x: n.x ?? "", y: n.y ?? "" }); }}>แก้</Btn><Btn kind="danger" onClick={() => deleteNode(n)}>ลบ</Btn></span></div>)}</div></section>
+        <section><b style={{ fontSize: 13 }}>Nodes ในชั้นนี้ ({floorNodes.length})</b><div style={{ maxHeight: 280, overflow: "auto", marginTop: 7 }}/>
+          
+        {floorNodes.map((n) => (
+          <div
+            key={n.id}
+            onClick={() => handlePickNode(n)}
+            style={{
+              ...rowStyle,
+              cursor: "pointer",
+              background:
+                selectedNodeId === n.id ? "#E8F0FE" : "#FFFFFF",
+              border:
+                selectedNodeId === n.id
+                  ? "1px solid #1A73E8"
+                  : "1px solid #F1F3F4",
+              borderRadius: 6,
+              padding: "10px 6px"
+            }}
+          >
+            <span>
+              <b>{nodeLabel(n)}</b>
+            </span>
+
+            <span style={{ display: "flex", gap: 5 }}>
+              <Btn
+                kind="danger"
+                onClick={(e) => {
+                  if (e?.stopPropagation) e.stopPropagation();
+                  setSelectedNodeId(n.id);
+                  deleteNode(n);
+                }}
+              >
+                ลบ
+              </Btn>
+            </span>
+          </div>
+        ))}
+        </section>
         <section><b style={{ fontSize: 13 }}>Edges ที่เชื่อมชั้นนี้ ({visibleEdges.length})</b><div style={{ maxHeight: 280, overflow: "auto", marginTop: 7 }}>{visibleEdges.map((e) => <div key={e.id} style={rowStyle}><span><b>{nodeLabel(nodeById.get(e.fromNodeId))} → {nodeLabel(nodeById.get(e.toNodeId))}</b><br/><small>{e.edgeType} · {e.distance ?? "-"} m · {e.accessible ? "accessible" : "not accessible"}</small></span><span style={{ display: "flex", gap: 5 }}><Btn kind="ghost" onClick={() => { setMode("edge"); setEdgeForm({ id: e.id, fromNodeId: e.fromNodeId, toNodeId: e.toNodeId, edgeType: e.edgeType || "walk", accessible: e.accessible !== false }); }}>แก้</Btn><Btn kind="danger" onClick={() => deleteEdge(e)}>ลบ</Btn></span></div>)}</div></section>
       </div>
     </Card>
