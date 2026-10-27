@@ -240,8 +240,10 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     if (isMainBuilding) return kmitlFloor === "1" ? KMITL_FLOOR1_EDGES : [];
     const keyById = Object.fromEntries((mapData.data?.nodes || []).map((n) => [n.id, n.nodeKey]));
     const floorKeys = new Set(Object.keys(kmitlFloorNodes));
-    return (edgeRows || [])
-      .map((e) => [keyById[e.fromNodeId], keyById[e.toNodeId]])
+    // ใช้ edges จาก useMapData (รวมทุกอาคารแล้ว) ถ้าไม่มีค่อยใช้จากคอลเลกชัน edges
+    const edgeSource = mapData.data?.edges?.length ? mapData.data.edges : edgeRows;
+    return (edgeSource || [])
+      .map((e) => [keyById[e.fromNodeId ?? e.from_node_id], keyById[e.toNodeId ?? e.to_node_id]])
       .filter(([from, to]) => from && to && floorKeys.has(from) && floorKeys.has(to));
   }, [selectedBuilding, kmitlFloor, kmitlFloorNodes, edgeRows, mapData.data]);
 

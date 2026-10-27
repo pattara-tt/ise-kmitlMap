@@ -299,8 +299,9 @@ export default function BuildingFloorPicker({
   const floorEdges = useMemo(() => {
     const floorNodeIds = new Set(Object.keys(floorNodes));
     if (b?.__db) {
-      return (edgeRows || [])
-        .map((e) => [dbNodeKeyById[e.fromNodeId], dbNodeKeyById[e.toNodeId]])
+      const edgeSource = mapData.data?.edges?.length ? mapData.data.edges : edgeRows;
+      return (edgeSource || [])
+        .map((e) => [dbNodeKeyById[e.fromNodeId ?? e.from_node_id], dbNodeKeyById[e.toNodeId ?? e.to_node_id]])
         .filter(([from, to]) => from && to && floorNodeIds.has(from) && floorNodeIds.has(to));
     }
     return (KMITL_ALL_EDGES || KMITL_FLOOR1_EDGES || []).filter(([from, to]) => floorNodeIds.has(from) && floorNodeIds.has(to));
