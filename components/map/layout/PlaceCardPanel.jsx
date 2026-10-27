@@ -29,7 +29,10 @@ export default function PlaceCardPanel({ view }) {
 
   // placeCard.nodeId is a map nodeKey, while rooms.nodeId is the DB nodes.id FK.
   const internalNodeId = nodeIdByKey[placeCard.nodeId] || placeCard.nodeId;
-  const room = rooms.find(r => r.nodeId === internalNodeId || r.id === placeCard.roomId);
+  const room = placeCard.kind === "building" ? null : rooms.find((row) =>
+    (internalNodeId != null && row.nodeId === internalNodeId) ||
+    (placeCard.roomId != null && row.id === placeCard.roomId)
+  );
   const floorRow = room ? floorRecords.find(f => f.id === room.floorId) : null;
   const floorLabel = floorRow?.name || (floorRow?.floorNo != null ? `ชั้น ${floorRow.floorNo}` : null);
   const typeLabel = room?.type || null;
@@ -120,7 +123,7 @@ export default function PlaceCardPanel({ view }) {
           </div>
         </div>
 
-        {placeCard.kind === "building" && <button onClick={showBuildingFloorplan} className="sm-b-primary" style={{width:"100%",marginTop:13,padding:"12px 0",border:"none",borderRadius:12,background:"#1A73E8",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:"-3px",marginRight:6}}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21v-4h6v4M8 7h2m4 0h2M8 11h2m4 0h2"/></svg>แสดงรายละเอียดผังตึก</button>}
+        {placeCard.kind === "building" && placeCard.buildingId && <button onClick={showBuildingFloorplan} className="sm-b-primary" style={{width:"100%",marginTop:13,padding:"12px 0",border:"none",borderRadius:12,background:"#1A73E8",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:"-3px",marginRight:6}}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21v-4h6v4M8 7h2m4 0h2M8 11h2m4 0h2"/></svg>แสดงรายละเอียดผังตึก</button>}
         <button onClick={navigateFromCard} className="sm-b-primary" style={{width:"100%",marginTop:placeCard.kind === "building" ? 8 : 13,padding:"12px 0",border:"none",borderRadius:12,background:placeCard.kind === "building" ? "#F1F5F9" : "#1A73E8",color:placeCard.kind === "building" ? "#334155" : "#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}><CompassIcon size={16} color={placeCard.kind === "building" ? "#334155" : "#fff"} /> เส้นทางไปที่นี่</button>
         {!expanded && <div onClick={()=>setExpanded(true)} style={{textAlign:"center",fontSize:11.5,color:"#80868B",marginTop:8,cursor:"pointer"}}>ลากขึ้นเพื่อดูข้อมูลเพิ่มเติม</div>}
       </div>

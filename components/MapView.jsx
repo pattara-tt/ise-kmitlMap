@@ -115,7 +115,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   const [reportForm, setReportForm] = useState(null);
   const [reportSending, setReportSending] = useState(false);
 
-  const { rooms, roomTypes, indoorSearchNodes, nodeIdByKey, effectiveFloors, buildingBounds, buildingPhoto, selectedBuilding } =
+  const { rooms, roomTypes, indoorSearchNodes, nodeIdByKey, effectiveFloors, buildingBounds, getBuildingPhoto, selectedBuilding } =
     useMapReferenceData(mapData, selectedBuildingId, mapBoundaries);
 
   // อาคารทั้งหมดจาก API (ต้องเป็น array เสมอ — building เอกพจน์คือ Sc8 ตึกเดียว)
@@ -275,7 +275,13 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     (bd?.geometry || []).map((p) => [Number(p[0]), Number(p[1])]);
 
   const openBuildingInfo = (buildingId, boundary) => {
-    const building = allBuildings.find((b) => b.id === buildingId) || mapData.data?.building || BUILDINGS.kmitl;
+    const requestedId = buildingId ?? boundary?.buildingId;
+    const legacyMatches = boundary && !requestedId
+      ? allBuildings.filter((entry) => entry.name === boundary.name) : [];
+    const building = requestedId != null
+      ? allBuildings.find((entry) => String(entry.id) === String(requestedId))
+      : boundary ? (legacyMatches.length === 1 ? legacyMatches[0] : null)
+      : selectedBuilding;
     const bd = boundary || boundaryOfBuilding(building?.id, building?.name);
     const pts = boundaryPoints(bd);
 
@@ -288,19 +294,22 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
       lon = (Number(building.bounds[0][1]) + Number(building.bounds[1][1])) / 2;
     } else return;
 
-    setSelectedBuildingId(building.id);
-    const first = (building.floors || [])[0];
-    if (first) setKmitlFloor(String(first.floorNo));
+    if (!building || building.id !== selectedBuilding?.id) setKmitlOpen(false);
+    setSelectedBuildingId(building?.id ?? null);
+    const first = (building?.floors || [])[0];
+    if (first && building.id !== selectedBuilding?.id) setKmitlFloor(String(first.floorNo));
 
-    openPlaceCard(bd?.name || building.name, [lon, lat], {
+    openPlaceCard(building?.name || bd?.name || "อาคาร", [lon, lat], {
       kind: "building",
+      buildingId: building?.id ?? null,
       icon: "🏢",
       extract: null,
-      image: building.photo || buildingPhoto || "/data/places/sc8.png",
+      image: getBuildingPhoto(building),
     });
   };
 
   const showBuildingFloorplan = () => {
+    if (!placeCard?.buildingId) return;
     setPlaceCard(null);
     if (ctx.current.searchPlaceMarker && mapRef.current) {
       mapRef.current.removeLayer(ctx.current.searchPlaceMarker);
@@ -520,6 +529,13 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   if (mapData.loading) return <div style={{ padding: 24, color: "#5F6368" }}>กำลังโหลดข้อมูลแผนที่…</div>;
   if (mapData.error) return <div style={{ padding: 24, color: "#D93025" }}>โหลดข้อมูลแผนที่ไม่สำเร็จ: {mapData.error.message}</div>;
 
+  // Assets may arrive after a card opens or change while it stays open.
+  // Resolve the image from the card's ID on every render, never the previous selection.
+  const cardBuilding = placeCard?.kind === "building" && placeCard.buildingId != null
+    ? allBuildings.find((entry) => String(entry.id) === String(placeCard.buildingId)) : null;
+  const displayedPlaceCard = placeCard?.kind === "building"
+    ? { ...placeCard, image: getBuildingPhoto(cardBuilding) } : placeCard;
+
   const view = {
     Btn,
     CENTER,
@@ -557,7 +573,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     openBuildingInfo,
     openPlaceCard,
     openReportForm,
-    placeCard,
+    placeCard: displayedPlaceCard,
     reportForm,
     reportOpen,
     reportQuota,
@@ -573,6 +589,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     sTo,
     searchOpen,
     searchQuery,
+    selectedBuilding,
     setEventCard,
     setKmitlFloor,
     setKmitlOpen,

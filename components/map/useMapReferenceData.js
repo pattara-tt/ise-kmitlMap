@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useCollection } from "../ui";
 import { formatDateTime } from "../../lib/datetime";
 import { KMITL_BOUNDS, WALKWAY_NODE_TYPES, getNodeType } from "../mapConfig";
 import { getNodeIcon } from "../building/nodePresentation";
 import { resolveRoomNodeIcon } from "../building/roomTypeIcon";
+import { resolveBuildingPhoto } from "./mapViewHelpers";
 
 // bounds [[south, west], [north, east]] จากพิกัดขอบเขต [[lat, lon], ...]
 function boundsFromGeometry(geometry) {
@@ -129,10 +130,14 @@ export function useMapReferenceData(mapData, selectedBuildingId = null, boundari
     return boundsFromGeometry(bd?.geometry) || KMITL_BOUNDS;
   }, [selectedBuilding, boundaries]);
 
-  const buildingPhoto = selectedBuilding?.photo || null;
+  const getBuildingPhoto = useCallback(
+    (building) => resolveBuildingPhoto(building, mapAssetItems),
+    [mapAssetItems]
+  );
+  const buildingPhoto = getBuildingPhoto(selectedBuilding);
 
   return {
     rooms, roomTypes, indoorSearchNodes, nodeIdByKey,
-    effectiveFloors, buildingBounds, buildingPhoto, selectedBuilding,
+    effectiveFloors, buildingBounds, buildingPhoto, getBuildingPhoto, selectedBuilding,
   };
 }

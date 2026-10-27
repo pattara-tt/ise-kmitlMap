@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Btn, Card, Field, Input, Pill, SearchBar, Table, Textarea, useCollection } from "../ui";
 import { clearMapDataCache } from "../../lib/useMapData";
+import { getBuildingPhotoAsset, resolveBuildingPhoto } from "../map/mapViewHelpers";
 
 const BuildingFloorPicker = dynamic(() => import("../Buildingfloorpicker"), {
   ssr: false,
@@ -235,60 +236,114 @@ export default function RegistrarPanel({ uc, user, onNavigate }) {
 }
 
 function BuildingDetailsManager({ buildingRecord, user, onRenamed }) {
-  const { items: buildings, patch: patchBuilding } = useCollection("buildings");
-  const { items: assets, create: createAsset, patch: patchAsset } = useCollection("mapAssets");
+  const { items: buildings, loading: buildingsLoading, patch: patchBuilding } = useCollection("buildings");
+  const { items: assets, loading: assetsLoading, create: createAsset, patch: patchAsset } = useCollection("mapAssets");
   const buildingRow = buildings.find((item) => item.id === buildingRecord?.id) || buildingRecord;
   const photoKey = buildingRow ? `building-photo:${buildingRow.id}` : null;
-  const photoRecord = assets.find((asset) => asset.kind === "buildingPhoto" && asset.name === photoKey);
-  const savedPhoto = photoRecord?.file || (buildingRow?.code?.toUpperCase() === "SC8" ? "/data/places/sc8.png" : "");
-  const [name, setName] = useState("");
-  const [photo, setPhoto] = useState("");
+  const photoRecord = getBuildingPhotoAsset(assets, buildingRow?.id);
+  const savedPhoto = resolveBuildingPhoto(buildingRow, assets) || "";
+  const [name, setName] = useState(buildingRow?.name || "");
+  const [photo, setPhoto] = useState(savedPhoto);
   const [saving, setSaving] = useState(false);
+  const [readingPhoto, setReadingPhoto] = useState(false);
   const [notice, setNotice] = useState("");
+  const mountedRef = useRef(false);
+  const readerRef = useRef(null);
+  const savingRef = useRef(false);
+  const dirtyRef = useRef({ name: false, photo: false });
+
+  // The manager is keyed by building ID. Ignore late file reads/save callbacks
+  // after it is replaced by the form for another building.
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const reader = readerRef.current;
+      readerRef.current = null;
+      if (reader?.readyState === 1) reader.abort();
+    };
+  }, []);
+
+  // Collection reads can finish after the user has started editing. Refresh
+  // untouched fields only, and do not reset the photo when a name is saved.
+  useEffect(() => {
+    if (!dirtyRef.current.name) setName(buildingRow?.name || "");
+  }, [buildingRow?.id, buildingRow?.name]);
 
   useEffect(() => {
-    setName(buildingRow?.name || "");
-    setPhoto(savedPhoto);
-    setNotice("");
-  }, [buildingRow?.id, buildingRow?.name, savedPhoto]);
+    if (!dirtyRef.current.photo && !readingPhoto) setPhoto(savedPhoto);
+  }, [buildingRow?.id, savedPhoto, readingPhoto]);
 
   const choosePhoto = (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || savingRef.current) return;
+    const previousReader = readerRef.current;
+    readerRef.current = null;
+    if (previousReader?.readyState === 1) previousReader.abort();
+    setReadingPhoto(false);
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 1_500_000) {
       setNotice("เลือกภาพ PNG, JPG หรือ WebP ขนาดไม่เกิน 1.5 MB");
       event.target.value = "";
       return;
     }
+    setNotice("");
+    setReadingPhoto(true);
     const reader = new FileReader();
-    reader.onload = () => setPhoto(String(reader.result || ""));
-    reader.onerror = () => setNotice("อ่านไฟล์รูปภาพไม่สำเร็จ");
+    readerRef.current = reader;
+    reader.onload = () => {
+      if (!mountedRef.current || readerRef.current !== reader) return;
+      readerRef.current = null;
+      dirtyRef.current.photo = true;
+      setPhoto(String(reader.result || ""));
+      setReadingPhoto(false);
+    };
+    reader.onerror = () => {
+      if (!mountedRef.current || readerRef.current !== reader) return;
+      readerRef.current = null;
+      setReadingPhoto(false);
+      setNotice("อ่านไฟล์รูปภาพไม่สำเร็จ");
+    };
     reader.readAsDataURL(file);
   };
 
   const save = async () => {
-    if (!buildingRow || saving || !name.trim()) return;
+    if (!buildingRow || savingRef.current || buildingsLoading || assetsLoading || readingPhoto || !name.trim()) return;
+    // Keep the original target and draft through every await, including a
+    // simultaneous rename/photo edit or a switch to another building.
+    const targetId = buildingRow.id;
+    const nextName = name.trim();
+    const nextPhoto = photo;
+    const nameChanged = nextName !== buildingRow.name;
+    const photoChanged = nextPhoto !== savedPhoto;
+    const targetPhotoId = photoRecord?.id;
+    const targetPhotoKey = photoKey;
+    savingRef.current = true;
     setSaving(true);
     setNotice("");
     try {
-      const nextName = name.trim();
-      if (nextName !== buildingRow.name) {
-        await patchBuilding(buildingRow.id, { name: nextName }, user);
+      if (nameChanged) {
+        await patchBuilding(targetId, { name: nextName }, user);
       }
-      if (photo !== savedPhoto) {
-        if (photoRecord) {
-          await patchAsset(photoRecord.id, { file: photo, status: "published" }, user);
-        } else if (photo) {
-          await createAsset({ name: photoKey, kind: "buildingPhoto", file: photo, floorId: null, status: "published" }, user);
+      if (photoChanged) {
+        const updatedAt = new Date().toISOString();
+        if (targetPhotoId) {
+          await patchAsset(targetPhotoId, { file: nextPhoto, status: "published", updatedAt }, user);
+        } else if (nextPhoto) {
+          await createAsset({ name: targetPhotoKey, kind: "buildingPhoto", file: nextPhoto, floorId: null, status: "published", updatedAt }, user);
         }
       }
       clearMapDataCache();
-      if (nextName !== buildingRow.name) onRenamed?.(nextName);
+      if (!mountedRef.current) return;
+      dirtyRef.current = { name: false, photo: false };
+      setName(nextName);
+      setPhoto(nextPhoto);
+      if (nameChanged) onRenamed?.(nextName);
       setNotice("บันทึกชื่อและรูปอาคารเรียบร้อยแล้ว");
     } catch (error) {
-      setNotice(`บันทึกไม่สำเร็จ: ${error?.message || String(error)}`);
+      if (mountedRef.current) setNotice(`บันทึกไม่สำเร็จ: ${error?.message || String(error)}`);
     } finally {
-      setSaving(false);
+      savingRef.current = false;
+      if (mountedRef.current) setSaving(false);
     }
   };
 
@@ -299,17 +354,21 @@ function BuildingDetailsManager({ buildingRecord, user, onRenamed }) {
     </p>
     <Field label="รหัสอาคาร"><Input value={buildingRow?.code || ""} disabled /></Field>
     <Field label="ชื่ออาคาร">
-      <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="ชื่ออาคาร" />
+      <Input value={name} disabled={saving} onChange={(event) => {
+        dirtyRef.current.name = true;
+        setName(event.target.value);
+        setNotice("");
+      }} placeholder="ชื่ออาคาร" />
     </Field>
     <Field label="รูปอาคาร (PNG, JPG, WebP สูงสุด 1.5 MB)">
-      <input type="file" accept="image/png,image/jpeg,image/webp" onChange={choosePhoto} />
+      <input type="file" aria-label="เลือกรูปอาคาร" accept="image/png,image/jpeg,image/webp" disabled={saving} onChange={choosePhoto} />
     </Field>
     {photo && <img src={photo} alt="ตัวอย่างรูปอาคาร" style={{ display: "block", width: "100%", maxWidth: 420, height: 190, objectFit: "cover", borderRadius: 12, marginTop: 12 }} />}
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
-      <Btn onClick={save} disabled={!buildingRow || saving || !name.trim() || (name.trim() === buildingRow.name && photo === savedPhoto)}>
-        {saving ? "กำลังบันทึก…" : "บันทึกข้อมูลตึก"}
+      <Btn onClick={save} disabled={!buildingRow || buildingsLoading || assetsLoading || readingPhoto || saving || !name.trim() || (name.trim() === buildingRow.name && photo === savedPhoto)}>
+        {saving ? "กำลังบันทึก…" : readingPhoto ? "กำลังอ่านรูป…" : "บันทึกข้อมูลตึก"}
       </Btn>
-      {notice && <span role="status" style={{ fontSize: 12.5, color: notice.startsWith("บันทึกไม่สำเร็จ") ? "#B3261E" : "#188038" }}>{notice}</span>}
+      {notice && <span role="status" style={{ fontSize: 12.5, color: notice.startsWith("บันทึกชื่อและรูป") ? "#188038" : "#B3261E" }}>{notice}</span>}
     </div>
   </Card>;
 }

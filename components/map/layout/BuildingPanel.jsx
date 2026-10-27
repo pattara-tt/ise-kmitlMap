@@ -8,6 +8,7 @@ export default function BuildingPanel({ view }) {
     kmitlOpen,
     nav,
     openBuildingInfo,
+    selectedBuilding,
     setKmitlFloor,
     setKmitlOpen
   } = view;
@@ -50,7 +51,7 @@ export default function BuildingPanel({ view }) {
       gap: 6,
       minWidth: 0
     }}>
-              <span>Sc8 · ชั้น {kmitlFloor}</span>
+              <span>{selectedBuilding?.name || "อาคาร"} · ชั้น {kmitlFloor}</span>
               {KMITL_FLOORS.find(x => x.id === kmitlFloor)?.detail ? <span style={{
         fontWeight: 500,
         fontSize: 11.5,
@@ -62,7 +63,7 @@ export default function BuildingPanel({ view }) {
                   · {KMITL_FLOORS.find(x => x.id === kmitlFloor).detail}
                 </span> : null}
             </span>
-            <button onClick={openBuildingInfo} title="ดูข้อมูลและรูปอาคาร" style={{
+            <button onClick={() => openBuildingInfo(selectedBuilding?.id)} title="ดูข้อมูลและรูปอาคาร" style={{
       background: "#E8F0FE",
       border: "1px solid #C6DAFC",
       borderRadius: 8,

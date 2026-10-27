@@ -95,6 +95,7 @@ export function usePlaceActions({
     setPlaceCard({
       name,
       kind: meta.kind || null,
+      buildingId: meta.buildingId ?? null,
       coord: finalCoord,
       nodeId: meta.nodeId || null,
       floor: meta.floor || null,

@@ -11,6 +11,29 @@ export { formatDateTime as fmtEventTime };
 // ไอคอนในหมุดกิจกรรม — เรนเดอร์เป็นสีขาวผ่าน CSS mask ให้ตัดกับพื้นหมุด
 export const EVENT_PIN_ICON = "/data/icon/ui/bullhorn.svg";
 
+// Registrar stores building photos in mapAssets, keyed by the real building ID.
+// Use the same record in the editor and public card, regardless of API ordering.
+export function getBuildingPhotoAsset(assets = [], buildingId) {
+  if (buildingId == null || !String(buildingId).trim()) return null;
+  const key = `building-photo:${buildingId}`;
+  const updated = (asset) => Date.parse(asset.updatedAt || asset.createdAt || "") || 0;
+  return (Array.isArray(assets) ? assets : [])
+    .filter((asset) => asset && asset.kind === "buildingPhoto" &&
+      asset.status !== "deleted" && asset.name === key)
+    .sort((a, b) => updated(b) - updated(a) ||
+      String(b.id || "").localeCompare(String(a.id || "")))
+    [0] || null;
+}
+
+export function resolveBuildingPhoto(building, assets = []) {
+  if (building?.id == null) return null;
+  const asset = getBuildingPhotoAsset(assets, building.id);
+  if (asset) return asset.file || null;
+  return building.photo ||
+    (String(building.code || "").trim().toUpperCase() === "SC8"
+      ? "/data/places/sc8.png" : null);
+}
+
 // ไอคอนเข็มทิศจากไฟล์ SVG — ย้อมสีตามบริบทที่ใช้
 
 export function placementToBounds(placement, fallbackBounds) {
