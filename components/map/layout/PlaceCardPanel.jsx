@@ -78,9 +78,14 @@ export default function PlaceCardPanel({ view }) {
         <div style={{padding:"0 0 8px"}}><div style={{width:42,height:5,borderRadius:999,background:"#B8BDC4",margin:"0 auto"}} /></div>
         <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
           {placeCard.kind !== "building" && (
-            <span style={{ fontSize: 25, lineHeight: 1 }}>
-              {placeCard.icon || "📍"}
-            </span>
+            placeCard.iconHtml ? (
+              <span aria-hidden="true" style={{width:26,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"none"}}
+                dangerouslySetInnerHTML={{__html:placeCard.iconHtml}} />
+            ) : (
+              <span aria-hidden="true" style={{ fontSize: 25, lineHeight: 1 }}>
+                {placeCard.icon || "📍"}
+              </span>
+            )
           )}
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:800,fontSize:18,color:"#202124"}}>{displayName}</div>

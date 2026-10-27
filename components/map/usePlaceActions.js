@@ -81,7 +81,7 @@ export function usePlaceActions({
     // A second red search pin covers that icon (especially after GPS recentering).
     // Indoor rooms already have their own icon; its red search-hit highlight
     // should remain visible instead of being covered by an extra red pin.
-    if (meta.kind !== "building" && c.L && map) {
+    if (meta.kind !== "building" && !meta.nodeId && c.L && map) {
       c.searchPlaceMarker = c.L.marker([finalCoord[1], finalCoord[0]], {
         icon: c.L.divIcon({
           className: "",
@@ -99,6 +99,7 @@ export function usePlaceActions({
       nodeId: meta.nodeId || null,
       floor: meta.floor || null,
       icon: meta.icon || "📍",
+      iconHtml: meta.iconHtml || null,
       extract: meta.extract || null,
       image: meta.image || null,
       loading: meta.kind !== "building" && !meta.extract,

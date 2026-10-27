@@ -79,7 +79,10 @@ export function useMapEffect14({
           nodeId: entry?.id || id,
           markerNodeId: entry?.markerId || id,
           floor: kmitlFloor,
-          icon: room?.type || entry?.icon || t.icon,
+          // Use the exact room icon already rendered on the GIS/Registrar map.
+          // room.type is a label (e.g. "ห้องเรียน"), not an icon.
+          icon: entry?.icon || t.icon,
+          iconHtml: icon.html,
           extract: entry?.extract || `${t.label} ชั้น ${kmitlFloor} อาคารพระจอมเกล้าฯ (Sc8)`,
         });
       });
