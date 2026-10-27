@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, refactor]
+    branches: [main, refactor-ui-refactor]
   pull_request:
 
 jobs:
@@ -58,14 +58,20 @@ jobs:
           PSQL="psql -d legacy" ./deploy/migrate.sh          # รอบสอง ต้องไม่มีอะไรค้าง
           test "$(PSQL='psql -d legacy' ./deploy/migrate.sh --status | grep -c 'ค้าง  ')" = "0"
 
-  # Continuous Deployment: deploy ขึ้น VM เมื่อ push เข้า refactor และ CI ข้างบนผ่านทั้งหมด
+  # Continuous Deployment: deploy ขึ้น VM เมื่อ push เข้า refactor-ui-refactor และ CI ข้างบนผ่านทั้งหมด
   # รันบน self-hosted runner ที่ติดตั้งบน VM เอง (VM เข้าจากข้างนอกไม่ได้ จึงให้ VM เป็นฝ่ายถามหา job จาก GitHub)
   # ห้ามเปิดให้ pull_request รัน job นี้ (repo เป็น public)
   deploy:
     name: deploy ขึ้น VM
     needs: [app, database]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/refactor'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/refactor-ui-refactor'
     runs-on: [self-hosted, kmitl-prod]
     concurrency: deploy
     steps:
-      - run: cd ~/ise-kmitlMap && ./deploy/deploy.sh
+      # ย้าย VM ไปอยู่ branch ที่ deploy ก่อน (กันกรณี VM ยังค้างอยู่ branch อื่น) แล้วค่อยรันสคริปต์
+      - run: |
+          cd ~/ise-kmitlMap
+          git fetch origin
+          git checkout "${{ github.ref_name }}"
+          git pull --ff-only origin "${{ github.ref_name }}"
+          ./deploy/deploy.sh

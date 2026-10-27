@@ -167,4 +167,4 @@ npm install && npm run dev
 
 - `migrate.sh` จดชื่อไฟล์ที่รันแล้วไว้ในตาราง `schema_migrations` และรันเฉพาะไฟล์ที่ยังไม่เคยรัน ครั้งแรกบนฐานเดิมมันตรวจสภาพฐานแล้วจด baseline ให้เอง
 - กติกา: ไฟล์ migration ต้องรันซ้ำได้ (`IF NOT EXISTS` ฯลฯ) และห้ามแก้ไฟล์ที่ push ไปแล้ว ถ้าผิดให้เขียนไฟล์ใหม่แก้
-- GitHub Actions (`.github/workflows/ci.yml`): ทุก push/PR รันเทสต์, build, สร้างฐานใหม่จาก schema+seed และอัปเกรดฐานเดิมด้วย migrate.sh ถ้าเป็น push เข้า `refactor` และผ่านทั้งหมด job `deploy` จะรัน `deploy/deploy.sh` บน VM ผ่าน self-hosted runner (label `kmitl-prod`) ที่ติดตั้งบน VM เอง ไม่ต้องเปิด SSH จากข้างนอก
+- GitHub Actions (`.github/workflows/ci.yml`): ทุก push/PR รันเทสต์, build, สร้างฐานใหม่จาก schema+seed และอัปเกรดฐานเดิมด้วย migrate.sh ถ้าเป็น push เข้า `refactor-ui-refactor` และผ่านทั้งหมด job `deploy` จะรัน `deploy/deploy.sh` บน VM ผ่าน self-hosted runner (label `kmitl-prod`) ที่ติดตั้งบน VM เอง ไม่ต้องเปิด SSH จากข้างนอก
