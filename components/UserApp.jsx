@@ -17,14 +17,21 @@ const MapView = dynamic(() => import("./MapView"), {
 export default function UserApp({ user, tab, onTabChange, viewMode = "auto" }) {
   const mapApi = useRef(null);
   const { items: accessRows, loading: accessLoading } = useCollection("institutionAccess");
+  const { items: institutions, loading: institutionsLoading } = useCollection("institutions");
   const access = accessRows.find((x) => x.institutionId === user.institutionId);
 
-  if (accessLoading) return <div className="bdi-page"><div className="bdi-page-inner"><div style={{ padding: 24, color: "#5F6368" }}>กำลังตรวจสอบสิทธิ์สถาบัน…</div></div></div>;
-  const institutionIdentity = `${user.institutionName || ""} ${user.institutionId || ""}`;
+  if (accessLoading || institutionsLoading) return <div className="bdi-page"><div className="bdi-page-inner"><div style={{ padding: 24, color: "#5F6368" }}>กำลังตรวจสอบสิทธิ์สถาบัน…</div></div></div>;
+
+  // institutionId is an internal key (e.g. INST-01), not the institution name.
+  // Resolve the selected institution before deciding whether the KMITL map is available.
+  const institution = institutions.find((x) => String(x.id) === String(user.institutionId));
+  const institutionIdentity = `${institution?.name || user.institutionName || ""} ${institution?.shortName || ""} ${institution?.id || user.institutionId || ""}`;
   const hasKmitlMap = /KMITL|สจล|ลาดกระบัง/i.test(institutionIdentity);
+
   if (!hasKmitlMap) {
-    return <div className="bdi-page"><div className="bdi-page-inner"><Card><b style={{ fontSize: 16 }}>ยังไม่มีข้อมูลสำหรับสถาบันนี้</b><div style={{ marginTop: 8, fontSize: 13, color: "#5F6368", lineHeight: 1.7 }}>ขณะนี้ระบบยังไม่มีข้อมูลสำหรับสถาบันนี้</div></Card></div></div>;
+    return <div className="bdi-page"><div className="bdi-page-inner"><Card><b style={{ fontSize: 16 }}>ยังไม่มีข้อมูลสำหรับสถาบันนี้</b><div style={{ marginTop: 8, fontSize: 13, color: "#5F6368", lineHeight: 1.7 }}>ระบบยังไม่มีข้อมูลของสถาบันนี้</div></Card></div></div>;
   }
+
   if (access && access.accessStatus && access.accessStatus !== "active") {
     const paused = access.accessStatus === "paused";
     return (
@@ -142,7 +149,7 @@ function EventsPage({ user, mapApi, onOpenMap }) {
 const NOTI_KINDS = {
   system: { label: "ประกาศแจ้งเตือนจากระบบ", icon: "notification", color: "#D93025", bg: "#FCE8E6" },
   event: { label: "ประกาศกิจกรรม", icon: "bullhorn", color: "#1A73E8", bg: "#E8F0FE" },
-  news: { label: "ข่าวสารจากประชาสัมพันธ์", icon: "news", color: "#188038", bg: "#E6F4EA" },
+  news: { label: "ข่าวสารจากฝ่ายประชาสัมพันธ์", icon: "news", color: "#188038", bg: "#E6F4EA" },
 };
 
 function NotificationsPage({ user }) {
@@ -220,7 +227,7 @@ function NotificationsPage({ user }) {
           return (
             <button key={k} onClick={() => setFilter(k)}
               style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid", borderColor: on ? (cfg?.color || "#1A73E8") : "#DADCE0",
-                background: on ? (cfg?.bg || "#E8F0FE") : "#fff", color: on ? (cfg?.color || "#1A73E8") : "#5F6368",
+                background: on ? (cfg?.bg || "#E8F0FE") : "#fff", color: on ? (cfg?.color || "#5F6368") : "#5F6368",
                 borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
               {cfg ? <Icon name={cfg.icon} size={14} color={on ? cfg.color : "#5F6368"} /> : null}
               {label} ({n})
@@ -445,8 +452,7 @@ function MyRequests({ user }) {
     .filter((r) => r.userId === user.id)
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
-
-    // โควต้าคงเหลือ (นับเหมือน backend: ไม่รวมที่ยกเลิก, ตามเวลาไทย)
+  // โควต้าคงเหลือ (นับเหมือน backend: ไม่รวมที่ยกเลิก, ตามเวลาไทย)
   const dailyLimit = quotaItems[0]?.perUserPerDay ?? 3;
   const monthlyLimit = quotaItems[0]?.perUserPerMonth ?? 20;
   const counted = mine.filter((r) => r.status !== "cancelled");
