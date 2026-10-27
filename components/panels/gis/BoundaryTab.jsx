@@ -366,23 +366,49 @@ function Boundary({ user }) {
       `เส้นเชื่อม (edge) ${edges.length} รายการ`,
       "\nกู้คืนไม่ได้ ยืนยันการลบหรือไม่?",
     ].filter(Boolean).join("\n");
-    if (!confirm(lines)) return;
+
+    const confirmed = await askConfirm(lines, {
+      title: "ยืนยันการลบขอบเขต",
+      confirmLabel: "ลบ",
+    });
+
+    if (!confirmed) return;
 
     const failed = [];
+
     const safeDestroy = async (api, row, label) => {
       try { await api.destroy(row.id, user); }
       catch (err) { failed.push(`${label} ${row.name || row.nodeKey || row.id}: ${err?.message || "ลบไม่สำเร็จ"}`); }
     };
 
-    // ลบจากล่างขึ้นบน: edge → node → แผนผัง → ขอบเขต
+    try {
+      // ลบจากล่างขึ้นบน: edge → node → แผนผัง → ขอบเขต
     for (const e of edges) await safeDestroy(edgesApi, e, "edge");
     for (const n of nodes) await safeDestroy(nodesApi, n, "node");
     for (const a of assets) await safeDestroy(assetsApi, a, "แผนผัง");
-    for (const b of ordered) await safeDestroy({ destroy }, b, "ขอบเขต");
-
+    for (const b of ordered) {
+      await safeDestroy({ destroy }, b, "ขอบเขต");
+    }
+    
     clearMapDataCache();
-    if (failed.length) alert(`ลบไม่สำเร็จ ${failed.length} รายการ:\n${failed.slice(0, 8).join("\n")}`);
-  };
+
+    if (failed.length > 0) {
+          notify(
+            `ลบไม่สำเร็จ ${failed.length} รายการ: ${failed.slice(0, 8).join(", ")}`,
+            "error"
+          );
+        } else {
+          notify("ลบขอบเขตและข้อมูลที่เกี่ยวข้องเรียบร้อยแล้ว", "success");
+        }
+      } catch (err) {
+        console.error("Delete boundary error:", err);
+
+        notify(
+          err?.message || "เกิดข้อผิดพลาดในการลบขอบเขต",
+          "error"
+        );
+      }  
+    };
 
 
   return <>

@@ -39,6 +39,20 @@ const escapePopupText = (value) => String(value ?? "")
   .replace(/'/g, "&#39;");
 
 
+// พิกัดขอบเขต [[lat, lon], ...] -> จุดที่ใช้ได้
+const toPoints = (geometry) =>
+  (Array.isArray(geometry) ? geometry : [])
+    .map((p) => [Number(p?.[0]), Number(p?.[1])])
+    .filter(([a, c]) => Number.isFinite(a) && Number.isFinite(c));
+
+// จุด -> bounds [[south, west], [north, east]]
+const boundsOfPoints = (pts) => {
+  if (!pts || !pts.length) return null;
+  const lats = pts.map((p) => p[0]);
+  const lons = pts.map((p) => p[1]);
+  return [[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]];
+};
+
 /* label สำหรับ Popup*/
 
 /* node ที่ถือว่าเป็นจุดทางเข้า/ทางออก */
@@ -68,10 +82,58 @@ export default function BuildingFloorPicker({
     searchLayer: null,
   });
 
+  /* ทะเบียนอาคาร: อาคารเดิมใน BUILDINGS (Sc8) + อาคารที่เพิ่มใหม่จาก UC7/UC8 (ฐานข้อมูล)
+     อาคารใหม่ใช้ shape เดียวกับ BUILDINGS ({ id, name, bounds, outline, floors }) จึงใช้กับ effect เดิมได้ */
+  const { items: boundaries } = useCollection("mapBoundaries");
+  const { items: edgeRows } = useCollection("edges");
+
+  const buildingRegistry = useMemo(() => {
+    const registry = { ...BUILDINGS };
+    const staticIds = new Set(Object.values(BUILDINGS).map((x) => String(x.id)));
+    const staticNames = new Set(Object.values(BUILDINGS).map((x) => x.name));
+    const dbBuildings = Array.isArray(mapData.data?.buildings) ? mapData.data.buildings : [];
+
+    for (const bd of dbBuildings) {
+      if (staticIds.has(String(bd.id)) || staticNames.has(bd.name)) continue;
+
+      const boundary = (boundaries || []).find(
+        (x) =>
+          x.type === "building" &&
+          x.status !== "deleted" &&
+          (x.buildingId ? x.buildingId === bd.id : x.name === bd.name)
+      );
+      const outline = toPoints(boundary?.geometry);
+      const bounds =
+        (outline.length >= 3 ? boundsOfPoints(outline) : null) ||
+        (Array.isArray(bd.bounds) && bd.bounds.length === 2 ? bd.bounds : null);
+      if (!bounds) continue; // ไม่มีขอบเขต/พิกัด วางบนแผนที่ไม่ได้
+
+      registry[`db:${bd.id}`] = {
+        id: bd.id,
+        code: bd.code,
+        name: bd.name,
+        bounds,
+        outline: outline.length >= 3 ? outline : null,
+        floors: (bd.floors || [])
+          .slice()
+          .sort((a, z) => Number(a.floorNo) - Number(z.floorNo))
+          .map((f) => ({ id: String(f.floorNo), label: f.name || `ชั้น ${f.floorNo}` })),
+        __db: true,
+      };
+    }
+    return registry;
+  }, [mapData.data, boundaries]);
+
+  // nodeKey ของ node ที่อยู่ในฐานข้อมูล (ใช้กับอาคารที่เพิ่มใหม่)
+  const dbNodeKeyById = useMemo(
+    () => Object.fromEntries((mapData.data?.nodes || []).map((n) => [n.id, n.nodeKey])),
+    [mapData.data]
+  );
+
   /* State*/
 
   const [openKey, setOpenKey] = useState(
-    () => Object.keys(BUILDINGS).find( (k) => BUILDINGS[k].name === building ) || null
+    () => Object.keys(buildingRegistry).find((k) => buildingRegistry[k].name === building) || null
   );
 
   const [curFloor, setCurFloor] = useState(floor || "1");
@@ -88,7 +150,7 @@ export default function BuildingFloorPicker({
   const { items: allRooms } = useCollection("rooms");
   const { items: roomTypes } = useCollection("roomTypes");
   const { items: mapAssets } = useCollection("mapAssets");
-  const b = openKey ? BUILDINGS[openKey] : null;
+  const b = openKey ? buildingRegistry[openKey] || null : null;
 
   const mergedFloors = useMemo(() => {
     if (!b) return [];
@@ -195,6 +257,27 @@ export default function BuildingFloorPicker({
       ? { ...node, type: "path", __routeConnector: true }
       : node;
 
+    // อาคารที่เพิ่มใหม่: อ่าน node ของชั้นนั้นจากฐานข้อมูล (พิกัดเดียวกับหน้าแผนที่ผู้ใช้)
+    if (b.__db) {
+      const floorRec = (floorRecords || []).find(
+        (f) => f.buildingId === b.id && String(f.floorNo) === String(curFloor)
+      );
+      const result = {};
+      if (!floorRec) return result;
+      for (const n of mapData.data?.nodes || []) {
+        if (n.floorId !== floorRec.id) continue;
+        result[n.nodeKey] = asDisplayNode({
+          id: n.id,
+          floorId: n.floorId,
+          lat: Number(n.y),
+          lon: Number(n.x),
+          type: n.type,
+          label: n.name || n.nodeKey,
+        });
+      }
+      return result;
+    }
+
     if (String(curFloor) === "1") {
       return Object.fromEntries(Object.entries(KMITL_FLOOR1_NODES || {})
         .map(([key, node]) => [key, asDisplayNode(node)]));
@@ -211,17 +294,25 @@ export default function BuildingFloorPicker({
       }
     }
     return result;
-  }, [b, curFloor, mapData.data]);
+  }, [b, curFloor, mapData.data, floorRecords]);
 
   const floorEdges = useMemo(() => {
     const floorNodeIds = new Set(Object.keys(floorNodes));
+    if (b?.__db) {
+      return (edgeRows || [])
+        .map((e) => [dbNodeKeyById[e.fromNodeId], dbNodeKeyById[e.toNodeId]])
+        .filter(([from, to]) => from && to && floorNodeIds.has(from) && floorNodeIds.has(to));
+    }
     return (KMITL_ALL_EDGES || KMITL_FLOOR1_EDGES || []).filter(([from, to]) => floorNodeIds.has(from) && floorNodeIds.has(to));
-  }, [curFloor, floorNodes, mapData.data]);
+  }, [b, curFloor, floorNodes, mapData.data, edgeRows, dbNodeKeyById]);
 
 
-  const nodeKeyById = useMemo(() => Object.fromEntries(
-    Object.entries(KMITL_ALL_NODES || {}).map(([key, node]) => [node.nodeId || node.id, key])
-  ), [mapData.data]);
+  const nodeKeyById = useMemo(() => ({
+    ...Object.fromEntries(
+      Object.entries(KMITL_ALL_NODES || {}).map(([key, node]) => [node.nodeId || node.id, key])
+    ),
+    ...dbNodeKeyById,
+  }), [mapData.data, dbNodeKeyById]);
 
   /* Match room กับ node */
   const roomByNode = useMemo(() => {
@@ -247,10 +338,10 @@ export default function BuildingFloorPicker({
 
   /* Sync props */
   useEffect(() => {
-    const key = Object.keys(BUILDINGS).find((k) => BUILDINGS[k].name === building);
+    const key = Object.keys(buildingRegistry).find((k) => buildingRegistry[k].name === building);
     setOpenKey(key || null);
     if (floor) setCurFloor(floor);
-  }, [building, floor, mapData.data]);
+  }, [building, floor, mapData.data, buildingRegistry]);
 
   useEffect(() => {
     if (!building) {
@@ -261,7 +352,18 @@ export default function BuildingFloorPicker({
 
 
   /* Map bounds — loaded from normalized buildings.bounds via /api/map/buildings */
-  const mapBounds = mapData.data?.building?.bounds || [];
+  // รวมขอบเขตของ Sc8 + อาคารที่เพิ่มใหม่ทุกหลัง เพื่อให้มุมมองแคมปัสครอบคลุมทุกอาคาร
+  const mapBounds = useMemo(() => {
+    const list = [
+      mapData.data?.building?.bounds,
+      ...Object.values(buildingRegistry).filter((x) => x.__db).map((x) => x.bounds),
+    ].filter((bb) => Array.isArray(bb) && bb.length === 2);
+    if (!list.length) return [];
+    return [
+      [Math.min(...list.map((bb) => bb[0][0])), Math.min(...list.map((bb) => bb[0][1]))],
+      [Math.max(...list.map((bb) => bb[1][0])), Math.max(...list.map((bb) => bb[1][1]))],
+    ];
+  }, [mapData.data, buildingRegistry]);
 
   /* Fit building */
   const fitBuilding = (map,poly) => {
@@ -303,7 +405,7 @@ export default function BuildingFloorPicker({
 
   /* Initialize map */
   useBuildingEffect06({
-    BUILDINGS,
+    BUILDINGS: buildingRegistry,
     CENTER,
     ctx,
     drawGoogleLikeBaseMap,

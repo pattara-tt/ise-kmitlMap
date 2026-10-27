@@ -14,6 +14,9 @@ export function useMapEffect14({
   indoorSearchNodes,
   kmitlFloor,
   kmitlFloorNodes,
+  kmitlFloorEdges = [],
+  showGraphEdges = true,
+  buildingName = "",
   kmitlOpen,
   kmitlRouteResult,
   mapRef,
@@ -37,8 +40,21 @@ export function useMapEffect14({
     );
     const frontDoorKey = entranceKeys.includes("Sc8Entrance1F1")
       ? "Sc8Entrance1F1" : entranceKeys[0];
-    // 🔗 เส้น edge ระหว่าง node เป็นโครงกราฟสำหรับคำนวณเส้นทางเท่านั้น ไม่วาดให้ผู้ใช้เห็น
-    //    (ผู้ใช้จะเห็นเฉพาะ "เส้นทางที่ระบบนำทางให้" ตอนกดนำทางจริงเท่านั้น)
+    // 🔗 เส้น edge ระหว่าง node ของชั้นที่เปิดอยู่ — วาดเป็นเส้นบาง ๆ ใต้หมุด (ปิดได้ด้วย showGraphEdges={false})
+    //    เส้นทางที่ระบบนำทางให้ (kmitlRouteResult) ยังวาดเป็นเส้นเหลืองหนาทับอยู่ด้านบนเหมือนเดิม
+    if (showGraphEdges) {
+      for (const edge of kmitlFloorEdges || []) {
+        const a = kmitlFloorNodes[edge?.[0]];
+        const b = kmitlFloorNodes[edge?.[1]];
+        if (!a || !b) continue;
+        if (![a.lat, a.lon, b.lat, b.lon].every(Number.isFinite)) continue;
+        c.kmitlGraphLayer.push(
+          L.polyline([[a.lat, a.lon], [b.lat, b.lon]], {
+            color: "#1A73E8", weight: 3, opacity: 0.6, interactive: false, pane: "bdiFloorPane",
+          }).addTo(m)
+        );
+      }
+    }
     // 📍 วาด node ทุกจุดของชั้นที่กำลังดูอยู่ ให้เห็นบน SVG จริง — กรองตามชิปที่เปิดอยู่ (ห้องเรียน/ห้องน้ำ/ลิฟต์/บันได) ส่วน type อื่น (ทางเดิน/ทางเข้า/ทางหนีไฟ) ยังโชว์เสมอไม่เกี่ยวกับชิป
     for (const id of Object.keys(kmitlFloorNodes)) {
       const n = kmitlFloorNodes[id];
@@ -84,7 +100,7 @@ export function useMapEffect14({
           // room.type is a label (e.g. "ห้องเรียน"), not an icon.
           icon: entry?.icon || t.icon,
           iconHtml: icon.html,
-          extract: entry?.extract || `${t.label} ชั้น ${kmitlFloor} อาคารพระจอมเกล้าฯ (Sc8)`,
+          extract: entry?.extract || `${t.label} ชั้น ${kmitlFloor} ${buildingName || "อาคารพระจอมเกล้าฯ (Sc8)"}`,
         });
       });
       c.kmitlGraphLayer.push(marker);
@@ -94,5 +110,5 @@ export function useMapEffect14({
       if (latlngs.length > 1) c.kmitlGraphLayer.push(L.polyline(latlngs, { color: "#F9AB00", weight: 6, opacity: 0.95, pane: "bdiFloorPane" }).addTo(m));
     }
     return () => { (c.kmitlGraphLayer || []).forEach((ly) => { if (m.hasLayer(ly)) m.removeLayer(ly); }); c.kmitlGraphLayer = []; };
-  }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlRouteResult, chips, indoorSearchNodes, rooms, roomTypes, nodeIdByKey, placeCard?.nodeId]);
+  }, [kmitlOpen, kmitlFloor, kmitlFloorNodes, kmitlFloorEdges, showGraphEdges, buildingName, kmitlRouteResult, chips, indoorSearchNodes, rooms, roomTypes, nodeIdByKey, placeCard?.nodeId]);
 }

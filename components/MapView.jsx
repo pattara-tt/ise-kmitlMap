@@ -105,14 +105,21 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   const mapData = useMapData();
   const { events, interests, eventCard, setEventCard, myInterest, toggleInterest } = useEventInterest(user);
   const { items: categories } = useCollection("categories");
+  const { items: mapBoundariesRaw } = useCollection("mapBoundaries");
+  const mapBoundaries = useMemo(() => mapBoundariesRaw || [], [mapBoundariesRaw]);
+  // อาคารที่ผู้ใช้กดบนแผนที่ (null = ยังไม่เลือก ใช้อาคารหลักเดิมเป็นค่าเริ่มต้นใน useMapReferenceData)
+  const [selectedBuildingId, setSelectedBuildingId] = useState(null);
 
   // 🚩 แจ้งปัญหา/ขอแก้ไขข้อมูลสถานที่ — ส่งเป็นคำร้องให้ฝ่ายดูแลระบบพิจารณา
   const [reportOpen, setReportOpen] = useState(false);
   const [reportForm, setReportForm] = useState(null);
   const [reportSending, setReportSending] = useState(false);
 
-  const { rooms, roomTypes, indoorSearchNodes, nodeIdByKey, effectiveFloors, buildingBounds, buildingPhoto } =
-    useMapReferenceData(mapData);
+  const { rooms, roomTypes, indoorSearchNodes, nodeIdByKey, effectiveFloors, buildingBounds, buildingPhoto, selectedBuilding } =
+    useMapReferenceData(mapData, selectedBuildingId, mapBoundaries);
+
+  // อาคารทั้งหมดจาก API (ต้องเป็น array เสมอ — building เอกพจน์คือ Sc8 ตึกเดียว)
+  const allBuildings = Array.isArray(mapData.data?.buildings) ? mapData.data.buildings : [];
   const { items: requests, create: createRequest } = useCollection("requests");
   const { items: quotaItems } = useCollection("requestQuota");
   const requestQuota = quotaItems[0] || {};
@@ -166,6 +173,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
 
   // 🏢 ตึก Sc8 — ตึกเดียว (ตัดของเก่า SD/BACC/CEN/LD/BTS/SW ทั้งหมดออกแล้ว)
   const [kmitlOpen, setKmitlOpen] = useState(false);
+
   const kmitlOpenRef = useRef(kmitlOpen);
   useEffect(() => { kmitlOpenRef.current = kmitlOpen; }, [kmitlOpen]);
   // เครื่องมือผู้พัฒนา (คาลิเบรตผัง / ปักหมุด / ทดสอบเส้นทางในตึก) ถูกถอดออกจากหน้าผู้ใช้ทั่วไป
@@ -184,19 +192,38 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   // 📋 ดึง "รายละเอียดชั้น" ที่ฝ่ายทะเบียนกรอกไว้ (collection "floors") มาผสานกับข้อมูลชั้นแบบ static (svg, id, label)
   // — ใช้ id ชั้น + ชื่ออาคาร (BUILDINGS.kmitl.name = "Sc8") จับคู่ ถ้าไม่มีข้อมูลในระบบ จะ fallback เป็นค่า detail เดิมใน mapConfig (ปกติเป็น null)
   const { items: floorRecords } = useCollection("floors");
-  const KMITL_FLOORS = useMemo(
-    () =>
-      KMITL_FLOORS_STATIC.map((f) => {
-        const rec = floorRecords.find((r) => r.buildingId === BUILDINGS.kmitl?.id && String(r.floorNo) === String(f.id));
-        return rec?.note ? { ...f, detail: rec.note, apiId: rec.id } : { ...f, apiId: rec?.id || f.apiId };
-      }),
-    [floorRecords, mapData.data]
-  );
+  const { items: edgeRows } = useCollection("edges");
+  const KMITL_FLOORS = useMemo(() => {
+    const floors = selectedBuilding?.floors;
+    const isMainBuilding = !selectedBuilding || selectedBuilding.id === BUILDINGS.kmitl?.id;
+
+    // อาคารอื่น: สร้างรายการชั้นจากข้อมูลจริงของอาคารนั้น (ไม่ใช้ผัง static ของ Sc8)
+    if (!isMainBuilding && Array.isArray(floors) && floors.length) {
+      return floors
+        .slice()
+        .sort((a, b) => Number(a.floorNo) - Number(b.floorNo))
+        .map((fl) => {
+          const rec = floorRecords.find((r) => r.buildingId === selectedBuilding.id && String(r.floorNo) === String(fl.floorNo));
+          return {
+            id: String(fl.floorNo),
+            label: fl.name || `ชั้น ${fl.floorNo}`,
+            apiId: fl.id,
+            detail: rec?.note || null,
+          };
+        });
+    }
+
+    // อาคารหลัก (Sc8): ใช้ข้อมูล static ผสานรายละเอียดชั้นเหมือนเดิม
+    return KMITL_FLOORS_STATIC.map((f) => {
+      const rec = floorRecords.find((r) => r.buildingId === BUILDINGS.kmitl?.id && String(r.floorNo) === String(f.id));
+      return rec?.note ? { ...f, detail: rec.note, apiId: rec.id } : { ...f, apiId: rec?.id || f.apiId };
+    });
+  }, [floorRecords, mapData.data, selectedBuilding]);
 
   // 🧭 กราฟ node/edge ของชั้นที่กำลังดูอยู่ — เพิ่มชั้นใหม่ในอนาคตแค่ต่อ ternary นี้
   // The public map and Registrar must read the exact same saved GIS coordinates.
   const kmitlFloorNodes = useMemo(() => {
-    const floorIds = new Set((mapData.data?.building?.floors || [])
+    const floorIds = new Set((selectedBuilding?.floors || [])
       .filter((floor) => String(floor.floorNo) === String(kmitlFloor))
       .map((floor) => floor.id));
     return Object.fromEntries((mapData.data?.nodes || [])
@@ -205,8 +232,18 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
         id: node.id, floorId: node.floorId, lat: Number(node.y), lon: Number(node.x),
         type: node.type, label: node.name || node.nodeKey,
       }]));
-  }, [mapData.data, kmitlFloor]);
-  const kmitlFloorEdges = kmitlFloor === "1" ? KMITL_FLOOR1_EDGES : [];
+  }, [mapData.data, kmitlFloor, selectedBuilding]);
+  // เส้นเชื่อม (edge) ของชั้นที่เปิดอยู่ — Sc8 ใช้ข้อมูล static เดิม, อาคารที่เพิ่มใหม่อ่านจากฐานข้อมูล
+  // รูปแบบ [[fromNodeKey, toNodeKey], ...] เหมือน KMITL_FLOOR1_EDGES
+  const kmitlFloorEdges = useMemo(() => {
+    const isMainBuilding = !selectedBuilding || selectedBuilding.id === BUILDINGS.kmitl?.id;
+    if (isMainBuilding) return kmitlFloor === "1" ? KMITL_FLOOR1_EDGES : [];
+    const keyById = Object.fromEntries((mapData.data?.nodes || []).map((n) => [n.id, n.nodeKey]));
+    const floorKeys = new Set(Object.keys(kmitlFloorNodes));
+    return (edgeRows || [])
+      .map((e) => [keyById[e.fromNodeId], keyById[e.toNodeId]])
+      .filter(([from, to]) => from && to && floorKeys.has(from) && floorKeys.has(to));
+  }, [selectedBuilding, kmitlFloor, kmitlFloorNodes, edgeRows, mapData.data]);
 
   // 🎪 การ์ดสถานที่/กิจกรรมต้องประกาศก่อน map effects ที่เรียกใช้ callbacks เหล่านี้
   // เพื่อหลีกเลี่ยง Temporal Dead Zone (Cannot access before initialization) ใน production build
@@ -222,24 +259,45 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     setRouteFormOpen,
     setKmitlFloor,
     setKmitlOpen,
+    setSelectedBuildingId,
     placeCard,
     setRouteSheetOpen,
   });
 
-  // First tap: building information/photo. Entering the floor plan is a separate action.
-  const openBuildingInfo = () => {
-    const building = mapData.data?.building || BUILDINGS.kmitl;
-    const bounds = building?.bounds;
-    if (!Array.isArray(bounds) || bounds.length < 2) return;
-    const lat = (Number(bounds[0][0]) + Number(bounds[1][0])) / 2;
-    const lon = (Number(bounds[0][1]) + Number(bounds[1][1])) / 2;
-    openPlaceCard(building.name || "Sc8", [lon, lat], {
+  const boundaryOfBuilding = (id, name) =>
+  mapBoundaries.find((b) =>
+    b.type === "building" && b.status !== "deleted" &&
+    (id ? b.buildingId === id : b.name === name));
+
+  const boundaryPoints = (bd) =>
+    (bd?.geometry || []).map((p) => [Number(p[0]), Number(p[1])]);
+
+  const openBuildingInfo = (buildingId, boundary) => {
+    const building = allBuildings.find((b) => b.id === buildingId) || mapData.data?.building || BUILDINGS.kmitl;
+    const bd = boundary || boundaryOfBuilding(building?.id, building?.name);
+    const pts = boundaryPoints(bd);
+
+    let lat, lon;
+    if (pts.length >= 3) {
+      lat = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      lon = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    } else if (building?.bounds?.length === 2) {
+      lat = (Number(building.bounds[0][0]) + Number(building.bounds[1][0])) / 2;
+      lon = (Number(building.bounds[0][1]) + Number(building.bounds[1][1])) / 2;
+    } else return;
+
+    setSelectedBuildingId(building.id);
+    const first = (building.floors || [])[0];
+    if (first) setKmitlFloor(String(first.floorNo));
+
+    openPlaceCard(bd?.name || building.name, [lon, lat], {
       kind: "building",
       icon: "🏢",
       extract: null,
-      image: buildingPhoto || "/data/places/sc8.png",
+      image: building.photo || buildingPhoto || "/data/places/sc8.png",
     });
   };
+
   const showBuildingFloorplan = () => {
     setPlaceCard(null);
     if (ctx.current.searchPlaceMarker && mapRef.current) {
@@ -248,24 +306,26 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     }
     setKmitlFloor((floor) => floor || "1");
     setKmitlOpen(true);
+
     const map = mapRef.current;
     const L = ctx.current.L;
-    const building = mapData.data?.building;
     if (map && L) {
-      const outline = building?.outline;
-      const bounds = Array.isArray(outline) && outline.length >= 3
-        ? L.latLngBounds(outline)
-        : Array.isArray(building?.bounds) && building.bounds.length === 2
-          ? L.latLngBounds(building.bounds)
-          : null;
+      const bd = boundaryOfBuilding(selectedBuilding?.id, selectedBuilding?.name);
+      const pts = boundaryPoints(bd);
+      const bounds = pts.length >= 3 ? L.latLngBounds(pts) : null;
       if (bounds?.isValid()) {
         map.invalidateSize();
-        // Match the close-up Registrar building view without locking user navigation.
         map.setView(bounds.getCenter(), 20.2, { animate: true });
       }
     }
   };
   ctx.current.openBuildingInfo = openBuildingInfo;
+
+  // จุด/ห้องที่วาดบนผังชั้น — เฉพาะอาคารที่เลือก (การค้นหายังใช้ indoorSearchNodes แบบรวมทุกอาคาร)
+  const mapIndoorNodes = useMemo(
+    () => indoorSearchNodes.filter((n) => !selectedBuilding || !n.buildingId || n.buildingId === selectedBuilding.id),
+    [indoorSearchNodes, selectedBuilding]
+  );
 
   useMapEffect05({
     CENTER,
@@ -308,7 +368,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
 
   // 🎓 ป้ายชื่ออาคาร — วางกลางตึกตาม bounds ใน BUILDINGS registry พร้อมไอคอนหมวกปริญญาบอกพิกัด
   // (แทนที่ label สำเร็จรูปจาก CARTO tile ที่ถูกเอาออกไปแล้วใน mapBaseLayer.js เพราะชื่อผิด/ไม่ตรงกับชื่อจริงของอาคาร)
-  useMapEffect06({ BUILDINGS, ctx, mapReady, mapRef, mapDataVersion: mapData.data });
+  useMapEffect06({ BUILDINGS, boundaries: mapBoundaries,ctx, mapReady, mapRef, mapDataVersion: mapData.data });
 
   // 🏢 วาด/ลบ overlay ผังชั้น KMITL ตาม state เปิด/ปิด และชั้นที่เลือก
   useMapEffect08({
@@ -359,9 +419,11 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     WALKWAY_NODE_TYPES,
     chips,
     ctx,
-    indoorSearchNodes,
+    indoorSearchNodes: mapIndoorNodes,
     kmitlFloor,
     kmitlFloorNodes,
+    kmitlFloorEdges,
+    buildingName: selectedBuilding?.name || BUILDINGS.kmitl?.name,
     kmitlOpen,
     kmitlRouteResult,
     mapRef,
