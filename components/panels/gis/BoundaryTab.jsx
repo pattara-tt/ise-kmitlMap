@@ -166,7 +166,7 @@ function Boundary({ user }) {
     }
 
     // ให้ผู้ใช้ยืนยันอีกครั้งก่อนบันทึกลงฐานข้อมูล
-    const confirmed = await askConfirm(
+    const confirmed = window.confirm(
       `ยืนยันการเพิ่มคณะนี้หรือไม่?\n\nID: ${id}\nชื่อคณะ: ${name}\n\nโปรดตรวจสอบ ID ให้ถูกต้อง เพราะไม่ควรเปลี่ยนภายหลัง`,
       { title: "ยืนยันการเพิ่มคณะ", confirmLabel: "เพิ่มคณะ" }
     );
