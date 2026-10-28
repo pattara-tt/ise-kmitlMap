@@ -15,7 +15,7 @@ export function useMapEffect14({
   kmitlFloor,
   kmitlFloorNodes,
   kmitlFloorEdges = [],
-  showGraphEdges = true,
+  showGraphEdges = false,
   buildingName = "",
   kmitlOpen,
   kmitlRouteResult,
