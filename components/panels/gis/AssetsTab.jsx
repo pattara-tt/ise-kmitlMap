@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMapData, clearMapDataCache } from "../../../lib/useMapData";
 import { MAX_SVG_BYTES } from "../../../lib/constants";
 import { SC8_CENTER } from "../../mapConfig";
-import { Btn, Card, Field, Input, Pill, Select, Status, UCHead, useCollection } from "../../ui";
+import { Btn, Card, Field, Input, Pill, Select, Status, UCHead, useCollection, notify, askConfirm } from "../../ui";
 import { formatDate, formatDateTime } from "../../../lib/datetime";
 import FloorplanEditor from "./FloorplanEditor";
 import { DEFAULT_PLACEMENT, todayStr } from "./shared";
@@ -423,6 +423,23 @@ export default function Assets({ user }) {
   /* -----------------------------------------
      UC8 UI เดิม
   ----------------------------------------- */
+  const handleDeleteAsset = async (asset) => {
+    const confirmed = await askConfirm("ลบไฟล์ประกอบนี้?", {
+      title: "ลบไฟล์ประกอบ",
+      confirmLabel: "ลบ",
+      tone: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await destroy(asset.id, user);
+      clearMapDataCache();
+    } catch (err) {
+      console.error("ลบไฟล์แผนผังไม่สำเร็จ:", err);
+      alert(err?.message || "ลบไฟล์แผนผังไม่สำเร็จ กรุณาลองใหม่");
+    }
+  };
 
   return <>
       <UCHead title="จัดการแผนผังภายในอาคาร" desc="อัปโหลดไฟล์แผนผังชั้น (.svg) ที่ใช้แสดงบนแผนที่ได้โดยตรงจากหน้านี้ — สำหรับผังชั้นสามารถปรับตำแหน่ง ขนาด และการหมุนบนแผนที่จริงได้" />
@@ -745,7 +762,8 @@ export default function Assets({ user }) {
                   🗺️ ปรับตำแหน่ง
                 </Btn> : null}
 
-              <Btn kind="danger" onClick={async () => (await askConfirm("ลบไฟล์ประกอบนี้?", { title: "ลบไฟล์ประกอบ", confirmLabel: "ลบ", tone: "danger" })) && destroy(a.id, user)}>
+              <Btn kind="danger" 
+                    onClick={async () => handleDeleteAsset(a)}>
                 ลบ
               </Btn>
             </div>
