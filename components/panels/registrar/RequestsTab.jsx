@@ -203,7 +203,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
             {
               key: "roomId",
               label: "สถานที่",
-              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || (r.roomId ? r.roomId : "ห้องใหม่ (ยังไม่มีในระบบ)"),
+              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || (r.roomId ? r.roomId : "ไม่มีรายละเอียดข้อมูลห้อง"),
             },
             { key: "status", label: "ผลการพิจารณา", render: (r) => <Status value={r.status} /> },
             { key: "reviewedAt", label: "วันที่พิจารณา", render: (r) => formatDateTime(r.reviewedAt) },
@@ -545,7 +545,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
                 </span>
 
                 <span>
-                  {oldValue ?? (!request.roomId ? "ห้องใหม่ (ยังไม่มีในระบบ)" : "-")}
+                  {oldValue ?? (!request.roomId ? "ไม่มีรายละเอียดข้อมูลห้อง" : "-")}
                 </span>
 
                 <Input

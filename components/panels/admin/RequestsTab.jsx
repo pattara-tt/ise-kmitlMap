@@ -118,7 +118,7 @@ function Requests({ user, filters, setFilters, onReport, onQuota }) {
       label: "สถานที่",
       render: r => {
         const room = rooms.find(room => room.id === r.roomId);
-        return room?.name || (r.roomId ? r.roomId : "ห้องใหม่ (ยังไม่มีในระบบ)");
+        return room?.name || (r.roomId ? r.roomId : "ไม่มีรายละเอียดข้อมูลห้อง");
       }
     }, {
       key: "createdAt",

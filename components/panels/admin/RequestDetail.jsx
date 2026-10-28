@@ -331,7 +331,7 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
                   {oldValue !== undefined && oldValue !== null
                     ? String(oldValue)
                     : !request.roomId
-                      ? "ห้องใหม่ (ยังไม่มีในระบบ)"
+                      ? "ไม่มีรายละเอียดข้อมูลห้อง"
                       : "-"}
                 </span>
 
@@ -354,7 +354,7 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
                 borderTop: "1px solid #E8EAED",
               }}
             >
-              ห้องใหม่ (ยังไม่มีในระบบ)
+              ไม่มีรายละเอียดข้อมูลห้อง
             </div>
           )}
         </div>
