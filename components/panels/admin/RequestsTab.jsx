@@ -10,7 +10,7 @@ function Requests({ user, filters, setFilters, onReport, onQuota }) {
   const { items, reload } = useCollection("requests");
   const { items: users } = useCollection("users");
   const { items: rooms } = useCollection("rooms");
-  
+
   const { q, status, sortBy } = filters;
   const setQ = v => setFilters(f => ({ ...f, q: v }));
   const setStatus = v => setFilters(f => ({ ...f, status: v }));
@@ -118,7 +118,7 @@ function Requests({ user, filters, setFilters, onReport, onQuota }) {
       label: "สถานที่",
       render: r => {
         const room = rooms.find(room => room.id === r.roomId);
-        return room?.name || r.roomId || "-";
+        return room?.name || (r.roomId ? r.roomId : "ห้องใหม่ (ยังไม่มีในระบบ)");
       }
     }, {
       key: "createdAt",

@@ -178,7 +178,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
             {
               key: "roomId",
               label: "สถานที่",
-              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || r.roomId || "-",
+              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || (r.roomId ? r.roomId : "ไม่มีรายละเอียดข้อมูลห้อง"),
             },
             { key: "reviewedAt", label: "วันที่รับเรื่อง", render: (r) => formatDateTime(r.reviewedAt) },
             {
@@ -203,7 +203,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
             {
               key: "roomId",
               label: "สถานที่",
-              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || r.roomId || "-",
+              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || (r.roomId ? r.roomId : "ห้องใหม่ (ยังไม่มีในระบบ)"),
             },
             { key: "status", label: "ผลการพิจารณา", render: (r) => <Status value={r.status} /> },
             { key: "reviewedAt", label: "วันที่พิจารณา", render: (r) => formatDateTime(r.reviewedAt) },
@@ -247,12 +247,12 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
 
   const sameValue = (a, b) => String(a ?? "") === String(b ?? "");
 
-  // snapshot ที่ผู้ใช้เห็นตอนกดยื่น และค่าที่ผู้ใช้เสนอ (after มีครบทุกฟิลด์ ฟิลด์ที่ไม่ได้แก้ = สำเนา snapshot)
+  // snapshot ที่ผู้ใช้เห็นตอนกดยื่น และค่าที่ผู้ใช้เสนอ
+  // after มีครบทุกฟิลด์ ฟิลด์ที่ไม่ได้แก้ = สำเนา snapshot
   const snapshotBefore = parseData(request.before);
   const proposedAfter = parseData(request.after);
 
-  // ข้อมูลห้อง "ปัจจุบัน" — อ่านจาก rooms ที่ useCollection โหลด/รีโหลดไว้ จึงอัปเดตตามข้อมูลล่าสุดเสมอ
-  // ถ้าไม่มีห้อง (roomId = null) หรือยังโหลดไม่เสร็จ ให้ fallback ไปใช้ snapshot
+  // ข้อมูลห้องปัจจุบัน ใช้สำหรับแสดงค่าล่าสุด
   const room = rooms.find((r) => r.id === request.roomId);
   const before = room
     ? Object.fromEntries(
@@ -263,7 +263,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
       )
     : snapshotBefore;
 
-  // เฉพาะฟิลด์ที่ผู้ยื่น "ตั้งใจแก้จริง" (ต่างจาก snapshot ตอนยื่น)
+  // เฉพาะฟิลด์ที่ผู้ยื่นตั้งใจแก้จริง เทียบกับ snapshot ตอนยื่น
   const userChanges = Object.fromEntries(
     Object.entries(proposedAfter).filter(([key, value]) => !sameValue(value, snapshotBefore[key]))
   );
@@ -274,20 +274,19 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
   // ข้อมูลที่จะบันทึก = ข้อมูลห้องปัจจุบัน + สิ่งที่ผู้ยื่นขอเปลี่ยนจริง + สิ่งที่ฝ่ายทะเบียนแก้เพิ่ม
   const form = { ...before, ...userChanges, ...edited };
 
-  // เปิดหน้ารายละเอียดแล้วรีโหลดห้องอีกรอบ เพื่อให้ "ข้อมูลเดิม" เป็นค่าล่าสุด (ใช้ GET /api/data/rooms เดิม)
+  // เปิดหน้ารายละเอียดแล้วรีโหลดห้อง เพื่อให้ข้อมูลปัจจุบันเป็นค่าล่าสุด
   useEffect(() => {
     if (typeof reloadRooms === "function") reloadRooms();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request.id]);
 
   const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState(false); // ตัดสินใจแล้ว → ห้ามกดซ้ำ
-  const busyRef = useRef(false); // กันกดซ้ำในจังหวะที่ state ยังไม่อัปเดต
+  const [done, setDone] = useState(false);
+  const busyRef = useRef(false);
   const actionable = request.status === "processing" && !done;
   const [note, setNote] = useState(request.note || "");
 
   const requestUser = users.find((u) => u.id === request.userId);
-  // Room type names are the current linkage used by existing rooms/markers.
   const proposedType = String(form.type ?? room?.type ?? "").trim();
   const knownType = !proposedType || roomTypes.some((type) =>
     String(type.name || "").trim().toLocaleLowerCase() === proposedType.toLocaleLowerCase()
@@ -309,7 +308,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
   async function approve() {
     if (!actionable || busyRef.current) return;
 
-    // กรณีที่ 2: คำร้องแจ้งปัญหาของสถานที่ที่ไม่มีข้อมูลห้อง (เช่น ห้องน้ำ ลิฟต์) → ไม่มีอะไรให้แก้
+    // กรณีคำร้องแจ้งปัญหาสถานที่ที่ไม่มีข้อมูลห้อง เช่น ห้องน้ำหรือลิฟต์
     if (!request.roomId) {
       await notify(
         "คำร้องนี้เป็นการแจ้งปัญหาของสถานที่ที่ไม่มีข้อมูลห้องในระบบ จึงไม่มีข้อมูลแผนที่ให้แก้ไข",
@@ -343,14 +342,18 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
     setSaving(true);
 
     try {
-      // ส่งเฉพาะฟิลด์ที่ต่างจากข้อมูลห้องปัจจุบัน → ไม่เขียนทับค่าที่มีคนอื่นเพิ่งแก้ระหว่างรอพิจารณา
+      // ส่งเฉพาะฟิลด์ที่ต่างจากข้อมูลห้องปัจจุบัน
+      // ไม่เขียนทับค่าที่มีคนอื่นเพิ่งแก้ระหว่างรอพิจารณา
       const roomPatch = Object.fromEntries(
         Object.entries(form).filter(([key, value]) => !sameValue(value, before[key]))
       );
+
       if (Object.keys(roomPatch).length > 0) {
         await patchRoom(request.roomId, roomPatch, user);
       }
 
+      // เก็บ snapshot ตอนยื่นไว้ใน request.before ตามเดิม
+      // ไม่แก้ before เพื่อให้รายงานยังใช้เปรียบเทียบคำร้องเดิมได้
       await patchRequest(
         request.id,
         {
@@ -370,7 +373,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
         tone: "success",
       });
 
-      await onBack(); // ออกจากหน้านี้ทันที ไม่ให้กดอนุมัติซ้ำ
+      await onBack();
     } catch (error) {
       await notify(
         `อนุมัติคำร้องไม่สำเร็จ: ${error?.message || "เกิดข้อผิดพลาด"}`,
@@ -386,56 +389,56 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
   }
 
   async function reject() {
-  if (!actionable || busyRef.current) return;
+    if (!actionable || busyRef.current) return;
 
-  const confirmed = await askConfirm(
-    `ยืนยันปฎืเสธคำร้องเลขที่ ${request.id} หรือไม่?\n\nข้อมูลห้องจะไม่ถูกอัปเดต`,
-    {
-      title: "ยืนยันการปฏิเสธคำร้อง",
-      confirmLabel: "ปฏิเสธ",
-      cancelLabel: "กลับไปตรวจสอบ",
-      tone: "danger",
-    }
-  );
-
-  if (!confirmed || busyRef.current) return;
-
-  busyRef.current = true;
-  setSaving(true);
-
-  try {
-    await patchRequest(
-      request.id,
+    const confirmed = await askConfirm(
+      `ยืนยันปฏิเสธคำร้องเลขที่ ${request.id} หรือไม่?\n\nข้อมูลห้องจะไม่ถูกอัปเดต`,
       {
-        status: "rejected",
-        note,
-        reviewedBy: user?.id || "",
-        reviewedAt: new Date().toISOString(),
-      },
-      user
-    );
-
-    setDone(true);
-
-    await notify("ปฏิเสธคำร้องเสร็จสิ้น", {
-      title: "บันทึกผลการพิจารณาแล้ว",
-      tone: "success",
-    });
-
-    await onBack(); // ออกจากหน้านี้ทันที ไม่ให้กดซ้ำ
-  } catch (error) {
-    await notify(
-      `ไม่สามารถปฏิเสธคำร้องได้: ${error?.message || "เกิดข้อผิดพลาด"}`,
-      {
-        title: "ดำเนินการไม่สำเร็จ",
-        tone: "error",
+        title: "ยืนยันการปฏิเสธคำร้อง",
+        confirmLabel: "ปฏิเสธ",
+        cancelLabel: "กลับไปตรวจสอบ",
+        tone: "danger",
       }
     );
-  } finally {
-    busyRef.current = false;
-    setSaving(false);
+
+    if (!confirmed || busyRef.current) return;
+
+    busyRef.current = true;
+    setSaving(true);
+
+    try {
+      await patchRequest(
+        request.id,
+        {
+          status: "rejected",
+          note,
+          reviewedBy: user?.id || "",
+          reviewedAt: new Date().toISOString(),
+        },
+        user
+      );
+
+      setDone(true);
+
+      await notify("ปฏิเสธคำร้องเสร็จสิ้น", {
+        title: "บันทึกผลการพิจารณาแล้ว",
+        tone: "success",
+      });
+
+      await onBack();
+    } catch (error) {
+      await notify(
+        `ไม่สามารถปฏิเสธคำร้องได้: ${error?.message || "เกิดข้อผิดพลาด"}`,
+        {
+          title: "ดำเนินการไม่สำเร็จ",
+          tone: "error",
+        }
+      );
+    } finally {
+      busyRef.current = false;
+      setSaving(false);
+    }
   }
-}
 
   return (
     <>
@@ -542,7 +545,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
                 </span>
 
                 <span>
-                  {oldValue ?? "-"}
+                  {oldValue ?? (!request.roomId ? "ห้องใหม่ (ยังไม่มีในระบบ)" : "-")}
                 </span>
 
                 <Input
@@ -562,6 +565,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
           <Btn onClick={navigateToTypes}>ไปสร้างประเภทห้องและไอคอน</Btn>
         </div>
       )}
+
       {actionError && <p role="alert" style={{color:"#B3261E"}}>{actionError}</p>}
 
       {/* หมายเหตุ */}

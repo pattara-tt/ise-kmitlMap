@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -35,27 +34,77 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
   const emailOf = (id) =>
     users.find((u) => u.id === id)?.email || id || "-";
 
-  // ข้อมูลปัจจุบันของห้องจาก rooms ที่ RequestsTab โหลดไว้แล้ว
-  // ไม่ใช้ request.before เพราะเป็น snapshot ตอนส่งคำร้อง
   const currentRoom = rooms.find((room) => room.id === request.roomId);
 
-  // รองรับ after ทั้งกรณีที่เป็น object และ JSON string
-  const proposedAfter = (() => {
-    if (!request.after) return {};
-    if (typeof request.after === "object") return request.after;
+  const parseData = (value) => {
+    if (!value) return {};
+    if (typeof value === "object") return value;
 
     try {
-      return JSON.parse(request.after);
+      return JSON.parse(value);
     } catch {
       return {};
     }
-  })();
+  };
+
+  const proposedAfter = parseData(request.after);
+  const snapshotBefore = parseData(request.before);
 
   const { roleLabels } = useRefData(true);
   const { items: editLogs } = useCollection("editLogs");
 
+  // ใช้ log ของห้องเพื่อย้อนดูค่าก่อนอนุมัติจริง
+  const roomEditLogs = editLogs
+    .filter(
+      (log) =>
+        log.roomId === request.roomId &&
+        log.action === "UPDATE_rooms"
+    )
+    .sort((a, b) =>
+      String(a.editedAt || "").localeCompare(String(b.editedAt || ""))
+    );
+
+  const decisionRoomLog =
+    currentStatus === "approved"
+      ? [...roomEditLogs].reverse().find((log) => {
+          const logAfter = parseData(log.after);
+          const logAt = new Date(log.editedAt || 0).getTime();
+          const decisionAt = new Date(reviewedAt || 0).getTime();
+
+          // จำกัด log ให้อยู่ไม่หลังเวลาที่พิจารณาคำร้อง
+          if (
+            Number.isFinite(logAt) &&
+            Number.isFinite(decisionAt) &&
+            decisionAt > 0 &&
+            logAt > decisionAt
+          ) {
+            return false;
+          }
+
+          return Object.keys(proposedAfter).some(
+            (key) => logAfter[key] !== undefined
+          );
+        })
+      : null;
+
+  const decisionBefore = decisionRoomLog
+    ? parseData(decisionRoomLog.before)
+    : {};
+
+  // ลำดับข้อมูลเดิม:
+  // คำร้องที่ยังรอพิจารณา = ห้องปัจจุบัน
+  // คำร้องที่อนุมัติแล้ว = snapshot ก่อนแก้จาก editLogs
+  // fallback = request.before แล้วจึงใช้ห้องปัจจุบัน
+  const oldRoomData =
+    currentStatus === "pending" || currentStatus === "processing"
+      ? currentRoom || snapshotBefore
+      : Object.keys(decisionBefore).length
+        ? decisionBefore
+        : Object.keys(snapshotBefore).length
+          ? snapshotBefore
+          : currentRoom || {};
+
   // รวมเหตุการณ์จาก editLogs ของคำร้องนี้ (เรียงเก่า → ใหม่)
-  // เฉพาะเหตุการณ์ที่มีสถานะ
   const events = [];
 
   editLogs
@@ -105,7 +154,6 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
     });
   }
 
-  // ขั้นที่ยังรออยู่
   const waiting =
     currentStatus === "pending"
       ? "รอผู้ดูแลระบบตรวจสอบ"
@@ -141,7 +189,8 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
       const at = new Date().toISOString();
       const by = user?.id || "";
 
-      // คง flow เดิม: เปลี่ยนสถานะคำร้องผ่าน patchRequest
+      // เปลี่ยนเฉพาะสถานะคำร้องตาม flow เดิม
+      // ไม่แก้ request.before ระหว่างส่งต่อ
       await patchRequest(
         request.id,
         {
@@ -226,7 +275,7 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
         </div>
       </Card>
 
-      {/* เปรียบเทียบข้อมูลห้องปัจจุบันกับข้อมูลที่ขอแก้ไข */}
+      {/* เปรียบเทียบข้อมูลห้องกับข้อมูลที่ขอแก้ไข */}
       <Card>
         <div
           style={{
@@ -262,9 +311,7 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
           </div>
 
           {Object.keys(proposedAfter).map((key) => {
-            // อ่านข้อมูลเดิมจากห้องปัจจุบันเท่านั้น
-            // ถ้าไม่มีข้อมูลปัจจุบัน ให้แสดง "-" ไม่ใช้ snapshot เก่า
-            const oldValue = currentRoom?.[key];
+            const oldValue = oldRoomData?.[key];
             const newValue = proposedAfter[key];
 
             return (
@@ -281,11 +328,11 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
                 <span>{FIELD_LABEL[key] || key}</span>
 
                 <span>
-                  {currentRoom &&
-                  oldValue !== undefined &&
-                  oldValue !== null
+                  {oldValue !== undefined && oldValue !== null
                     ? String(oldValue)
-                    : "-"}
+                    : !request.roomId
+                      ? "ห้องใหม่ (ยังไม่มีในระบบ)"
+                      : "-"}
                 </span>
 
                 <span
@@ -298,6 +345,18 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
               </div>
             );
           })}
+
+          {!request.roomId && Object.keys(proposedAfter).length === 0 && (
+            <div
+              style={{
+                padding: "10px 12px",
+                fontSize: 12.5,
+                borderTop: "1px solid #E8EAED",
+              }}
+            >
+              ห้องใหม่ (ยังไม่มีในระบบ)
+            </div>
+          )}
         </div>
       </Card>
 
@@ -334,7 +393,6 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
             <Status value={currentStatus} />
           </div>
 
-          {/* กำลังดำเนินการ = Admin ยังไม่ได้พิมพ์หมายเหตุ */}
           {!isProcessing && (
             <div style={{ marginTop: 10 }}>
               <b>หมายเหตุ:</b> {request.note || "-"}
