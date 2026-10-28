@@ -39,7 +39,7 @@ function Requests({ user, filters, setFilters, onReport, onQuota }) {
     return 0;
   });
   if (selectedRequest) {
-    return <RequestDetail request={selectedRequest} onBack={async () => {
+    return <RequestDetail request={selectedRequest} rooms={rooms} onBack={async () => {
       await reload();
       setSelectedRequest(null);
     }} user={user} />;

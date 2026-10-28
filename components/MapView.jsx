@@ -235,17 +235,43 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   }, [mapData.data, kmitlFloor, selectedBuilding]);
   // เส้นเชื่อม (edge) ของชั้นที่เปิดอยู่ — Sc8 ใช้ข้อมูล static เดิม, อาคารที่เพิ่มใหม่อ่านจากฐานข้อมูล
   // รูปแบบ [[fromNodeKey, toNodeKey], ...] เหมือน KMITL_FLOOR1_EDGES
+  // 🧭 ดึง Edge ของชั้นที่เลือกจากฐานข้อมูล สำหรับทุกอาคารรวมถึง Sc8
   const kmitlFloorEdges = useMemo(() => {
-    const isMainBuilding = !selectedBuilding || selectedBuilding.id === BUILDINGS.kmitl?.id;
-    if (isMainBuilding) return kmitlFloor === "1" ? KMITL_FLOOR1_EDGES : [];
-    const keyById = Object.fromEntries((mapData.data?.nodes || []).map((n) => [n.id, n.nodeKey]));
+    // สร้าง mapping จาก node ID ไปเป็น nodeKey
+    const keyById = Object.fromEntries(
+      (mapData.data?.nodes || []).map((node) => [
+        String(node.id),
+        node.nodeKey,
+      ])
+    );
+
+    // Node ที่อยู่บนชั้นปัจจุบัน
     const floorKeys = new Set(Object.keys(kmitlFloorNodes));
-    // ใช้ edges จาก useMapData (รวมทุกอาคารแล้ว) ถ้าไม่มีค่อยใช้จากคอลเลกชัน edges
-    const edgeSource = mapData.data?.edges?.length ? mapData.data.edges : edgeRows;
+
+    // ใช้ข้อมูล Edge จาก useMapData ก่อน
+    // ถ้าไม่มีข้อมูล จึงใช้ collection edges
+    const edgeSource =
+      mapData.data?.edges?.length
+        ? mapData.data.edges
+        : edgeRows;
+
     return (edgeSource || [])
-      .map((e) => [keyById[e.fromNodeId ?? e.from_node_id], keyById[e.toNodeId ?? e.to_node_id]])
-      .filter(([from, to]) => from && to && floorKeys.has(from) && floorKeys.has(to));
-  }, [selectedBuilding, kmitlFloor, kmitlFloorNodes, edgeRows, mapData.data]);
+      .map((edge) => {
+        const fromId = edge.fromNodeId ?? edge.from_node_id;
+        const toId = edge.toNodeId ?? edge.to_node_id;
+
+        const from = keyById[String(fromId)];
+        const to = keyById[String(toId)];
+
+        return [from, to];
+      })
+      .filter(([from, to]) =>
+        from &&
+        to &&
+        floorKeys.has(from) &&
+        floorKeys.has(to)
+      );
+  }, [mapData.data, edgeRows, kmitlFloorNodes]);
 
   // 🎪 การ์ดสถานที่/กิจกรรมต้องประกาศก่อน map effects ที่เรียกใช้ callbacks เหล่านี้
   // เพื่อหลีกเลี่ยง Temporal Dead Zone (Cannot access before initialization) ใน production build

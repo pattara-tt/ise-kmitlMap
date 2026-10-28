@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Btn, Card, Field, Input, SearchBar, Select, Status, Table, Textarea, useCollection, notify, askConfirm } from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
 import RequestDetail from "../admin/RequestDetail";
@@ -25,6 +25,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
 
   const {
     items: rooms,
+    reload: reloadRooms,
     patch: patchRoom,
   } = useCollection("rooms");
 
@@ -92,6 +93,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
         request={selectedRequest}
         users={users}
         rooms={rooms}
+        reloadRooms={reloadRooms}
         patchRequest={patchRequest}
         patchRoom={patchRoom}
         roomTypes={roomTypes}
@@ -228,7 +230,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
    รายละเอียดคำร้องของ Registrar
    ========================================================= */
 
-function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom, roomTypes, roomTypesLoading, reloadRoomTypes, onNavigate, user, onBack, }) {
+function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchRequest, patchRoom, roomTypes, roomTypesLoading, reloadRoomTypes, onNavigate, user, onBack, }) {
   const parseData = (value) => {
     if (!value) return {};
 
@@ -243,11 +245,40 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
     }
   };
 
-  const before = parseData(request.before);
-  const initialAfter = parseData(request.after);
+  const sameValue = (a, b) => String(a ?? "") === String(b ?? "");
 
-  // Registrar แก้ after โดยตรง
-  const [form, setForm] = useState(initialAfter);
+  // snapshot ที่ผู้ใช้เห็นตอนกดยื่น และค่าที่ผู้ใช้เสนอ (after มีครบทุกฟิลด์ ฟิลด์ที่ไม่ได้แก้ = สำเนา snapshot)
+  const snapshotBefore = parseData(request.before);
+  const proposedAfter = parseData(request.after);
+
+  // ข้อมูลห้อง "ปัจจุบัน" — อ่านจาก rooms ที่ useCollection โหลด/รีโหลดไว้ จึงอัปเดตตามข้อมูลล่าสุดเสมอ
+  // ถ้าไม่มีห้อง (roomId = null) หรือยังโหลดไม่เสร็จ ให้ fallback ไปใช้ snapshot
+  const room = rooms.find((r) => r.id === request.roomId);
+  const before = room
+    ? Object.fromEntries(
+        Object.keys(proposedAfter).map((key) => [
+          key,
+          room[key] !== undefined ? room[key] : snapshotBefore[key],
+        ])
+      )
+    : snapshotBefore;
+
+  // เฉพาะฟิลด์ที่ผู้ยื่น "ตั้งใจแก้จริง" (ต่างจาก snapshot ตอนยื่น)
+  const userChanges = Object.fromEntries(
+    Object.entries(proposedAfter).filter(([key, value]) => !sameValue(value, snapshotBefore[key]))
+  );
+
+  // ช่องที่ฝ่ายทะเบียนพิมพ์แก้เอง
+  const [edited, setEdited] = useState({});
+
+  // ข้อมูลที่จะบันทึก = ข้อมูลห้องปัจจุบัน + สิ่งที่ผู้ยื่นขอเปลี่ยนจริง + สิ่งที่ฝ่ายทะเบียนแก้เพิ่ม
+  const form = { ...before, ...userChanges, ...edited };
+
+  // เปิดหน้ารายละเอียดแล้วรีโหลดห้องอีกรอบ เพื่อให้ "ข้อมูลเดิม" เป็นค่าล่าสุด (ใช้ GET /api/data/rooms เดิม)
+  useEffect(() => {
+    if (typeof reloadRooms === "function") reloadRooms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request.id]);
 
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false); // ตัดสินใจแล้ว → ห้ามกดซ้ำ
@@ -256,8 +287,6 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
   const [note, setNote] = useState(request.note || "");
 
   const requestUser = users.find((u) => u.id === request.userId);
-  const room = rooms.find((r) => r.id === request.roomId);
-
   // Room type names are the current linkage used by existing rooms/markers.
   const proposedType = String(form.type ?? room?.type ?? "").trim();
   const knownType = !proposedType || roomTypes.some((type) =>
@@ -271,14 +300,23 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
   };
 
   const setValue = (key) => (e) => {
-    setForm((current) => ({
+    setEdited((current) => ({
       ...current,
       [key]: e.target.value,
     }));
   };
 
   async function approve() {
-    if (!request.roomId || !actionable || busyRef.current) return;
+    if (!actionable || busyRef.current) return;
+
+    // กรณีที่ 2: คำร้องแจ้งปัญหาของสถานที่ที่ไม่มีข้อมูลห้อง (เช่น ห้องน้ำ ลิฟต์) → ไม่มีอะไรให้แก้
+    if (!request.roomId) {
+      await notify(
+        "คำร้องนี้เป็นการแจ้งปัญหาของสถานที่ที่ไม่มีข้อมูลห้องในระบบ จึงไม่มีข้อมูลแผนที่ให้แก้ไข",
+        { title: "ไม่มีข้อมูลแผนที่ให้แก้ไข", tone: "warning" }
+      );
+      return;
+    }
 
     setActionError("");
 
@@ -305,7 +343,13 @@ function RegistrarRequestDetail({ request, users, rooms, patchRequest, patchRoom
     setSaving(true);
 
     try {
-      await patchRoom(request.roomId, form, user);
+      // ส่งเฉพาะฟิลด์ที่ต่างจากข้อมูลห้องปัจจุบัน → ไม่เขียนทับค่าที่มีคนอื่นเพิ่งแก้ระหว่างรอพิจารณา
+      const roomPatch = Object.fromEntries(
+        Object.entries(form).filter(([key, value]) => !sameValue(value, before[key]))
+      );
+      if (Object.keys(roomPatch).length > 0) {
+        await patchRoom(request.roomId, roomPatch, user);
+      }
 
       await patchRequest(
         request.id,
