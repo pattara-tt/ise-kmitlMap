@@ -401,8 +401,8 @@ export default function NodeEdgeTab({ user, mapData, onPageChange }) {
         fontSize: 13
       }}>
         {selectedCategory === "building"
-          ? "ยังไม่มีอาคารที่เพิ่มแผนผังภายในใน UC8"
-          : "ยังไม่มีพื้นที่ประเภทนี้ที่สร้างไว้ใน UC7"}
+          ? "ยังไม่มีอาคารที่เพิ่มแผนผังภายใน"
+          : "ยังไม่มีพื้นที่ประเภทนี้ที่สร้างไว้"}
       </div>
     )}
 
