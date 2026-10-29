@@ -9,7 +9,7 @@ UPDATE map_boundaries
 SET geometry = NULL
 WHERE id = 'MB-01'
   AND type = 'campus'
-  AND '[
+  AND geometry = '[
   [13.7314817, 100.7708228],
   [13.7282925, 100.7709301],
   [13.7287928, 100.7900489],
