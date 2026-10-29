@@ -101,12 +101,24 @@ import {
 // ไอคอนเข็มทิศจากไฟล์ SVG — ย้อมสีตามบริบทที่ใช้
 
 
-export default function MapView({ apiRef, viewMode = "auto", user = null }) {
+export default function MapView({ apiRef, viewMode = "auto", user = null , publishedOnly = false}) {
   const mapData = useMapData();
   const { events, interests, eventCard, setEventCard, myInterest, toggleInterest } = useEventInterest(user);
   const { items: categories } = useCollection("categories");
   const { items: mapBoundariesRaw } = useCollection("mapBoundaries");
-  const mapBoundaries = useMemo(() => mapBoundariesRaw || [], [mapBoundariesRaw]);
+  const mapBoundaries = useMemo(() => {
+    const boundaries = mapBoundariesRaw || [];
+    // mapBoundariesRaw || [], [mapBoundariesRaw]);
+
+    if(!publishedOnly) {
+      return boundaries;
+    }
+
+    return boundaries.filter(
+      (boundary) => boundary.status === "published"
+    );
+  }, [mapBoundariesRaw, publishedOnly]);
+
   // อาคารที่ผู้ใช้กดบนแผนที่ (null = ยังไม่เลือก ใช้อาคารหลักเดิมเป็นค่าเริ่มต้นใน useMapReferenceData)
   const [selectedBuildingId, setSelectedBuildingId] = useState(null);
 
@@ -116,7 +128,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   const [reportSending, setReportSending] = useState(false);
 
   const { rooms, roomTypes, indoorSearchNodes, nodeIdByKey, effectiveFloors, buildingBounds, getBuildingPhoto, selectedBuilding } =
-    useMapReferenceData(mapData, selectedBuildingId, mapBoundaries);
+    useMapReferenceData(mapData, selectedBuildingId, mapBoundaries,publishedOnly);
 
   // อาคารทั้งหมดจาก API (ต้องเป็น array เสมอ — building เอกพจน์คือ Sc8 ตึกเดียว)
   const allBuildings = Array.isArray(mapData.data?.buildings) ? mapData.data.buildings : [];
@@ -193,9 +205,12 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
   // — ใช้ id ชั้น + ชื่ออาคาร (BUILDINGS.kmitl.name = "Sc8") จับคู่ ถ้าไม่มีข้อมูลในระบบ จะ fallback เป็นค่า detail เดิมใน mapConfig (ปกติเป็น null)
   const { items: floorRecords } = useCollection("floors");
   const { items: edgeRows } = useCollection("edges");
+  
   const KMITL_FLOORS = useMemo(() => {
     const floors = selectedBuilding?.floors;
     const isMainBuilding = !selectedBuilding || selectedBuilding.id === BUILDINGS.kmitl?.id;
+    const hasPlan = (floorNo) =>
+      !publishedOnly || effectiveFloors.some((e) => e.id === String(floorNo));
 
     // อาคารอื่น: สร้างรายการชั้นจากข้อมูลจริงของอาคารนั้น (ไม่ใช้ผัง static ของ Sc8)
     if (!isMainBuilding && Array.isArray(floors) && floors.length) {
@@ -214,11 +229,13 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
     }
 
     // อาคารหลัก (Sc8): ใช้ข้อมูล static ผสานรายละเอียดชั้นเหมือนเดิม
-    return KMITL_FLOORS_STATIC.map((f) => {
+    return KMITL_FLOORS_STATIC
+    .filter((f) => hasPlan(f.id))
+    .map((f) => {
       const rec = floorRecords.find((r) => r.buildingId === BUILDINGS.kmitl?.id && String(r.floorNo) === String(f.id));
       return rec?.note ? { ...f, detail: rec.note, apiId: rec.id } : { ...f, apiId: rec?.id || f.apiId };
     });
-  }, [floorRecords, mapData.data, selectedBuilding]);
+  }, [floorRecords, mapData.data, selectedBuilding,effectiveFloors, publishedOnly]);
 
   // 🧭 กราฟ node/edge ของชั้นที่กำลังดูอยู่ — เพิ่มชั้นใหม่ในอนาคตแค่ต่อ ternary นี้
   // The public map and Registrar must read the exact same saved GIS coordinates.
@@ -405,7 +422,7 @@ export default function MapView({ apiRef, viewMode = "auto", user = null }) {
 
   // 🎓 ป้ายชื่ออาคาร — วางกลางตึกตาม bounds ใน BUILDINGS registry พร้อมไอคอนหมวกปริญญาบอกพิกัด
   // (แทนที่ label สำเร็จรูปจาก CARTO tile ที่ถูกเอาออกไปแล้วใน mapBaseLayer.js เพราะชื่อผิด/ไม่ตรงกับชื่อจริงของอาคาร)
-  useMapEffect06({ BUILDINGS, boundaries: mapBoundaries,ctx, mapReady, mapRef, mapDataVersion: mapData.data });
+  useMapEffect06({ BUILDINGS, boundaries: mapBoundaries,ctx, mapReady, mapRef, mapDataVersion: mapData.data ,publishedOnly, buildingList: allBuildings});
 
   // 🏢 วาด/ลบ overlay ผังชั้น KMITL ตาม state เปิด/ปิด และชั้นที่เลือก
   useMapEffect08({

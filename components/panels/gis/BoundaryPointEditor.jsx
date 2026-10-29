@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { SC8_CENTER } from "../../mapConfig";
-import { Btn } from "../../ui";
+import { Btn , notify, askConfirm} from "../../ui";
 import OSMMap from "./OSMMap";
 import { makeProjection } from "./projection";
 
@@ -128,19 +128,57 @@ export default function BoundaryPointEditor({
   // บันทึก
   // ==========================================
   const handleSave = async () => {
+    // ต้องมีอย่างน้อย 3 จุด จึงจะบันทึกขอบเขตได้
     if (points.length < 3) {
-      alert("กรุณาเลือกอย่างน้อย 3 จุดเพื่อสร้างขอบเขต");
+      notify("กรุณากำหนดจุดพิกัดอย่างน้อย 3 จุดก่อนบันทึก", {
+        title: "กำหนดพิกัดไม่ครบ",
+        tone: "warning",
+      });
       return;
     }
+
+    // เปรียบเทียบพิกัดปัจจุบันกับพิกัดเดิมที่เปิดเข้ามา
+    const normalizePoints = value =>
+      Array.isArray(value)
+        ? value
+            .filter(p => Array.isArray(p) && p.length >= 2)
+            .map(p => [Number(p[0]), Number(p[1])])
+        : [];
+
+    const originalPoints = normalizePoints(initialPoints);
+    const currentPoints = normalizePoints(points);
+    const hasExistingPoints = originalPoints.length > 0;
+    const pointsChanged =
+      JSON.stringify(currentPoints) !== JSON.stringify(originalPoints);
+
+    // ถ้ามีพิกัดเดิมและมีการแก้ไข ต้องให้ผู้ใช้ยืนยันก่อนเขียนทับ
+    if (hasExistingPoints && pointsChanged) {
+      const confirmed = await askConfirm(
+        "ตรวจพบการแก้ไขพิกัดที่มีอยู่\n\nต้องการเปลี่ยนแปลงข้อมูลเดิมใช่หรือไม่?",
+        {
+          title: "ยืนยันการเปลี่ยนแปลงพิกัด",
+          confirmLabel: "ยืนยันการเปลี่ยนแปลง",
+          tone: "danger",
+        }
+      );
+      if (!confirmed) return;
+    }
+
     setSaving(true);
     setError("");
     try {
-      if(typeof onSave !== "function") throw new Error("ไม่ได้ส่ง onSave เข้ามาใน component");
+      if (typeof onSave !== "function") {
+        throw new Error("ไม่ได้ส่ง onSave เข้ามาใน component");
+      }
       await onSave(points);
-    }catch(err) {
+    } catch (err) {
       console.error("save boundary failed:", err);
-      setError(err?.message || "บันทึกไม่สำเร็จ")
-    }finally {
+      setError(err?.message || "บันทึกไม่สำเร็จ");
+      notify(err?.message || "บันทึกพิกัดไม่สำเร็จ", {
+        title: "บันทึกไม่สำเร็จ",
+        tone: "danger",
+      });
+    } finally {
       setSaving(false);
     }
   };
@@ -203,7 +241,7 @@ export default function BoundaryPointEditor({
             ยกเลิก
           </Btn>
 
-          <Btn kind="ok" disabled={saving || points.length < 3} onClick={handleSave}>
+          <Btn kind="ok" disabled={saving} onClick={handleSave}>
             {saving ? "กำลังบันทึก..." : "บันทึกพิกัด"}
           </Btn>
         </div>

@@ -189,7 +189,9 @@ function Boundary({ user }) {
     if (!nameValue) {
       return alert("กรุณาระบุชื่อขอบเขต");
     }
-    if (!form.facultyId) return alert("กรุณาเลือกคณะ");
+    if (form.type !== "campus" && !form.facultyId) {
+      return alert("กรุณาเลือกคณะ");
+    }
     if (form.type === "building") {
       if (!String(form.buildingCode || "").trim()) return alert("กรุณาระบุรหัสอาคาร");
       if (!nameValue) return alert("กรุณาระบุชื่ออาคาร");
@@ -229,9 +231,12 @@ function Boundary({ user }) {
 
   const saveNewBoundary = async points => {
     if (points.length < 3) {
-      return alert("กรุณาเลือกอย่างน้อย 3 จุด");
+      notify("กรุณากำหนดจุดพิกัดอย่างน้อย 3 จุดก่อนบันทึก", {
+        title: "กำหนดพิกัดไม่ครบ",
+        tone: "warning",
+      });
+      return;
     }
-
     let buildingId = form.type === "building" && form.buildingId !== "custom" ? form.buildingId : null;
 
     if (form.type === "building") {
@@ -239,10 +244,22 @@ function Boundary({ user }) {
       const cleanCode = String(form.buildingCode || "").trim().toUpperCase();
       const preId = buildingId ||
         buildings.find(b => String(b.code || "").toUpperCase() === cleanCode)?.id || null;
-      if (
-        findBuildingBoundary(preId, nameValue) &&
-        !confirm("อาคารนี้มีขอบเขตอยู่แล้ว ต้องการแทนที่ด้วยพิกัดและข้อมูลใหม่หรือไม่?\n(แผนผังที่เพิ่มไว้ยังอยู่)")
-      ) return;
+      
+      const existingBoundary = findBuildingBoundary(preId, nameValue);
+
+      if (existingBoundary) {
+        const confirmed = await askConfirm(
+          "อาคารนี้มีขอบเขตอยู่แล้ว ต้องการแทนที่ด้วยพิกัดและข้อมูลใหม่หรือไม่?\n(แผนผังที่เพิ่มไว้ยังอยู่)",
+          {
+            title: "ยืนยันการเปลี่ยนแปลงขอบเขต",
+            confirmLabel: "แทนที่ข้อมูลเดิม",
+            tone: "danger",
+          }
+        );
+
+        if (!confirmed) return;
+      }
+
 
       try {
         buildingId = await ensureBuildingWithFloors({
@@ -510,12 +527,14 @@ function Boundary({ user }) {
             </Select>
           </Field>
 
-          <Field label="คณะที่เป็นเจ้าของขอบเขต">
-            <Select value={form.facultyId} onChange={e => setForm(f => ({ ...f, facultyId: e.target.value }))}>
-              <option value="">-- เลือกคณะ --</option>
-              {faculties.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </Select>
-          </Field>
+          {form.type !== "campus" && (
+            <Field label="คณะที่เป็นเจ้าของขอบเขต">
+              <Select value={form.facultyId} onChange={e => setForm(f => ({ ...f, facultyId: e.target.value }))}>
+                <option value="">-- เลือกคณะ --</option>
+                {faculties.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </Select>
+            </Field>
+          )}
 
           {form.type === "building" ? <>
               {/* ประเภท = อาคาร : เชื่อมกับรายชื่ออาคารจริงจาก mapData.buildings เหมือนหน้า "แผนผังภายในอาคาร" */}

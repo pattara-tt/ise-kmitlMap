@@ -48,7 +48,11 @@ export default function UserApp({ user, tab, onTabChange, viewMode = "auto" }) {
     <>
       {/* แผนที่ mount ค้างไว้เสมอ กันโหลด Leaflet ใหม่ทุกครั้งที่สลับแท็บ */}
       <div style={{ position: "absolute", inset: 0, visibility: tab === "map" ? "visible" : "hidden" }}>
-        <MapView apiRef={mapApi} viewMode={viewMode} user={user} />
+        <MapView 
+          apiRef={mapApi} 
+          viewMode={viewMode} 
+          user={user}
+          publishedOnly={true} />
       </div>
       {tab === "events" ? <EventsPage user={user} mapApi={mapApi} onOpenMap={() => onTabChange?.("map")} /> : null}
       {tab === "notifications" ? <NotificationsPage user={user} /> : null}

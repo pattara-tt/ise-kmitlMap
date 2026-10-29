@@ -19,7 +19,7 @@ function boundsFromGeometry(geometry) {
   return [[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]];
 }
 
-export function useMapReferenceData(mapData, selectedBuildingId = null, boundaries = []) {
+export function useMapReferenceData(mapData, selectedBuildingId = null, boundaries = [],publishedOnly = false) {
   const { items: rooms } = useCollection("rooms");
   const { items: roomTypes } = useCollection("roomTypes");
   const { items: mapAssetItems } = useCollection("mapAssets");
@@ -102,8 +102,25 @@ export function useMapReferenceData(mapData, selectedBuildingId = null, boundari
   // ผังชั้นของ "อาคารที่เลือก" เท่านั้น
   const effectiveFloors = useMemo(() => {
     const floorById = new Map((selectedBuilding?.floors || []).map((floor) => [floor.id, floor]));
-    return mapAssetItems
-      .filter((asset) => asset.kind === "floorplan" && floorById.has(asset.floorId) && asset.file)
+    const ts = (a) => Date.parse(a.updatedAt || a.createdAt || "") || 0;
+
+    let assets = mapAssetItems.filter(
+      (asset) =>
+        asset.kind === "floorplan" &&
+        floorById.has(asset.floorId) &&
+        asset.file &&
+        (!publishedOnly || asset.status === "published")
+    );
+
+    if (publishedOnly) {
+      // ฝั่งผู้ใช้: แต่ละชั้นใช้ผังที่เผยแพร่ล่าสุดเพียงอันเดียว
+      const seen = new Set();
+      assets = assets
+        .sort((a, b) => ts(b) - ts(a))
+        .filter((a) => !seen.has(a.floorId) && seen.add(a.floorId));
+    }
+
+    return assets
       .map((asset) => {
         const floor = floorById.get(asset.floorId);
         return {
@@ -116,7 +133,7 @@ export function useMapReferenceData(mapData, selectedBuildingId = null, boundari
         };
       })
       .sort((a, b) => Number(a.id) - Number(b.id));
-  }, [mapAssetItems, selectedBuilding]);
+  }, [mapAssetItems, selectedBuilding, publishedOnly]);
 
   // bounds: ใช้ของอาคารถ้ามี ไม่งั้นคำนวณจากขอบเขต UC7 ไม่งั้นค่อย fallback Sc8
   const buildingBounds = useMemo(() => {

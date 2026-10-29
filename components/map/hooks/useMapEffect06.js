@@ -9,6 +9,7 @@ export function useMapEffect06({
   mapReady,
   mapRef,
   mapDataVersion,
+  publishedOnly=false,
 }) {
   useEffect(() => {
     const c = ctx.current;
@@ -74,15 +75,21 @@ export function useMapEffect06({
     }
 
     // 2) หมุดอาคารเดิมใน BUILDINGS ที่ยังไม่มีขอบเขต
-    for (const key in BUILDINGS) {
-      const b = BUILDINGS[key];
-      if (!b.bounds || !b.bounds.length) continue;
-      if ((b.id && coveredIds.has(String(b.id))) || coveredNames.has(b.name)) continue;
+    // const allowedIds = publishedOnly?
+    //   new Set(buildingList.map((x) => String(x.id)))
+    //   :null;
+    if(!publishedOnly) {
+      for (const key in BUILDINGS) {
+        const b = BUILDINGS[key];
+        if (!b.bounds || !b.bounds.length) continue;
+        // if(allowedIds && !(b.id && allowedIds.has(String(b.id)))) continue;
+        if ((b.id && coveredIds.has(String(b.id))) || coveredNames.has(b.name)) continue;
 
-      const [[south, west], [north, east]] = b.bounds;
-      addPin([(south + north) / 2, (west + east) / 2], b.name, () =>
-        ctx.current.openBuildingInfo?.(b.id)
-      );
+        const [[south, west], [north, east]] = b.bounds;
+        addPin([(south + north) / 2, (west + east) / 2], b.name, () =>
+          ctx.current.openBuildingInfo?.(b.id)
+        );
+      }
     }
 
     const ensureVisible = () => {
@@ -94,5 +101,7 @@ export function useMapEffect06({
       m.off("moveend zoomend", ensureVisible);
       if (m.hasLayer(layer)) m.removeLayer(layer);
     };
-  }, [mapReady, mapDataVersion, boundaries]);
+  }, [mapReady, mapDataVersion, boundaries, publishedOnly]);
+
+
 }

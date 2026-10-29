@@ -37,19 +37,19 @@
   },
   {
     "key": "boundary",
-    "title": "จัดการขอบเขตแผนผัง",
+    "title": "จัดการขอบเขตสถานที่",
     "icon": "svg:boundary",
     "sortOrder": 6
   },
   {
     "key": "assets",
-    "title": "จัดการข้อมูลประกอบแผนผัง",
+    "title": "จัดการแผนผังภายในอาคาร",
     "icon": "svg:puzzle",
     "sortOrder": 7
   },
   {
     "key": "save",
-    "title": "บันทึกข้อมูลแผนที่",
+    "title": "กำหนดเส้นทางเดิน และบันทึกข้อมูล",
     "icon": "svg:save",
     "sortOrder": 8
   },
