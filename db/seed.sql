@@ -240,7 +240,7 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO map_boundaries ("id", "building_id", "name", "type", "geometry", "status", "updated_at") VALUES
   ('MB-01', NULL, 'ขอบเขตวิทยาเขตลาดกระบัง', 'campus', NULL, 'published', '2026-08-01'),
-  ('MB-02', 'BLD-SC8', 'ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)', 'building', NULL, 'published', '2026-08-20')
+  ('MB-02', 'BLD-SC8', 'ขอบเขตอาคารพระจอมเกล้าฯ (Sc8)', 'building', '[[13.7292248,100.779662],[13.7290841,100.779662],[13.7290893,100.77978],[13.7289799,100.7797746],[13.7289903,100.7800268],[13.7289382,100.7799785],[13.7288235,100.7799678],[13.7288288,100.7803165],[13.7291987,100.7803004],[13.7292248,100.7801448],[13.7291831,100.7801341],[13.7291883,100.7800858],[13.7292248,100.7800858]]', 'published', '2026-08-20')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO map_assets ("id", "floor_id", "name", "kind", "file", "status", "updated_at") VALUES
