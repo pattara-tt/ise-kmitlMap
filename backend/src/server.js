@@ -332,8 +332,17 @@ app.post("/api/data/:name", requireSession, wrap(async (req, res) => {
   const { _actor, ...item } = req.body || {};
   if (MARKETING_COLLECTIONS.has(name) && req.session.role !== ROLE.MARKETING)
     return res.status(403).json({ ok: false, error: "เฉพาะฝ่ายการตลาดเท่านั้นที่แก้ไขข้อมูลชุดนี้ได้" });
-  if ((name === "nodes" || name === "edges") && ![ROLE.GIS, ROLE.ADMIN].includes(req.session.role))
-    return res.status(403).json({ ok: false, error: "ไม่มีสิทธิ์แก้ไขโครงข่ายแผนที่" });
+
+  if (name === "nodes" || name === "edges") {
+    const isRegistrarRename =
+      name === "nodes" &&
+      req.session.role === ROLE.REGISTRAR &&
+      Object.keys(patch).length > 0 &&
+      Object.keys(patch).every((k) => k === "name");
+    if (![ROLE.GIS, ROLE.ADMIN].includes(req.session.role) && !isRegistrarRename)
+      return res.status(403).json({ ok: false, error: "ไม่มีสิทธิ์แก้ไขโครงข่ายแผนที่" });
+  }
+
   if (name === "requests" && !(await ensureRequestQuota(req.session.userId, res))) return;
   if (name === "requests") item.userId = req.session.userId;
   const row = await withTransaction(async () => {

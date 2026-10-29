@@ -32,7 +32,7 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
 
   const requestUser = users.find((u) => u.id === request.userId);
   const emailOf = (id) =>
-    users.find((u) => u.id === id)?.email || id || "-";
+    users.find((u) => u.id === id)?.email || "-";
 
   const currentRoom = rooms.find((room) => room.id === request.roomId);
 
@@ -254,7 +254,7 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
 
         <div style={{ marginBottom: 12 }}>
           <b>ผู้ยื่น:</b>{" "}
-          {requestUser?.email || request.userId || "-"}
+          {requestUser?.email || "-"}
         </div>
 
         <div style={{ marginBottom: 12 }}>
@@ -331,7 +331,7 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
                   {oldValue !== undefined && oldValue !== null
                     ? String(oldValue)
                     : !request.roomId
-                      ? "ไม่มีรายละเอียดข้อมูลห้อง"
+                      ? (request.nodeId ? "-" : "ไม่มีรายละเอียดข้อมูลห้อง")
                       : "-"}
                 </span>
 
@@ -346,7 +346,7 @@ function RequestDetail({ request, rooms = [], onBack, user }) {
             );
           })}
 
-          {!request.roomId && Object.keys(proposedAfter).length === 0 && (
+          {!request.roomId && !request.nodeId && Object.keys(proposedAfter).length === 0 && (
             <div
               style={{
                 padding: "10px 12px",

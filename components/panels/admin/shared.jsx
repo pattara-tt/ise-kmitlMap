@@ -59,4 +59,16 @@ export const isManageableUser = (u) => u.roleCode !== HIDDEN_ROLE;
 export const isManageableRole = (r) => r.code !== HIDDEN_ROLE;
 export { formatDateTime as formatAdminDateTime };
 
+// ชื่อสถานที่ของคำร้อง: ห้อง → ชื่อห้อง | หมุดที่ไม่ใช่ห้อง → ชื่อใน snapshot (before.name)
+export function requestPlaceLabel(r, rooms = []) {
+  const room = rooms.find((x) => x.id === r.roomId);
+  if (room?.name) return room.name;
+  if (r.roomId) return r.roomId;
+  try {
+    const b = typeof r.before === "string" ? JSON.parse(r.before || "{}") : (r.before || {});
+    if (b?.name) return b.name;
+  } catch {}
+  return "ไม่มีรายละเอียดข้อมูลห้อง";
+}
+
 // ── UC11 ค้นหาและเรียกดูข้อมูลคำร้อง ──────────────────────

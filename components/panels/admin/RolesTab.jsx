@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, Field, Pill, SearchBar, Select, useCollection, notify } from "../../ui";
 import { useRefData } from "../../../lib/useRefData";
 import { isManageableUser, isManageableRole } from "./shared";
+import { buildUserCodeMap, displayUserId } from "../../../lib/userDisplay";
 
 // ── UC12 จัดการแก้ไขสิทธิ์ผู้ใช้งาน ───────────────────────
 function Roles({ user }) {
   const { roles } = useRefData(true);
   const { items, patch } = useCollection("users");
+  const codeMap = useMemo(() => buildUserCodeMap(items), [items]);
 
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -17,7 +19,7 @@ function Roles({ user }) {
   const rows = items
     .filter(isManageableUser)
     .filter(u => !roleFilter || u.roleCode === roleFilter)
-    .filter(u => ((u.id || "") + (u.name || "") + (u.email || "")).toLowerCase().includes(q.toLowerCase()))
+    .filter(u => ((u.id || "") + " " + displayUserId(u, codeMap) + " " + (u.name || "") + (u.email || "")).toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => {
       // ผู้ถูกระงับอยู่ล่างสุดเสมอ
       const sa = a.status === "suspended" ? 1 : 0;
@@ -72,7 +74,7 @@ function Roles({ user }) {
               <b style={{ fontSize: 14, color: "#202124" }}>{u.name}</b>
 
               <div style={{ fontSize: 11.5, color: "#5F6368", overflowWrap: "anywhere" }}>
-                {u.email} · {u.id}
+                {u.email} · {displayUserId(u, codeMap)}
               </div>
 
               <div style={{ marginTop: 5, display: "flex", gap: 6, flexWrap: "wrap" }}>

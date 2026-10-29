@@ -1,18 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Btn,
-  Card,
-  Field,
-  Icon,
-  Input,
-  Select,
-  Status,
-  Table,
-  useCollection,
-} from "../../ui";
-import { FIELD_LABEL, formatAdminDateTime } from "./shared";
+import { useMemo, useState } from "react";
+import { Btn, Card, Field, Icon, Input, Select, Status, Table, useCollection, } from "../../ui";
+import { FIELD_LABEL, formatAdminDateTime, requestPlaceLabel } from "./shared";
+import { buildUserCodeMap, displayUserId } from "../../../lib/userDisplay";
 import { dayKey, todayKey } from "../../../lib/datetime";
 import { useRefData } from "../../../lib/useRefData";
 
@@ -45,6 +36,7 @@ const CHIP_COLOR = {
 function RequestReport({ onBack }) {
   const { items: requests } = useCollection("requests");
   const { items: users } = useCollection("users");
+  const codeMap = useMemo(() => buildUserCodeMap(users), [users]);
   const { items: rooms } = useCollection("rooms");
   const { items: categories } = useCollection("categories");
   const { items: editLogs } = useCollection("editLogs");
@@ -80,7 +72,7 @@ function RequestReport({ onBack }) {
         (r.id || "") +
         (r.subject || "") +
         (r.detail || "") +
-        (r.userId || "") +
+        (requestUser ? displayUserId(requestUser, codeMap) : "") +
         (requestUser?.email || "")
       )
         .toLowerCase()
@@ -185,7 +177,7 @@ function RequestReport({ onBack }) {
   ];
 
   const emailOf = (id) =>
-    users.find((u) => u.id === id)?.email || id || "";
+    users.find((u) => u.id === id)?.email || "";
 
   const stagesByRequest = {};
 
@@ -477,7 +469,7 @@ function RequestReport({ onBack }) {
         return request.id || "";
 
       case "applicant":
-        return requestUser?.email || request.userId || "";
+        return requestUser?.email || "";
 
       case "subject":
         return request.subject || "";
@@ -486,7 +478,7 @@ function RequestReport({ onBack }) {
         return request.detail || "";
 
       case "location":
-        return room?.name || "ไม่มีรายละเอียดข้อมูลห้อง";
+        return requestPlaceLabel(request, rooms);
 
       case "createdAt":
         return request.createdAt
@@ -1265,7 +1257,7 @@ function RequestReport({ onBack }) {
                   (item) => item.id === r.roomId
                 );
 
-                return room?.name || "ไม่มีรายละเอียดข้อมูลห้อง";
+                return requestPlaceLabel(r, rooms);
               },
             },
             {

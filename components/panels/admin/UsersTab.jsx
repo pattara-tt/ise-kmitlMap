@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Btn, Field, Pill, SearchBar, Select, Status, Table, useCollection } from "../../ui";
 import { useRefData } from "../../../lib/useRefData";
 import UserDetail from "./UserDetail";
+import { buildUserCodeMap, displayUserId } from "../../../lib/userDisplay";
 import { isManageableUser, isManageableRole } from "./shared";
 
 // ── UC10 ค้นหาและเรียกดูข้อมูลผู้ใช้งาน ───────────────────
@@ -24,13 +25,14 @@ function Users({ user }) {
   const [statusFilter, setStatusFilter] = useState(""); // "" | "active" | "suspended"
   const [sortBy, setSortBy] = useState("newest"); // newest | oldest
   const [selectedUser, setSelectedUser] = useState(null);
+  const codeMap = useMemo(() => buildUserCodeMap(users), [users]);
 
   const rows = users
     .filter(isManageableUser)
     .filter(u => !user?.institutionId || String(u.institutionId) === String(user.institutionId))
     .filter(u => !role || u.roleCode === role)
     .filter(u => !statusFilter || u.status === statusFilter)
-    .filter(u => (u.email || "").toLowerCase().includes(q.toLowerCase()))
+    .filter(u => ((u.email || "") + " " + displayUserId(u, codeMap)).toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => {
       const da = new Date(a.createdAt || 0).getTime();
       const db = new Date(b.createdAt || 0).getTime();
@@ -72,7 +74,8 @@ function Users({ user }) {
     }}>พบ {rows.length} รายการ</div>
       <Table columns={[{
       key: "id",
-      label: "รหัส"
+      label: "รหัส",
+      render: u => displayUserId(u, codeMap)
     }, {
       key: "name",
       label: "ชื่อ"

@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Btn, Field, SearchBar, Select, Status, Table, useCollection} from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
 import RequestDetail from "./RequestDetail";
+import { requestPlaceLabel } from "./shared";
+import { buildUserCodeMap, displayUserId } from "../../../lib/userDisplay";
 
 // ── UC11 ค้นหาและเรียกดูข้อมูลคำร้อง ──────────────────────
 function Requests({ user, filters, setFilters, onReport, onQuota }) {
   const { items, reload } = useCollection("requests");
   const { items: users } = useCollection("users");
   const { items: rooms } = useCollection("rooms");
+  const codeMap = useMemo(() => buildUserCodeMap(users), [users]);
 
   const { q, status, sortBy } = filters;
   const setQ = v => setFilters(f => ({ ...f, q: v }));
@@ -20,7 +23,7 @@ function Requests({ user, filters, setFilters, onReport, onQuota }) {
     // if (r.status === "cancelled") return false;
 
     const user = users.find(u => u.id === r.userId);
-    return (!status || r.status === status) && ((r.id || "") + (r.subject || "") + (r.detail || "") + (user?.email || "") + (r.userId || "")).toLowerCase().includes(q.toLowerCase());
+    return (!status || r.status === status) && ((r.id || "") + (r.subject || "") + (r.detail || "") + (user?.email || "") + (user ? displayUserId(user, codeMap) : "")).toLowerCase().includes(q.toLowerCase());
   }).sort((a, b) => {
     if (sortBy === "newest") {
       const dateCompare = String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
@@ -116,10 +119,7 @@ function Requests({ user, filters, setFilters, onReport, onQuota }) {
     }, {
       key: "roomId",
       label: "สถานที่",
-      render: r => {
-        const room = rooms.find(room => room.id === r.roomId);
-        return room?.name || (r.roomId ? r.roomId : "ไม่มีรายละเอียดข้อมูลห้อง");
-      }
+      render: r => requestPlaceLabel(r, rooms)
     }, {
       key: "createdAt",
       label: "วันที่ส่งคำร้อง",

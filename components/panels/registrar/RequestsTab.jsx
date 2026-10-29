@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Btn, Card, Field, Input, SearchBar, Select, Status, Table, Textarea, useCollection, notify, askConfirm } from "../../ui";
 import { formatDateTime } from "../../../lib/datetime";
 import RequestDetail from "../admin/RequestDetail";
+import { requestPlaceLabel } from "../admin/shared";
 
 const FIELD_LABEL = {
   name: "ชื่อห้อง",
@@ -30,6 +31,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
   } = useCollection("rooms");
 
   const { items: roomTypes, loading: roomTypesLoading, reload: reloadRoomTypes } = useCollection("roomTypes");
+  const { items: nodes, reload: reloadNodes, patch: patchNode } = useCollection("nodes");
 
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [q, setQ] = useState("");
@@ -96,6 +98,9 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
         reloadRooms={reloadRooms}
         patchRequest={patchRequest}
         patchRoom={patchRoom}
+        nodes={nodes}
+        patchNode={patchNode}
+        reloadNodes={reloadNodes}
         roomTypes={roomTypes}
         roomTypesLoading={roomTypesLoading}
         reloadRoomTypes={reloadRoomTypes}
@@ -178,7 +183,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
             {
               key: "roomId",
               label: "สถานที่",
-              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || (r.roomId ? r.roomId : "ไม่มีรายละเอียดข้อมูลห้อง"),
+              render: (r) => requestPlaceLabel(r, rooms),
             },
             { key: "reviewedAt", label: "วันที่รับเรื่อง", render: (r) => formatDateTime(r.reviewedAt) },
             {
@@ -203,7 +208,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
             {
               key: "roomId",
               label: "สถานที่",
-              render: (r) => rooms.find((room) => room.id === r.roomId)?.name || (r.roomId ? r.roomId : "ไม่มีรายละเอียดข้อมูลห้อง"),
+              render: (r) => requestPlaceLabel(r, rooms),
             },
             { key: "status", label: "ผลการพิจารณา", render: (r) => <Status value={r.status} /> },
             { key: "reviewedAt", label: "วันที่พิจารณา", render: (r) => formatDateTime(r.reviewedAt) },
@@ -230,7 +235,7 @@ export default function RegistrarRequestsTab({ user, onNavigate }) {
    รายละเอียดคำร้องของ Registrar
    ========================================================= */
 
-function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchRequest, patchRoom, roomTypes, roomTypesLoading, reloadRoomTypes, onNavigate, user, onBack, }) {
+function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchRequest, patchRoom, nodes = [], patchNode, reloadNodes, roomTypes, roomTypesLoading, reloadRoomTypes, onNavigate, user, onBack, }) {
   const parseData = (value) => {
     if (!value) return {};
 
@@ -254,6 +259,9 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
 
   // ข้อมูลห้องปัจจุบัน ใช้สำหรับแสดงค่าล่าสุด
   const room = rooms.find((r) => r.id === request.roomId);
+  // หมุดที่ไม่ใช่ห้อง (ลิฟต์/บันได/ห้องน้ำ/ทางเข้า): แก้ชื่อที่ nodes.name
+  const node = !request.roomId && request.nodeId ? nodes.find((n) => n.id === request.nodeId) : null;
+  const isNodeRequest = !!node;
   const before = room
     ? Object.fromEntries(
         Object.keys(proposedAfter).map((key) => [
@@ -261,7 +269,14 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
           room[key] !== undefined ? room[key] : snapshotBefore[key],
         ])
       )
-    : snapshotBefore;
+    : node
+      ? Object.fromEntries(
+          Object.keys(proposedAfter).map((key) => [
+            key,
+            key === "name" && node.name != null ? node.name : snapshotBefore[key],
+          ])
+        )
+      : snapshotBefore;
 
   // เฉพาะฟิลด์ที่ผู้ยื่นตั้งใจแก้จริง เทียบกับ snapshot ตอนยื่น
   const userChanges = Object.fromEntries(
@@ -309,7 +324,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
     if (!actionable || busyRef.current) return;
 
     // กรณีคำร้องแจ้งปัญหาสถานที่ที่ไม่มีข้อมูลห้อง เช่น ห้องน้ำหรือลิฟต์
-    if (!request.roomId) {
+    if (!request.roomId && !isNodeRequest) {
       await notify(
         "คำร้องนี้เป็นการแจ้งปัญหาของสถานที่ที่ไม่มีข้อมูลห้องในระบบ จึงไม่มีข้อมูลแผนที่ให้แก้ไข",
         { title: "ไม่มีข้อมูลแผนที่ให้แก้ไข", tone: "warning" }
@@ -319,7 +334,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
 
     setActionError("");
 
-    if (missingType || roomTypesLoading) {
+    if (!isNodeRequest && (missingType || roomTypesLoading)) {
       setActionError(
         "ไม่สามารถอนุมัติได้: ต้องเลือกประเภทห้องที่มีในระบบก่อน"
       );
@@ -349,7 +364,17 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
       );
 
       if (Object.keys(roomPatch).length > 0) {
-        await patchRoom(request.roomId, roomPatch, user);
+        if (isNodeRequest) {
+          // nodes รับเฉพาะ name (backend จำกัดสิทธิ์ registrar ไว้เท่านี้)
+          const newName = String(roomPatch.name ?? "").trim();
+          if ("name" in roomPatch) {
+            if (!newName) throw new Error("ชื่อสถานที่ต้องไม่ว่าง");
+            await patchNode(request.nodeId, { name: newName }, user);
+            if (typeof reloadNodes === "function") await reloadNodes();
+          }
+        } else {
+          await patchRoom(request.roomId, roomPatch, user);
+        }
       }
 
       // เก็บ snapshot ตอนยื่นไว้ใน request.before ตามเดิม
@@ -545,7 +570,7 @@ function RegistrarRequestDetail({ request, users, rooms, reloadRooms, patchReque
                 </span>
 
                 <span>
-                  {oldValue ?? (!request.roomId ? "ไม่มีรายละเอียดข้อมูลห้อง" : "-")}
+                  {oldValue ?? (!request.roomId && !isNodeRequest ? "ไม่มีรายละเอียดข้อมูลห้อง" : "-")}
                 </span>
 
                 <Input

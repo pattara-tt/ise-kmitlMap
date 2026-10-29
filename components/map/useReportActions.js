@@ -20,42 +20,38 @@ export function useReportActions({
   setReportSending,
   user
  }) {
+  
   // เปิดฟอร์มแจ้งปัญหาของสถานที่ที่กำลังเปิดการ์ดอยู่
   function openReportForm() {
     if (!placeCard) return;
-    const room = rooms.find(r => r.nodeId === (nodeIdByKey[placeCard.nodeId] || placeCard.nodeId));
-    if (room) {
-      // มีข้อมูลห้องอยู่ในระบบ (rooms) แล้ว → เก็บข้อมูลเดิมไว้ใน before ส่วนช่องกรอกเริ่มต้นเป็นค่าว่าง
-      // (ช่องว่าง = ไม่แก้ไข ระบบจะใช้ข้อมูลปัจจุบันของช่องนั้นตามเดิม)
-      setReportForm({
-        roomId: room.id,
-        nodeId: room.nodeId,
-        before: {
-          name: room.name,
-          type: room.type,
-          capacity: room.capacity,
-          teacher: room.teacher
-        },
-        subject: "",
-        name: "",
-        type: "",
-        capacity: "",
-        teacher: "",
-        note: ""
-      });
-    } else {
-      // สถานที่ประเภทนี้ยังไม่มีข้อมูลโครงสร้างใน rooms (เช่น ห้องน้ำ/ลิฟต์) → ใช้ฟอร์มข้อความอย่างเดียว
-      setReportForm({
-        roomId: null,
-        nodeId: nodeIdByKey[placeCard.nodeId] || placeCard.nodeId || null,
-        before: {
-          name: placeCard.name
-        },
-        subject: "",
-        name: placeCard.name,
-        note: ""
-      });
-    }
+    if (placeCard.kind === "building") return;
+
+    // ส่งคำร้องได้เฉพาะหมุดที่เป็นห้องและมีชื่อห้องใน database — อย่างอื่น (ลิฟต์/ทางหนีไฟ/ห้องน้ำ/ไม่มีข้อมูลห้อง) ส่งไม่ได้
+    const internalNodeId = nodeIdByKey[placeCard.nodeId] || placeCard.nodeId;
+    const room = rooms.find(r =>
+      (internalNodeId != null && r.nodeId === internalNodeId) ||
+      (placeCard.roomId != null && r.id === placeCard.roomId)
+    );
+    if (!room || String(room.name ?? "").trim() === "") return;
+
+    // เก็บข้อมูลเดิมไว้ใน before ส่วนช่องกรอกเริ่มต้นเป็นค่าว่าง
+    // (ช่องว่าง = ไม่แก้ไข ระบบจะใช้ข้อมูลปัจจุบันของช่องนั้นตามเดิม)
+    setReportForm({
+      roomId: room.id,
+      nodeId: room.nodeId,
+      before: {
+        name: room.name,
+        type: room.type,
+        capacity: room.capacity,
+        teacher: room.teacher
+      },
+      subject: "",
+      name: "",
+      type: "",
+      capacity: "",
+      teacher: "",
+      note: ""
+    });
     setReportOpen(true);
   }
 

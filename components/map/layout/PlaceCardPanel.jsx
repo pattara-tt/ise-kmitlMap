@@ -38,6 +38,10 @@ export default function PlaceCardPanel({ view }) {
   const typeLabel = room?.type || null;
   const displayName = room?.name || placeCard.name;
   const hasRoomDetails = !!room;
+  // ส่งคำร้องได้เฉพาะหมุดที่เป็น "ห้อง" และมีข้อมูลชื่อห้องใน database เท่านั้น
+  // (ตึก / ชั้น / ทางหนีไฟ / ลิฟต์ / สถานที่นอกผัง ที่ไม่มีข้อมูลห้อง → ไม่แสดงธง ส่งคำร้องไม่ได้)
+  const canReport = placeCard.kind !== "building" && !!room && String(room.name ?? "").trim() !== "";
+
   // extract from indoor nodes is only a search label (e.g. "ห้องเรียน · ชั้น 1"), not a place description.
   const description = placeCard.description || (!placeCard.nodeId ? placeCard.extract : null);
 
@@ -94,9 +98,11 @@ export default function PlaceCardPanel({ view }) {
             <div style={{fontWeight:800,fontSize:18,color:"#202124"}}>{displayName}</div>
             {!expanded && (typeLabel || floorLabel) && <div style={{marginTop:3,fontSize:12,color:"#5F6368"}}>{[typeLabel, floorLabel].filter(Boolean).join(" · ")}</div>}
           </div>
-          <button className="round-btn tip" data-tip="แจ้งปัญหาข้อมูลสถานที่" onClick={openReportForm} aria-label="แจ้งปัญหาข้อมูลสถานที่">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 21V4m0 0h11l-2.5 4L17 12H6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
+          {canReport && (
+            <button className="round-btn tip" data-tip="แจ้งปัญหาข้อมูลสถานที่" onClick={openReportForm} aria-label="แจ้งปัญหาข้อมูลสถานที่">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 21V4m0 0h11l-2.5 4L17 12H6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          )}
           <button className="round-btn" onClick={()=>setPlaceCard(null)} aria-label="ปิด" title="ปิด">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
           </button>

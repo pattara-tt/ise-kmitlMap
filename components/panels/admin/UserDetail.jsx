@@ -1,18 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Btn, Card, Status, useCollection } from "../../ui";
 import { useRefData } from "../../../lib/useRefData";
 import AccountHistoryDetail from "./AccountHistoryDetail";
 import RequestDetail from "./RequestDetail";
 import { formatDateTime } from "../../../lib/datetime";
 import { formatAdminDateTime, getHistoryActionLabel } from "./shared";
+import { buildUserCodeMap, displayUserId } from "../../../lib/userDisplay";
 
 
 export default function UserDetail({ user, adminUser, requests, onBack }) {
   const { roleLabels, roles } = useRefData(true);
   const { items: accountHistory } = useCollection("accountHistory");
   const { items: users } = useCollection("users");
+  const codeMap = useMemo(() => buildUserCodeMap(users), [users]);
   const [historyDetailId, setHistoryDetailId] = useState(null);
 
   const [statFilter, setStatFilter] = useState(null); // null | "all" | "cancelled" | "approved" | "rejected"
@@ -114,7 +116,7 @@ export default function UserDetail({ user, adminUser, requests, onBack }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "18px 24px" }}>
           {[
-            ["รหัสผู้ใช้งาน", user.id],
+            ["รหัสผู้ใช้งาน", displayUserId(user, codeMap)],
             ["บทบาท", (
               <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, background: "#E8F0FE", color: "#1A73E8", fontSize: 13.5, fontWeight: 700 }}>
                 {roleLabels[user.roleCode] || user.roleCode}
